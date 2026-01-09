@@ -6,20 +6,17 @@ import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    DEVICE_TYPE_GATEWAY,
-    HEATING_TYPES,
     MODE_AWAY,
     MODE_FROST_GUARD,
     MODE_SCHEDULE,
     SCHEDULE_TYPE_THERM,
 )
-from .entity import MigoControlEntity, MigoHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type
+from .entity import MigoHomeControlEntity
+from .helpers import generate_unique_id
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -64,16 +61,6 @@ async def async_setup_entry(
                     api=data.api,
                 )
             )
-
-    # Create heating type select for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoHeatingTypeSelect(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
 
     async_add_entities(entities)
 
@@ -174,41 +161,3 @@ class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):
             schedule_id=schedule_id,
         )
         _LOGGER.debug("Schedule switched to %s for home %s", option, self._home_id)
-
-
-class MigoHeatingTypeSelect(MigoControlEntity, SelectEntity):
-    """MiGO Heating Type select entity."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_translation_key = "heating_type"
-    _attr_icon = "mdi:radiator"
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-        api: MigoApi,
-    ) -> None:
-        """Initialize the heating type select entity."""
-        super().__init__(coordinator, device_id, api)
-        self._attr_unique_id = generate_unique_id("heating_type", device_id)
-        self._attr_options = HEATING_TYPES
-
-    @property
-    def current_option(self) -> str | None:
-        """Return the current heating type."""
-        return self._device_data.get("heating_type", "unknown")
-
-    async def async_select_option(self, option: str) -> None:
-        """Change the heating type."""
-        if option not in HEATING_TYPES:
-            _LOGGER.error("Invalid heating type: %s", option)
-            return
-
-        _LOGGER.debug("Setting heating type to %s for device %s", option, self._device_id)
-        await self._call_api_and_refresh(
-            self._api.set_heating_type,
-            device_id=self._device_id,
-            heating_type=option,
-        )
-        _LOGGER.debug("Heating type set to %s for device %s", option, self._device_id)

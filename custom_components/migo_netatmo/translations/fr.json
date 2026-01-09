@@ -81,15 +81,6 @@
       },
       "schedule": {
         "name": "Programme actif"
-      },
-      "heating_type": {
-        "name": "Type de chauffage",
-        "state": {
-          "radiator": "Radiateurs",
-          "convector": "Convecteurs",
-          "floor_heating": "Plancher chauffant",
-          "unknown": "Inconnu"
-        }
       }
     },
     "sensor": {
@@ -116,6 +107,15 @@
       },
       "outdoor_temperature": {
         "name": "Température extérieure"
+      },
+      "heating_type": {
+        "name": "Type de chauffage",
+        "state": {
+          "radiator": "Radiateurs",
+          "convector": "Convecteurs",
+          "floor_heating": "Plancher chauffant",
+          "unknown": "Inconnu"
+        }
       }
     },
     "switch": {

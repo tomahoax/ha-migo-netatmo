@@ -81,15 +81,6 @@
       },
       "schedule": {
         "name": "Active schedule"
-      },
-      "heating_type": {
-        "name": "Heating type",
-        "state": {
-          "radiators": "Radiators",
-          "convector": "Convector",
-          "floor_heating": "Floor heating",
-          "unknown": "Unknown"
-        }
       }
     },
     "sensor": {
@@ -116,6 +107,15 @@
       },
       "outdoor_temperature": {
         "name": "Outdoor temperature"
+      },
+      "heating_type": {
+        "name": "Heating type",
+        "state": {
+          "radiator": "Radiators",
+          "convector": "Convector",
+          "floor_heating": "Floor heating",
+          "unknown": "Unknown"
+        }
       }
     },
     "switch": {
