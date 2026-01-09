@@ -63,6 +63,9 @@
       }
     },
     "number": {
+      "dhw_temperature": {
+        "name": "Température ECS"
+      },
       "manual_setpoint_duration": {
         "name": "Durée consignes manuelles"
       },

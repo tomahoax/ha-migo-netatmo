@@ -11,6 +11,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    DEVICE_TYPE_GATEWAY,
+    DHW_TEMP_MAX,
+    DHW_TEMP_MIN,
+    DHW_TEMP_STEP,
     MANUAL_SETPOINT_DURATION_MAX,
     MANUAL_SETPOINT_DURATION_MIN,
     MANUAL_SETPOINT_DURATION_STEP,
@@ -18,8 +22,8 @@ from .const import (
     TEMP_OFFSET_MIN,
     TEMP_OFFSET_STEP,
 )
-from .entity import MigoHomeEntity, MigoRoomEntity
-from .helpers import generate_unique_id
+from .entity import MigoControlEntity, MigoHomeEntity, MigoRoomEntity
+from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -46,6 +50,16 @@ async def async_setup_entry(
             MigoManualSetpointDurationNumber(
                 coordinator=coordinator,
                 home_id=home_id,
+                api=data.api,
+            )
+        )
+
+    # Create DHW temperature entity for each gateway
+    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        entities.append(
+            MigoDHWTemperatureNumber(
+                coordinator=coordinator,
+                device_id=device_id,
                 api=data.api,
             )
         )
@@ -188,4 +202,70 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
         # Store in optimistic cache (API doesn't return this value)
         self.coordinator.set_cached_value(self._cache_key, value)
         _LOGGER.debug("Temperature offset set for room %s", self._room_id)
+        await self.coordinator.async_request_refresh()
+
+
+class MigoDHWTemperatureNumber(MigoControlEntity, NumberEntity):
+    """MiGO Domestic Hot Water temperature number entity."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "dhw_temperature"
+    _attr_native_min_value = DHW_TEMP_MIN  # 45°C
+    _attr_native_max_value = DHW_TEMP_MAX  # 60°C
+    _attr_native_step = DHW_TEMP_STEP  # 1°C
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_mode = NumberMode.SLIDER
+    _attr_icon = "mdi:water-thermometer"
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        api: MigoApi,
+    ) -> None:
+        """Initialize the DHW temperature number entity."""
+        super().__init__(coordinator, device_id, api)
+        self._attr_unique_id = generate_unique_id("dhw_temperature", device_id)
+
+    @property
+    def _cache_key(self) -> str:
+        """Return the cache key for this entity."""
+        return f"dhw_temperature_{self._device_id}"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the current DHW temperature."""
+        # Check optimistic cache first
+        cached = self.coordinator.get_cached_value(self._cache_key)
+        if cached is not None:
+            return cached
+        # Fallback to API data
+        temp = self._device_data.get("dhw_setpoint_temperature")
+        if temp is not None:
+            return int(temp)
+        # Default to 60°C as shown in the screenshot
+        return 60
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the DHW temperature."""
+        temperature = int(value)
+        home_id = self._device_data.get("home_id")
+
+        if not home_id:
+            _LOGGER.error("Cannot set DHW temperature: home_id not found for device %s", self._device_id)
+            return
+
+        _LOGGER.debug(
+            "Setting DHW temperature to %s°C for device %s",
+            temperature,
+            self._device_id,
+        )
+        await self._api.set_dhw_temperature(
+            home_id=home_id,
+            module_id=self._device_id,
+            temperature=temperature,
+        )
+        # Store in optimistic cache
+        self.coordinator.set_cached_value(self._cache_key, temperature)
+        _LOGGER.debug("DHW temperature set for device %s", self._device_id)
         await self.coordinator.async_request_refresh()

@@ -164,6 +164,11 @@ TEMP_OFFSET_STEP: Final = 0.5
 DHW_CONTROL_WATER_TANK: Final = "water_tank"
 DHW_CONTROL_INSTANTANEOUS: Final = "instantaneous"
 
+# DHW temperature
+DHW_TEMP_MIN: Final = 45
+DHW_TEMP_MAX: Final = 60
+DHW_TEMP_STEP: Final = 1
+
 # =============================================================================
 # Timing Constants
 # =============================================================================
