@@ -71,6 +71,9 @@
       },
       "temperature_offset": {
         "name": "Décalage température"
+      },
+      "hysteresis": {
+        "name": "Seuil d'hystérésis"
       }
     },
     "select": {
@@ -110,15 +113,6 @@
       },
       "outdoor_temperature": {
         "name": "Température extérieure"
-      },
-      "heating_type": {
-        "name": "Type de chauffage",
-        "state": {
-          "radiator": "Radiateurs",
-          "convector": "Convecteurs",
-          "floor_heating": "Plancher chauffant",
-          "unknown": "Inconnu"
-        }
       }
     },
     "switch": {

@@ -1,0 +1,127 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiGO - Il tuo assistente per il riscaldamento",
+        "description": "Inserisci le credenziali dell'app **MiGO** (icona fiamma arancione).\n\n**Nota:** Questa integrazione NON funziona con MiGO Link o myVAILLANT.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Riautenticazione MiGO",
+        "description": "Inserisci nuovamente le credenziali MiGO",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Email o password non validi",
+      "no_homes": "Nessuna abitazione trovata nel tuo account MiGO",
+      "unknown": "Si è verificato un errore sconosciuto"
+    },
+    "abort": {
+      "already_configured": "Questo account è già configurato",
+      "reauth_successful": "Riautenticazione completata"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "boiler_status": {
+        "name": "Stato caldaia"
+      },
+      "boiler_error": {
+        "name": "Errore caldaia"
+      },
+      "reachable": {
+        "name": "Dispositivo raggiungibile"
+      },
+      "ebus_error": {
+        "name": "Errore eBus"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Aggiorna"
+      }
+    },
+    "climate": {
+      "thermostat": {
+        "name": "{room_name}",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "away": "Assente",
+              "hot_water_only": "Solo acqua calda",
+              "frost_guard": "Antigelo"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "dhw_temperature": {
+        "name": "Temperatura ACS"
+      },
+      "manual_setpoint_duration": {
+        "name": "Durata setpoint manuale"
+      },
+      "temperature_offset": {
+        "name": "Offset temperatura"
+      },
+      "hysteresis": {
+        "name": "Soglia isteresi"
+      }
+    },
+    "select": {
+      "therm_mode": {
+        "name": "Modalità termostato",
+        "state": {
+          "schedule": "Auto",
+          "away": "Assente",
+          "hg": "Antigelo"
+        }
+      },
+      "schedule": {
+        "name": "Programma attivo"
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "Temperatura {room_name}"
+      },
+      "room_humidity": {
+        "name": "Umidità {room_name}"
+      },
+      "battery": {
+        "name": "Batteria"
+      },
+      "wifi_strength": {
+        "name": "Segnale WiFi"
+      },
+      "rf_strength": {
+        "name": "Segnale RF"
+      },
+      "gateway_firmware": {
+        "name": "Firmware gateway"
+      },
+      "thermostat_firmware": {
+        "name": "Firmware termostato"
+      },
+      "outdoor_temperature": {
+        "name": "Temperatura esterna"
+      }
+    },
+    "switch": {
+      "dhw_boost": {
+        "name": "Boost acqua calda sanitaria"
+      },
+      "anticipation": {
+        "name": "Anticipazione riscaldamento"
+      }
+    }
+  }
+}

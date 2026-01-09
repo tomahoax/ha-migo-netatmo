@@ -198,3 +198,27 @@ class MigoHomeControlEntity(MigoHomeEntity, MigoApiControlMixin):
         """
         super().__init__(coordinator, home_id)
         self._api = api
+
+
+class MigoRoomControlEntity(MigoRoomEntity, MigoApiControlMixin):
+    """Base class for room-based entities that control the device via API.
+
+    This is used by climate entities that need both room data access
+    and API control capabilities.
+    """
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        room_id: str,
+        api: MigoApi,
+    ) -> None:
+        """Initialize the room control entity.
+
+        Args:
+            coordinator: The data update coordinator.
+            room_id: The room ID this entity controls.
+            api: The API client for making control calls.
+        """
+        super().__init__(coordinator, room_id)
+        self._api = api

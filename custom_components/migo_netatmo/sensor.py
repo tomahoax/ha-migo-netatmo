@@ -89,14 +89,6 @@ GATEWAY_SENSORS: tuple[SensorConfig, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda v: str(v) if v is not None else None,
     ),
-    SensorConfig(
-        data_key="heating_type",
-        unique_id_key="heating_type",
-        translation_key="heating_type",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:radiator",
-        value_fn=lambda v: v if v else "unknown",
-    ),
 )
 
 

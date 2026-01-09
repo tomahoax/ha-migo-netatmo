@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -99,7 +98,7 @@ class TestMigoDataUpdateCoordinator:
             }
         )
 
-        result = await coordinator._async_update_data()
+        await coordinator._async_update_data()
 
         assert len(coordinator.homes) == 0
 
@@ -113,7 +112,7 @@ class TestMigoDataUpdateCoordinator:
         mock_api.get_home_status = AsyncMock(side_effect=MigoApiError("Status error"))
 
         # Should not raise, just log warning
-        result = await coordinator._async_update_data()
+        await coordinator._async_update_data()
 
         # Home should still be processed (without status data)
         assert len(coordinator.homes) == 1

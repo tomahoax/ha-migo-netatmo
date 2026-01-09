@@ -1,0 +1,127 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiGO - Tu asistente de calefacción",
+        "description": "Introduce tus credenciales de la app **MiGO** (icono de llama naranja).\n\n**Nota:** Esta integración NO funciona con MiGO Link o myVAILLANT.",
+        "data": {
+          "username": "Email",
+          "password": "Contraseña"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reautenticación MiGO",
+        "description": "Por favor, vuelve a introducir tus credenciales MiGO",
+        "data": {
+          "username": "Email",
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Email o contraseña incorrectos",
+      "no_homes": "No se encontraron hogares en tu cuenta MiGO",
+      "unknown": "Se produjo un error desconocido"
+    },
+    "abort": {
+      "already_configured": "Esta cuenta ya está configurada",
+      "reauth_successful": "Reautenticación exitosa"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "boiler_status": {
+        "name": "Estado caldera"
+      },
+      "boiler_error": {
+        "name": "Error caldera"
+      },
+      "reachable": {
+        "name": "Dispositivo accesible"
+      },
+      "ebus_error": {
+        "name": "Error eBus"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Actualizar"
+      }
+    },
+    "climate": {
+      "thermostat": {
+        "name": "{room_name}",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "away": "Ausente",
+              "hot_water_only": "Solo agua caliente",
+              "frost_guard": "Antihielo"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "dhw_temperature": {
+        "name": "Temperatura ACS"
+      },
+      "manual_setpoint_duration": {
+        "name": "Duración consigna manual"
+      },
+      "temperature_offset": {
+        "name": "Offset temperatura"
+      },
+      "hysteresis": {
+        "name": "Umbral de histéresis"
+      }
+    },
+    "select": {
+      "therm_mode": {
+        "name": "Modo termostato",
+        "state": {
+          "schedule": "Auto",
+          "away": "Ausente",
+          "hg": "Antihielo"
+        }
+      },
+      "schedule": {
+        "name": "Programa activo"
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "Temperatura {room_name}"
+      },
+      "room_humidity": {
+        "name": "Humedad {room_name}"
+      },
+      "battery": {
+        "name": "Batería"
+      },
+      "wifi_strength": {
+        "name": "Señal WiFi"
+      },
+      "rf_strength": {
+        "name": "Señal RF"
+      },
+      "gateway_firmware": {
+        "name": "Firmware gateway"
+      },
+      "thermostat_firmware": {
+        "name": "Firmware termostato"
+      },
+      "outdoor_temperature": {
+        "name": "Temperatura exterior"
+      }
+    },
+    "switch": {
+      "dhw_boost": {
+        "name": "Boost agua caliente sanitaria"
+      },
+      "anticipation": {
+        "name": "Anticipación calefacción"
+      }
+    }
+  }
+}

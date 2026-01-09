@@ -1,0 +1,127 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiGO - Ваш помощник по отоплению",
+        "description": "Введите учетные данные из приложения **MiGO** (оранжевый значок пламени).\n\n**Примечание:** Эта интеграция НЕ работает с MiGO Link или myVAILLANT.",
+        "data": {
+          "username": "Email",
+          "password": "Пароль"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Повторная аутентификация MiGO",
+        "description": "Пожалуйста, введите учетные данные MiGO повторно",
+        "data": {
+          "username": "Email",
+          "password": "Пароль"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Неверный email или пароль",
+      "no_homes": "В вашем аккаунте MiGO не найдено домов",
+      "unknown": "Произошла неизвестная ошибка"
+    },
+    "abort": {
+      "already_configured": "Этот аккаунт уже настроен",
+      "reauth_successful": "Повторная аутентификация успешна"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "boiler_status": {
+        "name": "Состояние котла"
+      },
+      "boiler_error": {
+        "name": "Ошибка котла"
+      },
+      "reachable": {
+        "name": "Устройство доступно"
+      },
+      "ebus_error": {
+        "name": "Ошибка eBus"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Обновить"
+      }
+    },
+    "climate": {
+      "thermostat": {
+        "name": "{room_name}",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "away": "Нет дома",
+              "hot_water_only": "Только горячая вода",
+              "frost_guard": "Защита от замерзания"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "dhw_temperature": {
+        "name": "Температура ГВС"
+      },
+      "manual_setpoint_duration": {
+        "name": "Длительность ручной уставки"
+      },
+      "temperature_offset": {
+        "name": "Смещение температуры"
+      },
+      "hysteresis": {
+        "name": "Порог гистерезиса"
+      }
+    },
+    "select": {
+      "therm_mode": {
+        "name": "Режим термостата",
+        "state": {
+          "schedule": "Авто",
+          "away": "Нет дома",
+          "hg": "Защита от замерзания"
+        }
+      },
+      "schedule": {
+        "name": "Активное расписание"
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "Температура {room_name}"
+      },
+      "room_humidity": {
+        "name": "Влажность {room_name}"
+      },
+      "battery": {
+        "name": "Батарея"
+      },
+      "wifi_strength": {
+        "name": "Сигнал WiFi"
+      },
+      "rf_strength": {
+        "name": "Сигнал RF"
+      },
+      "gateway_firmware": {
+        "name": "Прошивка шлюза"
+      },
+      "thermostat_firmware": {
+        "name": "Прошивка термостата"
+      },
+      "outdoor_temperature": {
+        "name": "Температура на улице"
+      }
+    },
+    "switch": {
+      "dhw_boost": {
+        "name": "Ускоренный нагрев ГВС"
+      },
+      "anticipation": {
+        "name": "Упреждение отопления"
+      }
+    }
+  }
+}
