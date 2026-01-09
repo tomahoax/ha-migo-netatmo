@@ -1,0 +1,136 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiGO - Your Heating Assistant",
+        "description": "Enter your credentials from the **MiGO** app (orange flame icon).\n\n**Note:** This does NOT work with MiGO Link or myVAILLANT apps.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate MiGO",
+        "description": "Please re-enter your MiGO app credentials",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password",
+      "no_homes": "No homes found in your MiGO account",
+      "unknown": "An unknown error occurred"
+    },
+    "abort": {
+      "already_configured": "This account is already configured",
+      "reauth_successful": "Re-authentication successful"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "anticipating": {
+        "name": "Anticipation"
+      },
+      "boiler_status": {
+        "name": "Boiler status"
+      },
+      "boiler_error": {
+        "name": "Boiler error"
+      },
+      "reachable": {
+        "name": "Device reachable"
+      },
+      "ebus_error": {
+        "name": "eBus error"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    },
+    "climate": {
+      "thermostat": {
+        "name": "{room_name}",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "away": "Away",
+              "hot_water_only": "Hot water only",
+              "frost_guard": "Frost guard"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "heating_curve": {
+        "name": "Heating curve"
+      },
+      "dhw_temperature": {
+        "name": "Hot water temperature"
+      },
+      "temperature_offset": {
+        "name": "Temperature offset"
+      }
+    },
+    "select": {
+      "therm_mode": {
+        "name": "Thermostat mode",
+        "state": {
+          "schedule": "Auto",
+          "away": "Away",
+          "hg": "Frost guard"
+        }
+      },
+      "schedule": {
+        "name": "Active schedule"
+      },
+      "heating_type": {
+        "name": "Heating type",
+        "state": {
+          "radiator": "Radiators",
+          "convector": "Convector",
+          "floor_heating": "Floor heating",
+          "unknown": "Unknown"
+        }
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "{room_name} temperature"
+      },
+      "room_humidity": {
+        "name": "{room_name} humidity"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "wifi_strength": {
+        "name": "WiFi signal"
+      },
+      "rf_strength": {
+        "name": "RF signal"
+      },
+      "gateway_firmware": {
+        "name": "Gateway firmware"
+      },
+      "thermostat_firmware": {
+        "name": "Thermostat firmware"
+      },
+      "outdoor_temperature": {
+        "name": "Outdoor temperature"
+      }
+    },
+    "switch": {
+      "dhw": {
+        "name": "Hot water"
+      },
+      "anticipation": {
+        "name": "Heating anticipation"
+      }
+    }
+  }
+}

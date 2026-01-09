@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  release:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update version in manifest.json
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/migo_netatmo/manifest.json
+
+      - name: Create release archive
+        run: |
+          cd custom_components
+          zip -r ../migo_netatmo.zip migo_netatmo
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./migo_netatmo.zip
+          asset_name: migo_netatmo.zip
+          asset_content_type: application/zip

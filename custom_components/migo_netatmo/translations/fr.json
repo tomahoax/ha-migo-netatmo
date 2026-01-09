@@ -1,0 +1,136 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiGO - Your Heating Assistant",
+        "description": "Entrez vos identifiants de l'application **MiGO** (icône flamme orange).\n\n**Note :** Cette intégration ne fonctionne PAS avec MiGO Link ou myVAILLANT.",
+        "data": {
+          "username": "Email",
+          "password": "Mot de passe"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authentification MiGO",
+        "description": "Veuillez re-saisir vos identifiants MiGO",
+        "data": {
+          "username": "Email",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Email ou mot de passe incorrect",
+      "no_homes": "Aucun domicile trouvé dans votre compte MiGO",
+      "unknown": "Une erreur inconnue s'est produite"
+    },
+    "abort": {
+      "already_configured": "Ce compte est déjà configuré",
+      "reauth_successful": "Re-authentification réussie"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "anticipating": {
+        "name": "Anticipation"
+      },
+      "boiler_status": {
+        "name": "État chaudière"
+      },
+      "boiler_error": {
+        "name": "Erreur chaudière"
+      },
+      "reachable": {
+        "name": "Appareil joignable"
+      },
+      "ebus_error": {
+        "name": "Erreur eBus"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Rafraîchir"
+      }
+    },
+    "climate": {
+      "thermostat": {
+        "name": "{room_name}",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "away": "Absent",
+              "hot_water_only": "Eau chaude seulement",
+              "frost_guard": "Hors-gel"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "heating_curve": {
+        "name": "Courbe de chauffe"
+      },
+      "dhw_temperature": {
+        "name": "Température eau chaude"
+      },
+      "temperature_offset": {
+        "name": "Décalage température"
+      }
+    },
+    "select": {
+      "therm_mode": {
+        "name": "Mode thermostat",
+        "state": {
+          "schedule": "Auto",
+          "away": "Absent",
+          "hg": "Hors-gel"
+        }
+      },
+      "schedule": {
+        "name": "Programme actif"
+      },
+      "heating_type": {
+        "name": "Type de chauffage",
+        "state": {
+          "radiator": "Radiateurs",
+          "convector": "Convecteurs",
+          "floor_heating": "Plancher chauffant",
+          "unknown": "Inconnu"
+        }
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "Température {room_name}"
+      },
+      "room_humidity": {
+        "name": "Humidité {room_name}"
+      },
+      "battery": {
+        "name": "Batterie"
+      },
+      "wifi_strength": {
+        "name": "Signal WiFi"
+      },
+      "rf_strength": {
+        "name": "Signal RF"
+      },
+      "gateway_firmware": {
+        "name": "Firmware passerelle"
+      },
+      "thermostat_firmware": {
+        "name": "Firmware thermostat"
+      },
+      "outdoor_temperature": {
+        "name": "Température extérieure"
+      }
+    },
+    "switch": {
+      "dhw": {
+        "name": "Eau chaude"
+      },
+      "anticipation": {
+        "name": "Anticipation chauffage"
+      }
+    }
+  }
+}
