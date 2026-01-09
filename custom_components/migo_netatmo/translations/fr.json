@@ -30,9 +30,6 @@
   },
   "entity": {
     "binary_sensor": {
-      "anticipating": {
-        "name": "Anticipation"
-      },
       "boiler_status": {
         "name": "État chaudière"
       },
@@ -66,11 +63,8 @@
       }
     },
     "number": {
-      "heating_curve": {
-        "name": "Courbe de chauffe"
-      },
-      "dhw_temperature": {
-        "name": "Température eau chaude"
+      "manual_setpoint_duration": {
+        "name": "Durée consignes manuelles"
       },
       "temperature_offset": {
         "name": "Décalage température"
@@ -125,8 +119,8 @@
       }
     },
     "switch": {
-      "dhw": {
-        "name": "Eau chaude"
+      "dhw_boost": {
+        "name": "Boost eau chaude sanitaire"
       },
       "anticipation": {
         "name": "Anticipation chauffage"

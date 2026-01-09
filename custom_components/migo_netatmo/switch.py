@@ -57,9 +57,11 @@ async def async_setup_entry(
 
 
 class MigoDHWSwitch(MigoControlEntity, SwitchEntity):
-    """MiGO Domestic Hot Water (DHW) switch entity."""
+    """MiGO Domestic Hot Water (DHW) boost switch entity."""
 
-    _attr_translation_key = "dhw"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "dhw_boost"
+    _attr_icon = "mdi:water-boiler"
 
     def __init__(
         self,

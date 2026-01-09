@@ -133,11 +133,6 @@ TEMP_MIN: Final = 7.0
 TEMP_MAX: Final = 30.0
 TEMP_STEP: Final = 0.5
 
-# DHW Temperature
-DHW_TEMP_MIN: Final = 45
-DHW_TEMP_MAX: Final = 65
-DHW_TEMP_STEP: Final = 1
-
 # =============================================================================
 # Heating System Settings
 # =============================================================================
@@ -154,18 +149,6 @@ HEATING_TYPES: Final = [
     HEATING_TYPE_FLOOR,
     HEATING_TYPE_UNKNOWN,
 ]
-
-# Heating curve (slope) settings
-HEATING_CURVE_MIN: Final = 5  # 0.5 in UI (value / 10)
-HEATING_CURVE_MAX: Final = 35  # 3.5 in UI
-HEATING_CURVE_STEP: Final = 1
-HEATING_CURVE_DEFAULT: Final = 14  # 1.4 in UI
-
-# Hysteresis settings (high_deadband = hysteresis * 10 - 1)
-HYSTERESIS_MIN: Final = 0.1
-HYSTERESIS_MAX: Final = 2.0
-HYSTERESIS_STEP: Final = 0.1
-HYSTERESIS_DEFAULT: Final = 0.5
 
 # Manual setpoint duration (in seconds)
 MANUAL_SETPOINT_DURATION_MIN: Final = 300  # 5 minutes
