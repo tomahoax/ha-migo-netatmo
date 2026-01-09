@@ -63,16 +63,17 @@ This integration was created to fill that gap by reverse-engineering the Netatmo
 - RF signal strength (thermostat)
 - Gateway firmware version
 - Thermostat firmware version
+- Heating type (radiators/convector/floor heating) - read-only
 
 ### Switches
 
-- Domestic Hot Water (DHW) control
+- DHW boost (hot water boost)
 - Heating anticipation (enable/disable)
 
-### Number Controls
+### Number Controls (Configuration)
 
-- Heating curve (slope adjustment: 0.5 - 3.5)
-- DHW temperature (45°C - 65°C)
+- DHW temperature (45°C - 60°C)
+- Manual setpoint duration (5 min - 12 hours)
 - Temperature offset per room (-5.0°C to +5.0°C)
 
 ### Binary Sensors
@@ -81,13 +82,11 @@ This integration was created to fill that gap by reverse-engineering the Netatmo
 - Boiler error
 - Device reachable
 - eBus error
-- Anticipation (heating anticipation in progress)
 
 ### Select
 
 - Thermostat mode (Auto/Away/Frost guard)
 - Active schedule
-- Heating type (radiators/convector/floor heating)
 
 ### Button
 
