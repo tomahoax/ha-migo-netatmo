@@ -63,6 +63,9 @@
       }
     },
     "number": {
+      "dhw_temperature": {
+        "name": "DHW temperature"
+      },
       "manual_setpoint_duration": {
         "name": "Manual setpoint duration"
       },
