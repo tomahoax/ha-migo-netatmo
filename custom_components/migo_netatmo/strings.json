@@ -30,9 +30,6 @@
   },
   "entity": {
     "binary_sensor": {
-      "anticipating": {
-        "name": "Anticipation"
-      },
       "boiler_status": {
         "name": "Boiler status"
       },
@@ -66,11 +63,8 @@
       }
     },
     "number": {
-      "heating_curve": {
-        "name": "Heating curve"
-      },
-      "dhw_temperature": {
-        "name": "Hot water temperature"
+      "manual_setpoint_duration": {
+        "name": "Manual setpoint duration"
       },
       "temperature_offset": {
         "name": "Temperature offset"
@@ -125,8 +119,8 @@
       }
     },
     "switch": {
-      "dhw": {
-        "name": "Hot water"
+      "dhw_boost": {
+        "name": "DHW boost"
       },
       "anticipation": {
         "name": "Heating anticipation"

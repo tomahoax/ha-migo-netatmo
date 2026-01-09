@@ -36,14 +36,7 @@ class BinarySensorConfig:
 
 
 # Room-based binary sensor configurations
-ROOM_BINARY_SENSORS: tuple[BinarySensorConfig, ...] = (
-    BinarySensorConfig(
-        data_key="anticipating",
-        unique_id_key="anticipating",
-        translation_key="anticipating",
-        device_class=BinarySensorDeviceClass.RUNNING,
-    ),
-)
+ROOM_BINARY_SENSORS: tuple[BinarySensorConfig, ...] = ()
 
 # Gateway binary sensor configurations
 GATEWAY_BINARY_SENSORS: tuple[BinarySensorConfig, ...] = (
