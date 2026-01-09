@@ -1,0 +1,14 @@
+{
+  "domain": "migo_netatmo",
+  "name": "MiGo (Netatmo) - Integration",
+  "codeowners": ["@tomahoax"],
+  "config_flow": true,
+  "documentation": "https://github.com/tomahoax/ha-migo-netatmo",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/tomahoax/ha-migo-netatmo/issues",
+  "requirements": [
+    "aiohttp>=3.8.0"
+  ],
+  "version": "0.20.0"
+}
