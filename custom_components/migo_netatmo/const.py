@@ -26,6 +26,7 @@ API_SWITCHHOMESCHEDULE_URL: Final = f"{API_BASE_URL}/api/switchhomeschedule"
 API_CHANGEHEATINGCURVE_URL: Final = f"{API_BASE_URL}/api/changeheatingcurve"
 API_SETHEATINGSYSTEM_URL: Final = f"{API_BASE_URL}/api/setheatingsystem"
 API_SETCONFIGS_URL: Final = f"{API_BASE_URL}/syncapi/v1/setconfigs"
+API_CHANGEHEATINGALGO_URL: Final = f"{API_BASE_URL}/api/changeheatingalgo"
 
 # Sync API endpoints (used by mobile app for real-time updates)
 API_SYNC_HOMESTATUS_URL: Final = f"{API_BASE_URL}/syncapi/v1/homestatus"
@@ -150,10 +151,10 @@ HEATING_TYPES: Final = [
     HEATING_TYPE_UNKNOWN,
 ]
 
-# Manual setpoint duration (in seconds)
-MANUAL_SETPOINT_DURATION_MIN: Final = 300  # 5 minutes
-MANUAL_SETPOINT_DURATION_MAX: Final = 43200  # 12 hours
-MANUAL_SETPOINT_DURATION_STEP: Final = 300  # 5 minutes
+# Manual setpoint duration (in minutes - API stores in minutes)
+MANUAL_SETPOINT_DURATION_MIN: Final = 5  # 5 minutes
+MANUAL_SETPOINT_DURATION_MAX: Final = 720  # 12 hours (720 minutes)
+MANUAL_SETPOINT_DURATION_STEP: Final = 5  # 5 minutes
 
 # Temperature offset
 TEMP_OFFSET_MIN: Final = -5.0
@@ -168,6 +169,12 @@ DHW_CONTROL_INSTANTANEOUS: Final = "instantaneous"
 DHW_TEMP_MIN: Final = 45
 DHW_TEMP_MAX: Final = 60
 DHW_TEMP_STEP: Final = 1
+
+# Hysteresis threshold (0.1 to 2.0°C)
+# API uses high_deadband = hysteresis * 10 - 1
+HYSTERESIS_MIN: Final = 0.1
+HYSTERESIS_MAX: Final = 2.0
+HYSTERESIS_STEP: Final = 0.1
 
 # =============================================================================
 # Timing Constants
@@ -212,3 +219,34 @@ CONF_PASSWORD: Final = "password"
 # =============================================================================
 
 ENTITY_ID_PREFIX: Final = "migo_netatmo"
+
+# =============================================================================
+# Default Values
+# =============================================================================
+
+DEFAULT_MANUAL_SETPOINT_DURATION: Final = 180  # 3 hours in minutes
+DEFAULT_DHW_TEMPERATURE: Final = 60  # °C
+DEFAULT_HYSTERESIS: Final = 1.6  # °C (deadband=15)
+DEFAULT_TEMP_OFFSET: Final = 0.0  # °C
+
+# =============================================================================
+# Climate Mode Mappings
+# =============================================================================
+
+# Preset modes for climate entity
+CLIMATE_PRESET_AWAY: Final = "away"
+CLIMATE_PRESET_HOT_WATER_ONLY: Final = "hot_water_only"
+CLIMATE_PRESET_FROST_GUARD: Final = "frost_guard"
+
+CLIMATE_PRESET_MODES: Final = [
+    CLIMATE_PRESET_AWAY,
+    CLIMATE_PRESET_HOT_WATER_ONLY,
+    CLIMATE_PRESET_FROST_GUARD,
+]
+
+# Mapping from preset mode to API mode
+PRESET_TO_API_MODE: Final = {
+    CLIMATE_PRESET_AWAY: MODE_AWAY,
+    CLIMATE_PRESET_FROST_GUARD: MODE_FROST_GUARD,
+    CLIMATE_PRESET_HOT_WATER_ONLY: MODE_FROST_GUARD,
+}

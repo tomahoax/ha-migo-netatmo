@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.const import DOMAIN
@@ -25,21 +28,42 @@ def load_fixture(filename: str) -> dict[str, Any]:
     Returns:
         The parsed JSON data.
     """
-    with open(FIXTURES_PATH / filename, encoding="utf-8") as f:
+    with (FIXTURES_PATH / filename).open(encoding="utf-8") as f:
         return json.load(f)
+
+
+@pytest.fixture
+def hass() -> HomeAssistant:
+    """Create a Home Assistant instance for testing."""
+    hass = MagicMock(spec=HomeAssistant)
+    hass.config_entries = MagicMock()
+    hass.config_entries.flow = MagicMock()
+    hass.config_entries.flow.async_init = AsyncMock()
+    hass.config_entries.flow.async_configure = AsyncMock()
+    hass.config_entries.async_reload = AsyncMock()
+    hass.config_entries.async_update_entry = MagicMock()
+    return hass
 
 
 @pytest.fixture
 def mock_config_entry() -> MagicMock:
     """Create a mock config entry."""
-    entry = MagicMock()
+    entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test_entry_id"
     entry.domain = DOMAIN
+    entry.unique_id = None
     entry.data = {
-        "username": "test@example.com",
-        "password": "test_password",
+        CONF_USERNAME: "test@example.com",
+        CONF_PASSWORD: "test_password",
     }
     entry.title = "MiGo (Netatmo)"
+
+    def add_to_hass(hass):
+        """Add entry to hass."""
+        entry.unique_id = "test@example.com"
+        hass.config_entries._entries = {entry.entry_id: entry}
+
+    entry.add_to_hass = add_to_hass
     return entry
 
 

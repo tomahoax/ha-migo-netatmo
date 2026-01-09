@@ -71,6 +71,9 @@
       },
       "temperature_offset": {
         "name": "Temperature offset"
+      },
+      "hysteresis": {
+        "name": "Hysteresis threshold"
       }
     },
     "select": {
@@ -110,15 +113,6 @@
       },
       "outdoor_temperature": {
         "name": "Outdoor temperature"
-      },
-      "heating_type": {
-        "name": "Heating type",
-        "state": {
-          "radiator": "Radiators",
-          "convector": "Convector",
-          "floor_heating": "Floor heating",
-          "unknown": "Unknown"
-        }
       }
     },
     "switch": {

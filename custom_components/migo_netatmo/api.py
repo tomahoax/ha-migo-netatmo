@@ -10,6 +10,7 @@ import aiohttp
 
 from .const import (
     API_AUTH_URL,
+    API_CHANGEHEATINGALGO_URL,
     API_CHANGEHEATINGCURVE_URL,
     API_HOMESDATA_URL,
     API_HOMESTATUS_URL,
@@ -754,7 +755,7 @@ class MigoApi:
 
         Args:
             home_id: The home ID.
-            duration: Duration in seconds (300-43200, i.e., 5min to 12h).
+            duration: Duration in minutes (5-720, i.e., 5min to 12h).
 
         Returns:
             The API response.
@@ -768,3 +769,37 @@ class MigoApi:
 
         _LOGGER.debug("Setting manual setpoint duration=%s for home %s", duration, home_id)
         return await self._api_request(API_SETHOMEDATA_URL, data)
+
+    async def set_hysteresis(
+        self,
+        device_id: str,
+        hysteresis: float,
+    ) -> dict[str, Any]:
+        """Set hysteresis threshold for heating algorithm.
+
+        Args:
+            device_id: The gateway device ID (e.g., "70:ee:50:6b:e3:6a").
+            hysteresis: Hysteresis value in °C (0.1 to 2.0).
+
+        Returns:
+            The API response.
+        """
+        # API uses high_deadband = hysteresis * 10 - 1
+        # e.g., 0.4°C -> high_deadband = 3, 1.8°C -> high_deadband = 17
+        high_deadband = int(hysteresis * 10 - 1)
+
+        data = {
+            "device_id": device_id,
+            "algo_type": "simple_algo",
+            "algo_params": {
+                "high_deadband": high_deadband,
+            },
+        }
+
+        _LOGGER.debug(
+            "Setting hysteresis=%s (high_deadband=%s) for device %s",
+            hysteresis,
+            high_deadband,
+            device_id,
+        )
+        return await self._api_request(API_CHANGEHEATINGALGO_URL, data)

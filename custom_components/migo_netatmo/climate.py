@@ -29,7 +29,7 @@ from .const import (
     TEMP_STEP,
 )
 from .coordinator import MigoDataUpdateCoordinator
-from .entity import MigoApiControlMixin, MigoRoomEntity
+from .entity import MigoRoomControlEntity
 from .helpers import get_home_id_or_log_error, safe_float
 
 if TYPE_CHECKING:
@@ -101,7 +101,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class MigoClimate(MigoRoomEntity, MigoApiControlMixin, ClimateEntity):
+class MigoClimate(MigoRoomControlEntity, ClimateEntity):
     """MiGO Climate entity."""
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -125,8 +125,7 @@ class MigoClimate(MigoRoomEntity, MigoApiControlMixin, ClimateEntity):
         api: MigoApi,
     ) -> None:
         """Initialize the climate entity."""
-        super().__init__(coordinator, room_id)
-        self._api = api
+        super().__init__(coordinator, room_id, api)
         self._attr_unique_id = f"migo_netatmo_climate_{room_id}"
         self._attr_translation_key = "thermostat"
 

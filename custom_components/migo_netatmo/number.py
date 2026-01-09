@@ -11,10 +11,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    DEFAULT_DHW_TEMPERATURE,
+    DEFAULT_HYSTERESIS,
+    DEFAULT_MANUAL_SETPOINT_DURATION,
+    DEFAULT_TEMP_OFFSET,
     DEVICE_TYPE_GATEWAY,
     DHW_TEMP_MAX,
     DHW_TEMP_MIN,
     DHW_TEMP_STEP,
+    HYSTERESIS_MAX,
+    HYSTERESIS_MIN,
+    HYSTERESIS_STEP,
     MANUAL_SETPOINT_DURATION_MAX,
     MANUAL_SETPOINT_DURATION_MIN,
     MANUAL_SETPOINT_DURATION_STEP,
@@ -54,10 +61,17 @@ async def async_setup_entry(
             )
         )
 
-    # Create DHW temperature entity for each gateway
+    # Create DHW temperature and hysteresis entities for each gateway
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
         entities.append(
             MigoDHWTemperatureNumber(
+                coordinator=coordinator,
+                device_id=device_id,
+                api=data.api,
+            )
+        )
+        entities.append(
+            MigoHysteresisNumber(
                 coordinator=coordinator,
                 device_id=device_id,
                 api=data.api,
@@ -86,9 +100,9 @@ class MigoManualSetpointDurationNumber(MigoHomeEntity, NumberEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "manual_setpoint_duration"
-    _attr_native_min_value = MANUAL_SETPOINT_DURATION_MIN // 60  # 5 minutes
-    _attr_native_max_value = MANUAL_SETPOINT_DURATION_MAX // 60  # 720 minutes (12h)
-    _attr_native_step = MANUAL_SETPOINT_DURATION_STEP // 60  # 5 minutes
+    _attr_native_min_value = MANUAL_SETPOINT_DURATION_MIN  # 5 minutes
+    _attr_native_max_value = MANUAL_SETPOINT_DURATION_MAX  # 720 minutes (12h)
+    _attr_native_step = MANUAL_SETPOINT_DURATION_STEP  # 5 minutes
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_mode = NumberMode.SLIDER
     _attr_icon = "mdi:timer-cog-outline"
@@ -116,30 +130,28 @@ class MigoManualSetpointDurationNumber(MigoHomeEntity, NumberEntity):
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
             return cached
-        # Fallback to API data (therm_setpoint_default_duration is in seconds)
+        # Fallback to API data (therm_setpoint_default_duration is in minutes)
         home_data = self.coordinator.homes.get(self._home_id, {})
-        duration_seconds = home_data.get("therm_setpoint_default_duration")
-        if duration_seconds is not None:
-            return duration_seconds // 60
+        duration_minutes = home_data.get("therm_setpoint_default_duration")
+        if duration_minutes is not None:
+            return int(duration_minutes)
         # Default to 3 hours (180 minutes) as shown in the app
-        return 180
+        return DEFAULT_MANUAL_SETPOINT_DURATION
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the manual setpoint duration."""
         minutes = int(value)
-        seconds = minutes * 60
 
         _LOGGER.debug(
-            "Setting manual setpoint duration to %s minutes (%s seconds) for home %s",
+            "Setting manual setpoint duration to %s minutes for home %s",
             minutes,
-            seconds,
             self._home_id,
         )
         await self._api.set_manual_setpoint_duration(
             home_id=self._home_id,
-            duration=seconds,
+            duration=minutes,
         )
-        # Store in optimistic cache (in minutes for display)
+        # Store in optimistic cache
         self.coordinator.set_cached_value(self._cache_key, minutes)
         _LOGGER.debug("Manual setpoint duration set for home %s", self._home_id)
         await self.coordinator.async_request_refresh()
@@ -189,7 +201,7 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
             offset = self._room_data.get("therm_setpoint_offset")
         if offset is not None:
             return float(offset)
-        return 0.0
+        return DEFAULT_TEMP_OFFSET
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the temperature offset."""
@@ -244,7 +256,7 @@ class MigoDHWTemperatureNumber(MigoControlEntity, NumberEntity):
         if temp is not None:
             return int(temp)
         # Default to 60°C as shown in the screenshot
-        return 60
+        return DEFAULT_DHW_TEMPERATURE
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHW temperature."""
@@ -268,4 +280,64 @@ class MigoDHWTemperatureNumber(MigoControlEntity, NumberEntity):
         # Store in optimistic cache
         self.coordinator.set_cached_value(self._cache_key, temperature)
         _LOGGER.debug("DHW temperature set for device %s", self._device_id)
+        await self.coordinator.async_request_refresh()
+
+
+class MigoHysteresisNumber(MigoControlEntity, NumberEntity):
+    """MiGO Hysteresis threshold number entity."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "hysteresis"
+    _attr_native_min_value = HYSTERESIS_MIN  # 0.1°C
+    _attr_native_max_value = HYSTERESIS_MAX  # 2.0°C
+    _attr_native_step = HYSTERESIS_STEP  # 0.1°C
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_mode = NumberMode.SLIDER
+    _attr_icon = "mdi:thermometer-lines"
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        api: MigoApi,
+    ) -> None:
+        """Initialize the hysteresis number entity."""
+        super().__init__(coordinator, device_id, api)
+        self._attr_unique_id = generate_unique_id("hysteresis", device_id)
+
+    @property
+    def _cache_key(self) -> str:
+        """Return the cache key for this entity."""
+        return f"hysteresis_{self._device_id}"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current hysteresis threshold."""
+        # Check optimistic cache first
+        cached = self.coordinator.get_cached_value(self._cache_key)
+        if cached is not None:
+            return cached
+        # Fallback to API data: hysteresis = (deadband + 1) / 10
+        deadband = self._device_data.get("simple_heating_algo_deadband")
+        if deadband is not None:
+            return round((deadband + 1) / 10, 1)
+        # Default to 1.6°C (deadband=15) as seen in typical configuration
+        return DEFAULT_HYSTERESIS
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the hysteresis threshold."""
+        hysteresis = round(value, 1)
+
+        _LOGGER.debug(
+            "Setting hysteresis to %s°C for device %s",
+            hysteresis,
+            self._device_id,
+        )
+        await self._api.set_hysteresis(
+            device_id=self._device_id,
+            hysteresis=hysteresis,
+        )
+        # Store in optimistic cache
+        self.coordinator.set_cached_value(self._cache_key, hysteresis)
+        _LOGGER.debug("Hysteresis set for device %s", self._device_id)
         await self.coordinator.async_request_refresh()

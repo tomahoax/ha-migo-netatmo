@@ -166,6 +166,7 @@ Retrieves real-time data (temperatures, states).
 | `dhw_enabled` | bool | DHW enabled |
 | `dhw_setpoint_endtime` | int | DHW boost end time (timestamp) |
 | `outdoor_temperature` | float | Outdoor temperature |
+| `simple_heating_algo_deadband` | int | Hysteresis deadband (see `/api/changeheatingalgo`) |
 | `sequence_id` | int | Sequence ID |
 
 #### NAThermVaillant (Thermostat)
@@ -334,6 +335,43 @@ Sets the heating curve (slope).
 
 ---
 
+### POST `/api/changeheatingalgo`
+Sets the heating algorithm hysteresis threshold.
+
+**Request:**
+```json
+{
+  "device_id": "<gateway_mac_address>",
+  "algo_type": "simple_algo",
+  "algo_params": {
+    "high_deadband": 15
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "time_exec": 0.024837017059326172,
+  "time_server": 1767980332
+}
+```
+
+**Notes:**
+- `high_deadband` = hysteresis × 10 - 1
+- Range: 0-19 (0.1°C to 2.0°C in UI)
+- Examples:
+  - 0.1°C → `high_deadband = 0`
+  - 0.4°C → `high_deadband = 3`
+  - 1.6°C → `high_deadband = 15` (default)
+  - 1.8°C → `high_deadband = 17`
+  - 2.0°C → `high_deadband = 19`
+- The current value is returned in homestatus as `simple_heating_algo_deadband` on the gateway module
+- To convert back: hysteresis = (`simple_heating_algo_deadband` + 1) / 10
+
+---
+
 ### POST `/api/sethomedata` - Advanced Settings
 
 **Request - Set Anticipation:**
@@ -364,14 +402,15 @@ Sets the heating curve (slope).
 {
   "home": {
     "id": "<home_id>",
-    "therm_setpoint_default_duration": 3600
+    "therm_setpoint_default_duration": 180
   }
 }
 ```
 
 **Notes:**
-- `therm_setpoint_default_duration` is in seconds
-- Range: 300-43200 (5 minutes to 12 hours)
+- `therm_setpoint_default_duration` is in minutes
+- Range: 5-720 (5 minutes to 12 hours)
+- Default: 180 (3 hours)
 
 ---
 
@@ -632,7 +671,8 @@ Retrieves synchronization configurations.
 - [x] Heating curve (slope)
 - [x] DHW temperature
 - [x] Temperature offset
-- [ ] Manual setpoint default duration
+- [x] Manual setpoint default duration
+- [x] Hysteresis threshold
 
 ### Select Entities
 - [x] Active schedule
