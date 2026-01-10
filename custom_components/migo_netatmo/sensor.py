@@ -111,6 +111,7 @@ THERMOSTAT_SENSORS: tuple[SensorConfig, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         unit=PERCENTAGE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         extra_attrs_fn=_battery_extra_attrs,
     ),
     SensorConfig(

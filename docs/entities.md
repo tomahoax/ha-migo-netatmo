@@ -125,6 +125,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|-------|-------------|
 | `number.migo_{home}_dhw_temperature` | DHW Temperature | 45-60°C | Hot water temperature setpoint |
 | `number.migo_{home}_hysteresis` | Hysteresis Threshold | 0.1-2.0°C | Heating algorithm threshold |
+| `number.migo_{home}_heating_curve` | Heating Curve | 0.0-5.0 | Heating curve slope adjustment |
 
 ### Home Controls
 
@@ -154,6 +155,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
 | `button.migo_{home}_refresh` | Refresh | Force data refresh from API |
+| `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Reset heating curve to default value (1.5) |
 
 ---
 
@@ -163,4 +165,9 @@ After installation, you can configure the integration via **Settings** → **Dev
 
 | Option | Description | Range | Default |
 |--------|-------------|-------|---------|
+| **Email** | MiGO account email | - | - |
+| **Password** | MiGO account password | - | - |
+| **Client ID** | Custom OAuth client ID (optional) | - | Default MiGO app |
+| **Client Secret** | Custom OAuth client secret (optional) | - | Default MiGO app |
+| **User Prefix** | Custom user prefix (optional) | - | sdbg |
 | **Update interval** | How often to poll the API for updates | 60-3600 seconds | 300 seconds (5 min) |

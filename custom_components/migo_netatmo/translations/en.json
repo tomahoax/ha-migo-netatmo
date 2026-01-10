@@ -8,11 +8,13 @@
           "username": "Email",
           "password": "Password",
           "client_id": "Client ID (optional)",
-          "client_secret": "Client Secret (optional)"
+          "client_secret": "Client Secret (optional)",
+          "user_prefix": "User prefix (optional)"
         },
         "data_description": {
           "client_id": "Leave empty to use default MiGO app credentials",
-          "client_secret": "Leave empty to use default MiGO app credentials"
+          "client_secret": "Leave empty to use default MiGO app credentials",
+          "user_prefix": "Leave empty to use default prefix (sdbg)"
         }
       },
       "reauth_confirm": {
@@ -22,11 +24,13 @@
           "username": "Email",
           "password": "Password",
           "client_id": "Client ID (optional)",
-          "client_secret": "Client Secret (optional)"
+          "client_secret": "Client Secret (optional)",
+          "user_prefix": "User prefix (optional)"
         },
         "data_description": {
           "client_id": "Leave empty to use default MiGO app credentials",
-          "client_secret": "Leave empty to use default MiGO app credentials"
+          "client_secret": "Leave empty to use default MiGO app credentials",
+          "user_prefix": "Leave empty to use default prefix (sdbg)"
         }
       }
     },
@@ -44,14 +48,26 @@
     "step": {
       "init": {
         "title": "MiGO Options",
-        "description": "Configure polling interval and advanced settings",
+        "description": "Configure credentials and polling interval",
         "data": {
+          "username": "Email",
+          "password": "Password",
+          "client_id": "Client ID (optional)",
+          "client_secret": "Client Secret (optional)",
+          "user_prefix": "User prefix (optional)",
           "update_interval": "Update interval (seconds)"
         },
         "data_description": {
+          "client_id": "Leave empty to use default MiGO app credentials",
+          "client_secret": "Leave empty to use default MiGO app credentials",
+          "user_prefix": "Leave empty to use default prefix (sdbg)",
           "update_interval": "How often to poll the API for updates (60-3600 seconds)"
         }
       }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password",
+      "unknown": "An unknown error occurred"
     }
   },
   "entity": {
@@ -72,6 +88,9 @@
     "button": {
       "refresh": {
         "name": "Refresh"
+      },
+      "reset_heating_curve": {
+        "name": "Reset heating curve"
       }
     },
     "climate": {
@@ -100,6 +119,9 @@
       },
       "hysteresis": {
         "name": "Hysteresis threshold"
+      },
+      "heating_curve": {
+        "name": "Heating curve"
       }
     },
     "select": {

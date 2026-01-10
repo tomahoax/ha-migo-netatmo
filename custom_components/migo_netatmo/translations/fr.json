@@ -8,11 +8,13 @@
           "username": "Email",
           "password": "Mot de passe",
           "client_id": "Client ID (optionnel)",
-          "client_secret": "Client Secret (optionnel)"
+          "client_secret": "Client Secret (optionnel)",
+          "user_prefix": "Préfixe utilisateur (optionnel)"
         },
         "data_description": {
           "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
-          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO"
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)"
         }
       },
       "reauth_confirm": {
@@ -22,11 +24,13 @@
           "username": "Email",
           "password": "Mot de passe",
           "client_id": "Client ID (optionnel)",
-          "client_secret": "Client Secret (optionnel)"
+          "client_secret": "Client Secret (optionnel)",
+          "user_prefix": "Préfixe utilisateur (optionnel)"
         },
         "data_description": {
           "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
-          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO"
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)"
         }
       }
     },
@@ -44,14 +48,26 @@
     "step": {
       "init": {
         "title": "Options MiGO",
-        "description": "Configurer l'intervalle de mise à jour et les paramètres avancés",
+        "description": "Configurer les identifiants et l'intervalle de mise à jour",
         "data": {
+          "username": "Email",
+          "password": "Mot de passe",
+          "client_id": "Client ID (optionnel)",
+          "client_secret": "Client Secret (optionnel)",
+          "user_prefix": "Préfixe utilisateur (optionnel)",
           "update_interval": "Intervalle de mise à jour (secondes)"
         },
         "data_description": {
+          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)",
           "update_interval": "Fréquence de mise à jour des données (60-3600 secondes)"
         }
       }
+    },
+    "error": {
+      "invalid_auth": "Email ou mot de passe incorrect",
+      "unknown": "Une erreur inconnue s'est produite"
     }
   },
   "entity": {
@@ -72,6 +88,9 @@
     "button": {
       "refresh": {
         "name": "Rafraîchir"
+      },
+      "reset_heating_curve": {
+        "name": "Réinitialiser courbe de chauffe"
       }
     },
     "climate": {
@@ -100,6 +119,9 @@
       },
       "hysteresis": {
         "name": "Seuil d'hystérésis"
+      },
+      "heating_curve": {
+        "name": "Courbe de chauffe"
       }
     },
     "select": {

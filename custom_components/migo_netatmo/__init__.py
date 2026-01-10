@@ -12,7 +12,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MigoApi, MigoApiError, MigoAuthError
-from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET
+from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX
 from .coordinator import MigoDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -52,6 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
         session=session,
         client_id=entry.data.get(CONF_CLIENT_ID),
         client_secret=entry.data.get(CONF_CLIENT_SECRET),
+        user_prefix=entry.data.get(CONF_USER_PREFIX),
     )
 
     try:

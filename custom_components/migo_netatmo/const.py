@@ -173,6 +173,13 @@ HYSTERESIS_MIN: Final = 0.1
 HYSTERESIS_MAX: Final = 2.0
 HYSTERESIS_STEP: Final = 0.1
 
+# Heating curve (slope) - 0 to 5 in UI
+# API uses slope * 10 (0-50)
+HEATING_CURVE_MIN: Final = 0.0
+HEATING_CURVE_MAX: Final = 5.0
+HEATING_CURVE_STEP: Final = 0.1
+DEFAULT_HEATING_CURVE: Final = 1.5
+
 # =============================================================================
 # Timing Constants
 # =============================================================================
@@ -214,6 +221,7 @@ CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
 CONF_CLIENT_ID: Final = "client_id"
 CONF_CLIENT_SECRET: Final = "client_secret"
+CONF_USER_PREFIX: Final = "user_prefix"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
 
 # =============================================================================

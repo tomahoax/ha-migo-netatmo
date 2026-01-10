@@ -70,6 +70,7 @@ THERMOSTAT_BINARY_SENSORS: tuple[BinarySensorConfig, ...] = (
         unique_id_key="reachable",
         translation_key="reachable",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
 

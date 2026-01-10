@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Heating curve control** - New number entity to adjust heating curve slope (0.0-5.0)
+- **Reset heating curve button** - Button to reset heating curve to default value (1.5)
+- **Configuration options** - Ability to modify credentials and OAuth settings in options flow
+  - Email, Password, Client ID, Client Secret, User Prefix can now be changed after setup
+  - Credentials are validated before saving
+
 ### Fixed
 - **Boiler runtime sensor not reporting data** - Fixed issue where the Daily Boiler Runtime sensor showed "Unknown"
   - Changed from `/api/getroommeasure` (home_id/room_id) to `/api/getmeasure` (device_id/module_id)
@@ -20,11 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed unused API endpoint constants
   - Removed duplicate preset constants from `const.py`
   - Renamed `get_consumption(room_id)` to `get_consumption(device_id)` for clarity
+- **Diagnostic entities** - Moved Battery and Reachable sensors to Diagnostic category (hidden by default)
 
 ### Documentation
 - Updated API reference to document `/api/getmeasure` endpoint with form-data format
 - Updated entities documentation to explain boiler runtime data source
 - Updated architecture documentation with consumption data flow
+- Added configuration options documentation
 
 ---
 

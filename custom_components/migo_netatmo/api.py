@@ -66,6 +66,7 @@ class MigoApi:
         session: aiohttp.ClientSession | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
+        user_prefix: str | None = None,
     ) -> None:
         """Initialize the API client.
 
@@ -75,6 +76,7 @@ class MigoApi:
             session: Optional aiohttp session to use. If not provided, one will be created.
             client_id: Optional custom OAuth client ID. Uses default if not provided.
             client_secret: Optional custom OAuth client secret. Uses default if not provided.
+            user_prefix: Optional custom user prefix. Uses default if not provided.
         """
         self._username = username
         self._password = password
@@ -82,6 +84,7 @@ class MigoApi:
         self._own_session = session is None
         self._client_id = client_id or CLIENT_ID
         self._client_secret = client_secret or CLIENT_SECRET
+        self._user_prefix = user_prefix or USER_PREFIX
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._token_expiry: datetime | None = None
@@ -148,7 +151,7 @@ class MigoApi:
             "grant_type": GRANT_TYPE_PASSWORD,
             "username": self._username,
             "password": self._password,
-            "user_prefix": USER_PREFIX,
+            "user_prefix": self._user_prefix,
             "scope": SCOPE,
         }
 
@@ -670,23 +673,30 @@ class MigoApi:
     async def set_heating_curve(
         self,
         device_id: str,
-        slope: int,
+        slope: float,
     ) -> dict[str, Any]:
         """Set heating curve (slope).
 
         Args:
             device_id: The gateway device ID.
-            slope: The slope value (5-35, representing 0.5-3.5 in UI).
+            slope: The slope value in UI (0.0-5.0). API uses slope * 10.
 
         Returns:
             The API response.
         """
+        # Convert UI value (0.0-5.0) to API value (0-50)
+        api_slope = int(slope * 10)
         data = {
             "device_id": device_id,
-            "slope": slope,
+            "slope": api_slope,
         }
 
-        _LOGGER.debug("Setting heating curve slope=%s for device %s", slope, device_id)
+        _LOGGER.debug(
+            "Setting heating curve slope=%s (api=%s) for device %s",
+            slope,
+            api_slope,
+            device_id,
+        )
         return await self._api_request(API_CHANGEHEATINGCURVE_URL, data)
 
     async def set_heating_type(
