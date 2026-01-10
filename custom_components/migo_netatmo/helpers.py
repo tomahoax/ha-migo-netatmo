@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from .const import KEY_BODY
+from .const import DEVICE_TYPE_GATEWAY, KEY_BODY
 
 if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
@@ -230,8 +230,6 @@ def get_gateway_mac_for_home(
     Returns:
         The gateway MAC address, or None if not found.
     """
-    from .const import DEVICE_TYPE_GATEWAY
-
     for device_id, device_data in coordinator.devices.items():
         if device_data.get("type") == DEVICE_TYPE_GATEWAY and device_data.get("home_id") == home_id:
             return device_id

@@ -6,6 +6,48 @@ Complete documentation of the Netatmo API used by the MiGO (Saunier Duval) appli
 
 > **Security Note:** The OAuth2 credentials (CLIENT_ID, CLIENT_SECRET) used by this integration were extracted from the official MiGO iOS app. They are required for authentication and are included in the integration source code. Do not share these credentials outside of this project.
 
+---
+
+## Differences with Standard Netatmo API
+
+This integration uses the same base API as the [official Netatmo Energy API](https://dev.netatmo.com/apidocumentation/energy), but with some differences specific to the MiGO/Vaillant ecosystem.
+
+### Endpoints Comparison
+
+| Official Netatmo API | MiGO Integration | Notes |
+|---------------------|------------------|-------|
+| `/api/homesdata` | ✅ Used | Same endpoint |
+| `/api/homestatus` | ✅ Used | Same endpoint |
+| `/api/setthermmode` | ✅ Used | Same endpoint |
+| `/api/switchhomeschedule` | ✅ Used | Same endpoint |
+| `/api/setroomthermpoint` | ❌ Not used | Replaced by `/api/setstate` |
+| `/api/setstate` | ✅ Used | More flexible than `setroomthermpoint` |
+
+### MiGO-Specific Endpoints (Not in Official Netatmo API)
+
+These endpoints are used by the MiGO app but are **not documented** in the official Netatmo API:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/sethomedata` | Anticipation, manual setpoint duration |
+| `/api/synchomeschedule` | Schedule synchronization |
+| `/api/changeheatingcurve` | Heating curve (slope) adjustment |
+| `/api/setheatingsystem` | Heating type configuration |
+| `/api/changeheatingalgo` | Hysteresis threshold |
+| `/syncapi/v1/setconfigs` | DHW temperature, temperature offset |
+| `/syncapi/v1/homestatus` | Real-time status (sync version) |
+| `/syncapi/v1/setstate` | State changes (sync version) |
+
+### Why `/api/setstate` Instead of `/api/setroomthermpoint`?
+
+The integration uses `/api/setstate` instead of the official `/api/setroomthermpoint` because:
+
+1. **More flexible**: Can modify multiple properties in a single request
+2. **Consistent**: Same endpoint for room state and module control (DHW)
+3. **Used by MiGO app**: Matches the behavior of the official MiGO mobile app
+
+---
+
 ## Base URL
 ```
 https://app.netatmo.net
@@ -240,8 +282,51 @@ Changes the global home mode (alternative API).
 
 ---
 
+### POST `/api/setroomthermpoint` (Official Netatmo API - Not Used)
+
+> **Note:** This endpoint is documented in the [official Netatmo API](https://dev.netatmo.com/apidocumentation/energy) but is **not used** by this integration. We use `/api/setstate` instead, which provides more flexibility.
+
+Sets the thermostat point for a specific room.
+
+**Request:**
+```json
+{
+  "home_id": "<home_id>",
+  "room_id": "<room_id>",
+  "mode": "manual|max|home",
+  "temp": 20.0,
+  "endtime": 1704067200
+}
+```
+
+**Parameters:**
+
+| Parameter | Required | Type | Description |
+|-----------|----------|------|-------------|
+| `home_id` | Yes | string | The home ID |
+| `room_id` | Yes | string | The room ID |
+| `mode` | Yes | string | The mode to apply: `manual`, `max`, or `home` |
+| `temp` | No | float | Temperature to set (required for `manual` mode) |
+| `endtime` | No | int | Unix timestamp when the setting expires |
+
+**Available Modes:**
+
+| Mode | Description |
+|------|-------------|
+| `manual` | Set a specific temperature until `endtime` |
+| `max` | Set maximum temperature (30°C) until `endtime` |
+| `home` | Return to schedule mode |
+
+**Notes on `endtime`:**
+- Only meaningful for `manual` and `max` modes
+- If not set, uses the default duration configured at account level (`therm_setpoint_default_duration`)
+- Must be a Unix timestamp in the future
+- When the time expires, the room returns to schedule mode
+
+---
+
 ### POST `/api/setstate` or `/syncapi/v1/setstate`
-Modifies the state of rooms or modules.
+Modifies the state of rooms or modules. **This is the endpoint used by this integration** instead of `setroomthermpoint`.
 
 > **Note:** The app uses `/syncapi/v1/setstate` with an `x-correlationid` header.
 
@@ -263,9 +348,34 @@ Modifies the state of rooms or modules.
 **Available Room Modes:**
 | Mode | Description |
 |------|-------------|
-| `manual` | Manual mode with temperature |
+| `manual` | Manual mode with specific temperature |
+| `max` | Maximum temperature (30°C) - useful for quick heating boost |
 | `home` | Home/presence mode |
-| `hg` | Frost guard mode |
+| `hg` | Frost guard mode (minimum temperature ~7°C) |
+
+**Optional Parameters for Timed Setpoints:**
+
+The `setstate` endpoint also supports timed setpoints (similar to `setroomthermpoint`):
+
+```json
+{
+  "home": {
+    "id": "<home_id>",
+    "rooms": [{
+      "id": "<room_id>",
+      "therm_setpoint_mode": "manual",
+      "therm_setpoint_temperature": 22,
+      "therm_setpoint_end_time": 1704067200
+    }]
+  }
+}
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `therm_setpoint_end_time` | int | Unix timestamp when the setpoint expires |
+
+> **Note:** If `therm_setpoint_end_time` is not provided, the system uses `therm_setpoint_default_duration` from the home configuration.
 
 **Request - Control DHW (Domestic Hot Water):**
 ```json
