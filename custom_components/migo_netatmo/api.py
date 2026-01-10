@@ -12,6 +12,7 @@ from .const import (
     API_AUTH_URL,
     API_CHANGEHEATINGALGO_URL,
     API_CHANGEHEATINGCURVE_URL,
+    API_GETMEASURE_URL,
     API_HOMESDATA_URL,
     API_HOMESTATUS_URL,
     API_SETCONFIGS_URL,
@@ -63,6 +64,8 @@ class MigoApi:
         username: str,
         password: str,
         session: aiohttp.ClientSession | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
     ) -> None:
         """Initialize the API client.
 
@@ -70,11 +73,15 @@ class MigoApi:
             username: The MiGO account email address.
             password: The MiGO account password.
             session: Optional aiohttp session to use. If not provided, one will be created.
+            client_id: Optional custom OAuth client ID. Uses default if not provided.
+            client_secret: Optional custom OAuth client secret. Uses default if not provided.
         """
         self._username = username
         self._password = password
         self._session = session
         self._own_session = session is None
+        self._client_id = client_id or CLIENT_ID
+        self._client_secret = client_secret or CLIENT_SECRET
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._token_expiry: datetime | None = None
@@ -136,8 +143,8 @@ class MigoApi:
         session = await self._get_session()
 
         data = {
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
             "grant_type": GRANT_TYPE_PASSWORD,
             "username": self._username,
             "password": self._password,
@@ -194,8 +201,8 @@ class MigoApi:
         session = await self._get_session()
 
         data = {
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
             "grant_type": GRANT_TYPE_REFRESH,
             "refresh_token": self._refresh_token,
         }
@@ -403,6 +410,60 @@ class MigoApi:
 
         _LOGGER.debug("Fetching home status for: %s", home_id)
         return await self._api_request(API_HOMESTATUS_URL, data)
+
+    async def get_measure(
+        self,
+        device_id: str,
+        module_id: str,
+        scale: str = "1day",
+        measure_types: list[str] | None = None,
+        date_begin: int | None = None,
+        date_end: int | None = None,
+    ) -> dict[str, Any]:
+        """Get measurements (historical data) from API using device/module IDs.
+
+        This is the endpoint used by Vaillant vSmart integration for boiler runtime.
+        Unlike getroommeasure which uses home/room IDs, this uses device/module IDs.
+
+        Args:
+            device_id: The ID of the gateway device (NAVaillant).
+            module_id: The ID of the thermostat module (NAThermVaillant).
+            scale: Time scale for measurements (30min, 1hour, 3hours, 1day, 1week, 1month).
+            measure_types: List of measure types to retrieve. If None, defaults to
+                          ["sum_boiler_on", "sum_boiler_off"].
+            date_begin: Optional start timestamp (Unix timestamp).
+            date_end: Optional end timestamp (Unix timestamp).
+
+        Returns:
+            The getmeasure response containing historical measurements.
+        """
+        if measure_types is None:
+            measure_types = [
+                "sum_boiler_on",
+                "sum_boiler_off",
+            ]
+
+        data: dict[str, Any] = {
+            "device_id": device_id,
+            "module_id": module_id,
+            "scale": scale,
+            "type": ",".join(measure_types),
+        }
+
+        if date_begin is not None:
+            data["date_begin"] = date_begin
+        if date_end is not None:
+            data["date_end"] = date_end
+
+        _LOGGER.debug(
+            "Fetching measure for device=%s, module=%s, scale=%s, types=%s",
+            device_id,
+            module_id,
+            scale,
+            measure_types,
+        )
+        # getmeasure uses form data, not JSON (legacy API)
+        return await self._api_request(API_GETMEASURE_URL, data, use_json=False)
 
     # =========================================================================
     # Room Control Methods

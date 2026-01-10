@@ -6,7 +6,13 @@
         "description": "Entrez vos identifiants de l'application **MiGO** (icône flamme orange).\n\n**Note :** Cette intégration ne fonctionne PAS avec MiGO Link ou myVAILLANT.",
         "data": {
           "username": "Email",
-          "password": "Mot de passe"
+          "password": "Mot de passe",
+          "client_id": "Client ID (optionnel)",
+          "client_secret": "Client Secret (optionnel)"
+        },
+        "data_description": {
+          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO"
         }
       },
       "reauth_confirm": {
@@ -14,7 +20,13 @@
         "description": "Veuillez re-saisir vos identifiants MiGO",
         "data": {
           "username": "Email",
-          "password": "Mot de passe"
+          "password": "Mot de passe",
+          "client_id": "Client ID (optionnel)",
+          "client_secret": "Client Secret (optionnel)"
+        },
+        "data_description": {
+          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO"
         }
       }
     },
@@ -26,6 +38,20 @@
     "abort": {
       "already_configured": "Ce compte est déjà configuré",
       "reauth_successful": "Re-authentification réussie"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options MiGO",
+        "description": "Configurer l'intervalle de mise à jour et les paramètres avancés",
+        "data": {
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        },
+        "data_description": {
+          "update_interval": "Fréquence de mise à jour des données (60-3600 secondes)"
+        }
+      }
     }
   },
   "entity": {
@@ -113,6 +139,9 @@
       },
       "outdoor_temperature": {
         "name": "Température extérieure"
+      },
+      "daily_boiler_runtime": {
+        "name": "Temps de fonctionnement chaudière"
       }
     },
     "switch": {

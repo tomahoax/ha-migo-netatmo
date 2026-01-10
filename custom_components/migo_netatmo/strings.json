@@ -6,7 +6,13 @@
         "description": "Enter your credentials from the **MiGO** app (orange flame icon).\n\n**Note:** This does NOT work with MiGO Link or myVAILLANT apps.",
         "data": {
           "username": "Email",
-          "password": "Password"
+          "password": "Password",
+          "client_id": "Client ID (optional)",
+          "client_secret": "Client Secret (optional)"
+        },
+        "data_description": {
+          "client_id": "Leave empty to use default MiGO app credentials",
+          "client_secret": "Leave empty to use default MiGO app credentials"
         }
       },
       "reauth_confirm": {
@@ -14,7 +20,13 @@
         "description": "Please re-enter your MiGO app credentials",
         "data": {
           "username": "Email",
-          "password": "Password"
+          "password": "Password",
+          "client_id": "Client ID (optional)",
+          "client_secret": "Client Secret (optional)"
+        },
+        "data_description": {
+          "client_id": "Leave empty to use default MiGO app credentials",
+          "client_secret": "Leave empty to use default MiGO app credentials"
         }
       }
     },
@@ -26,6 +38,20 @@
     "abort": {
       "already_configured": "This account is already configured",
       "reauth_successful": "Re-authentication successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MiGO Options",
+        "description": "Configure polling interval and advanced settings",
+        "data": {
+          "update_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "update_interval": "How often to poll the API for updates (60-3600 seconds)"
+        }
+      }
     }
   },
   "entity": {
@@ -113,6 +139,9 @@
       },
       "outdoor_temperature": {
         "name": "Outdoor temperature"
+      },
+      "daily_boiler_runtime": {
+        "name": "Daily boiler runtime"
       }
     },
     "switch": {

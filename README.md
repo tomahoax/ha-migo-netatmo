@@ -40,6 +40,21 @@ This integration was created to fill that gap by reverse-engineering the Netatmo
 
 ## Features
 
+### Device Architecture
+
+This integration creates **two separate devices** in Home Assistant:
+
+1. **Gateway (NAVaillant)** - The main communication hub
+   - Connected to your boiler via eBus
+   - Provides WiFi connectivity
+   - Controls DHW (Domestic Hot Water)
+
+2. **Thermostat (NAThermVaillant)** - The wall-mounted thermostat
+   - Connected to the Gateway via RF (radio)
+   - Battery powered
+   - Measures room temperature
+   - Linked to Gateway via `via_device` relationship
+
 ### Climate Entity
 
 - Display current temperature
@@ -55,33 +70,47 @@ This integration was created to fill that gap by reverse-engineering the Netatmo
 
 ### Sensors
 
+#### Gateway Sensors
+- Outdoor temperature
+- WiFi signal strength
+- Gateway firmware version
+
+#### Thermostat Sensors
 - Temperature sensor per room
 - Humidity sensor per room (if available)
-- Outdoor temperature (from gateway)
-- Battery level (thermostat)
-- WiFi signal strength (gateway)
-- RF signal strength (thermostat)
-- Gateway firmware version
+- Battery level
+- RF signal strength
 - Thermostat firmware version
-- Heating type (radiators/convector/floor heating) - read-only
+
+#### Energy Consumption
+- **Daily boiler runtime** - Tracks boiler operation time in seconds (compatible with Energy Dashboard via `state_class: total_increasing`)
 
 ### Switches
 
-- DHW boost (hot water boost)
-- Heating anticipation (enable/disable)
+- **DHW boost** (hot water boost) - Gateway
+- **Heating anticipation** (enable/disable) - Home setting
 
 ### Number Controls (Configuration)
 
-- DHW temperature (45°C - 60°C)
-- Manual setpoint duration (5 min - 12 hours)
-- Temperature offset per room (-5.0°C to +5.0°C)
+#### Gateway Controls
+- **DHW temperature** (45°C - 60°C)
+- **Hysteresis threshold** (0.1°C - 2.0°C)
+
+#### Home Controls
+- **Manual setpoint duration** (5 min - 12 hours)
+
+#### Room Controls
+- **Temperature offset** per room (-5.0°C to +5.0°C)
 
 ### Binary Sensors
 
-- Boiler status (running/idle)
-- Boiler error
-- Device reachable
+#### Gateway Binary Sensors
 - eBus error
+- Boiler error
+
+#### Thermostat Binary Sensors
+- Boiler status (running/idle)
+- Device reachable
 
 ### Select
 
@@ -91,6 +120,21 @@ This integration was created to fill that gap by reverse-engineering the Netatmo
 ### Button
 
 - Manual refresh
+
+## Configuration Options
+
+After installation, you can configure the integration options:
+
+1. Go to **Settings** → **Devices & services**
+2. Find **MiGo (Netatmo)** and click **Configure**
+3. Adjust the following settings:
+
+| Option | Description | Range | Default |
+|--------|-------------|-------|---------|
+| **Update interval** | How often to poll the API for updates | 60 - 3600 seconds | 300 seconds (5 min) |
+
+> [!TIP]
+> Lower polling intervals provide more responsive updates but may increase API load. A 5-minute interval is recommended for normal use.
 
 ## Installation
 
@@ -146,6 +190,15 @@ After restart:
 
 Your devices should now appear in Home Assistant!
 
+### Advanced Configuration
+
+You can optionally provide custom OAuth credentials:
+
+- **Client ID** (optional) - Custom OAuth client ID
+- **Client Secret** (optional) - Custom OAuth client secret
+
+Leave these empty to use the default MiGO app credentials.
+
 ### Manual Installation
 
 If you prefer not to use HACS:
@@ -155,6 +208,31 @@ If you prefer not to use HACS:
 3. Copy the `custom_components/migo_netatmo` folder to your Home Assistant `config/custom_components/` directory
 4. Restart Home Assistant
 5. Configure the integration via Settings → Devices & services → Add Integration
+
+## Energy Dashboard Integration
+
+The **Daily boiler runtime** sensor can be used to track heating usage in the Home Assistant Energy Dashboard:
+
+1. Go to **Settings** → **Dashboards** → **Energy**
+2. Under **Gas consumption** or **Individual devices**, add the boiler runtime sensor
+3. The sensor uses `state_class: total_increasing` for proper energy tracking
+
+> [!NOTE]
+> The sensor reports boiler runtime in seconds. To estimate energy consumption, you can create a template sensor that multiplies runtime by your boiler's power rating.
+
+Example template sensor for estimated gas consumption:
+```yaml
+template:
+  - sensor:
+      - name: "Estimated Gas Consumption"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {% set runtime_seconds = states('sensor.migo_thermostat_daily_boiler_runtime') | float(0) %}
+          {% set boiler_power_kw = 25 %}  {# Adjust to your boiler's power #}
+          {{ (runtime_seconds / 3600 * boiler_power_kw) | round(2) }}
+```
 
 ## Troubleshooting
 
@@ -168,6 +246,11 @@ If you prefer not to use HACS:
 
 - Check Home Assistant logs for errors
 - Verify that your thermostat is properly connected in the MiGO app
+
+### Two devices not showing
+
+- Make sure you have both a gateway (NAVaillant) and thermostat (NAThermVaillant) in your MiGO setup
+- The integration will only create devices for modules found in the API response
 
 ### Enable debug logs
 
@@ -183,6 +266,20 @@ logger:
 ## Technical Details
 
 This integration uses the Netatmo API (`app.netatmo.net`) which is the backend for the MiGO app. It was developed through reverse engineering of the iOS app to provide a Home Assistant integration for users who cannot use the myVAILLANT/MiGO Link ecosystem.
+
+### API Endpoints Used
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/oauth2/token` | Authentication |
+| `/api/homesdata` | Home structure and configuration |
+| `/api/homestatus` | Real-time status |
+| `/api/getroommeasure` | Historical data and consumption |
+| `/api/setstate` | Control room temperature and DHW |
+| `/api/setthermmode` | Set global mode |
+| `/api/sethomedata` | Home settings (anticipation, duration) |
+| `/syncapi/v1/setconfigs` | DHW temperature, offsets |
+| `/api/changeheatingalgo` | Hysteresis settings |
 
 ## Contributing
 

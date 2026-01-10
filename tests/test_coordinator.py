@@ -257,3 +257,90 @@ class TestCoordinatorDataMerging:
 
         # Added by coordinator
         assert device["home_id"] == "home_123"
+
+
+class TestCoordinatorConsumption:
+    """Tests for consumption data fetching and access."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_consumption_success(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+    ) -> None:
+        """Test successful consumption data fetching."""
+        await coordinator._async_update_data()
+
+        # Consumption data should be indexed by gateway device_id
+        consumption = coordinator.get_consumption("gateway_001")
+        assert consumption is not None
+        assert "sum_boiler_on" in consumption
+        assert "sum_boiler_off" in consumption
+        assert "timestamp" in consumption
+
+        # Values from mock (most recent timestamp: 1704240000)
+        assert consumption["sum_boiler_on"] == 5400
+        assert consumption["sum_boiler_off"] == 81000
+
+    @pytest.mark.asyncio
+    async def test_get_consumption_returns_none_for_unknown_device(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+    ) -> None:
+        """Test that get_consumption returns None for unknown device."""
+        await coordinator._async_update_data()
+
+        consumption = coordinator.get_consumption("nonexistent_device")
+        assert consumption is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_consumption_api_error_continues(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that consumption API errors don't stop processing."""
+        mock_api.get_measure = AsyncMock(side_effect=MigoApiError("Consumption error"))
+
+        # Should not raise, just log debug message
+        await coordinator._async_update_data()
+
+        # Other data should still be processed
+        assert len(coordinator.homes) == 1
+        assert len(coordinator.devices) == 2
+
+        # Consumption should be empty
+        consumption = coordinator.get_consumption("gateway_001")
+        assert consumption is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_consumption_empty_response(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test handling of empty consumption response."""
+        mock_api.get_measure = AsyncMock(return_value={"body": {}, "status": "ok"})
+
+        await coordinator._async_update_data()
+
+        # Should handle gracefully
+        consumption = coordinator.get_consumption("gateway_001")
+        assert consumption is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_consumption_uses_gateway_thermostat_pair(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that consumption fetch uses correct gateway/thermostat IDs."""
+        await coordinator._async_update_data()
+
+        # Verify get_measure was called with correct parameters
+        mock_api.get_measure.assert_called_once()
+        call_kwargs = mock_api.get_measure.call_args.kwargs
+        assert call_kwargs["device_id"] == "gateway_001"
+        assert call_kwargs["module_id"] == "module_789"
+        assert call_kwargs["scale"] == "1day"
+        assert "sum_boiler_on" in call_kwargs["measure_types"]
+        assert "sum_boiler_off" in call_kwargs["measure_types"]

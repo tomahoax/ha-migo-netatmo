@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY
-from .entity import MigoControlEntity, MigoHomeControlEntity
+from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error
 
 if TYPE_CHECKING:
@@ -56,7 +56,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class MigoDHWSwitch(MigoControlEntity, SwitchEntity):
+class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
     """MiGO Domestic Hot Water (DHW) boost switch entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -109,7 +109,7 @@ class MigoDHWSwitch(MigoControlEntity, SwitchEntity):
         _LOGGER.debug("DHW disabled for device %s", self._device_id)
 
 
-class MigoAnticipationSwitch(MigoHomeControlEntity, SwitchEntity):
+class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
     """MiGO Heating Anticipation switch entity."""
 
     _attr_entity_category = EntityCategory.CONFIG

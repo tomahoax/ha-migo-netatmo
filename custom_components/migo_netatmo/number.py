@@ -29,7 +29,7 @@ from .const import (
     TEMP_OFFSET_MIN,
     TEMP_OFFSET_STEP,
 )
-from .entity import MigoControlEntity, MigoHomeEntity, MigoRoomEntity
+from .entity import MigoGatewayControlEntity, MigoRoomEntity, MigoThermostatHomeControlEntity
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ async def async_setup_entry(
             )
         )
 
-    # Create DHW temperature and hysteresis entities for each gateway
+    # Create DHW temperature entities for each gateway
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
         entities.append(
             MigoDHWTemperatureNumber(
@@ -70,13 +70,18 @@ async def async_setup_entry(
                 api=data.api,
             )
         )
-        entities.append(
-            MigoHysteresisNumber(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
+        # Create hysteresis entity (assigned to Thermostat device)
+        device_data = coordinator.devices.get(device_id, {})
+        home_id = device_data.get("home_id")
+        if home_id:
+            entities.append(
+                MigoHysteresisNumber(
+                    coordinator=coordinator,
+                    home_id=home_id,
+                    device_id=device_id,
+                    api=data.api,
+                )
             )
-        )
 
     # Create temperature offset entities for each room
     for room_id in coordinator.rooms:
@@ -95,7 +100,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class MigoManualSetpointDurationNumber(MigoHomeEntity, NumberEntity):
+class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEntity):
     """MiGO Manual setpoint default duration number entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -114,8 +119,7 @@ class MigoManualSetpointDurationNumber(MigoHomeEntity, NumberEntity):
         api: MigoApi,
     ) -> None:
         """Initialize the manual setpoint duration number entity."""
-        super().__init__(coordinator, home_id)
-        self._api = api
+        super().__init__(coordinator, home_id, api)
         self._attr_unique_id = generate_unique_id("manual_setpoint_duration", home_id)
 
     @property
@@ -217,7 +221,7 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class MigoDHWTemperatureNumber(MigoControlEntity, NumberEntity):
+class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
     """MiGO Domestic Hot Water temperature number entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -283,8 +287,12 @@ class MigoDHWTemperatureNumber(MigoControlEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
 
-class MigoHysteresisNumber(MigoControlEntity, NumberEntity):
-    """MiGO Hysteresis threshold number entity."""
+class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
+    """MiGO Hysteresis threshold number entity.
+
+    Note: Although hysteresis is a gateway parameter, it's assigned to the
+    Thermostat device per user preference.
+    """
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "hysteresis"
@@ -298,12 +306,19 @@ class MigoHysteresisNumber(MigoControlEntity, NumberEntity):
     def __init__(
         self,
         coordinator: MigoDataUpdateCoordinator,
+        home_id: str,
         device_id: str,
         api: MigoApi,
     ) -> None:
         """Initialize the hysteresis number entity."""
-        super().__init__(coordinator, device_id, api)
+        super().__init__(coordinator, home_id, api)
+        self._device_id = device_id  # Gateway device ID for API calls
         self._attr_unique_id = generate_unique_id("hysteresis", device_id)
+
+    @property
+    def _device_data(self) -> dict:
+        """Get current gateway device data."""
+        return self.coordinator.devices.get(self._device_id, {})
 
     @property
     def _cache_key(self) -> str:

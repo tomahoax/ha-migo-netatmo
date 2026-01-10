@@ -30,13 +30,11 @@ These endpoints are used by the MiGO app but are **not documented** in the offic
 | Endpoint | Purpose |
 |----------|---------|
 | `/api/sethomedata` | Anticipation, manual setpoint duration |
-| `/api/synchomeschedule` | Schedule synchronization |
 | `/api/changeheatingcurve` | Heating curve (slope) adjustment |
 | `/api/setheatingsystem` | Heating type configuration |
 | `/api/changeheatingalgo` | Hysteresis threshold |
+| `/api/getmeasure` | Historical data and boiler consumption |
 | `/syncapi/v1/setconfigs` | DHW temperature, temperature offset |
-| `/syncapi/v1/homestatus` | Real-time status (sync version) |
-| `/syncapi/v1/setstate` | State changes (sync version) |
 
 ### Why `/api/setstate` Instead of `/api/setroomthermpoint`?
 
@@ -686,6 +684,61 @@ Retrieves synchronization configurations.
 
 ---
 
+### POST `/api/getmeasure`
+Retrieves historical measurements and boiler consumption data.
+
+> **Important:** This endpoint uses **form data** (`application/x-www-form-urlencoded`) instead of JSON. This is a legacy Netatmo API behavior.
+
+**Request:**
+```
+Content-Type: application/x-www-form-urlencoded
+
+device_id=<gateway_mac>&module_id=<thermostat_mac>&scale=1day&type=sum_boiler_on,sum_boiler_off&date_begin=<timestamp>
+```
+
+**Parameters:**
+| Parameter | Required | Type | Description |
+|-----------|----------|------|-------------|
+| `device_id` | Yes | string | The gateway device MAC address (e.g., `70:ee:50:6b:e3:6a`) |
+| `module_id` | Yes | string | The thermostat module MAC address (e.g., `04:00:00:6b:e3:6a`) |
+| `scale` | Yes | string | Time scale: `30min`, `1hour`, `3hours`, `1day`, `1week`, `1month` |
+| `type` | Yes | string | Comma-separated measure types |
+| `date_begin` | No | int | Start timestamp (Unix) |
+| `date_end` | No | int | End timestamp (Unix) |
+
+**Available Measure Types:**
+| Type | Description |
+|------|-------------|
+| `sum_boiler_on` | Cumulative boiler on time (seconds) |
+| `sum_boiler_off` | Cumulative boiler off time (seconds) |
+
+**Response:**
+```json
+{
+  "body": {
+    "1704067200": [3600, 82800],
+    "1704153600": [4200, 82200]
+  },
+  "status": "ok",
+  "time_exec": 0.05,
+  "time_server": 1704240000
+}
+```
+
+**Response Format:**
+- `body` is a dictionary with timestamps as keys
+- Each value is an array: `[sum_boiler_on, sum_boiler_off]`
+- `sum_boiler_on` and `sum_boiler_off` are in seconds
+- The scale determines the granularity (e.g., `1day` returns daily totals)
+
+**Notes:**
+- Used by this integration for the **Daily boiler runtime** sensor
+- Compatible with Home Assistant Energy Dashboard via `state_class: total_increasing`
+- To estimate energy consumption: `energy_kWh = sum_boiler_on / 3600 * boiler_power_kW`
+- The `device_id` and `module_id` are MAC addresses found in the `/api/homesdata` response
+
+---
+
 ## Thresholds and Constants
 
 ### WiFi Thresholds (NAVaillant)
@@ -765,6 +818,7 @@ Retrieves synchronization configurations.
 - [x] Gateway firmware version
 - [x] Thermostat firmware version
 - [x] Room humidity
+- [x] Daily boiler runtime (Energy Dashboard compatible)
 
 ### Binary Sensor Entities
 - [x] Boiler running

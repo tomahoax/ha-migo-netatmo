@@ -12,6 +12,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MigoApi, MigoApiError, MigoAuthError
+from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET
 from .coordinator import MigoDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -49,6 +50,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         session=session,
+        client_id=entry.data.get(CONF_CLIENT_ID),
+        client_secret=entry.data.get(CONF_CLIENT_SECRET),
     )
 
     try:
@@ -66,7 +69,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Register update listener for options changes
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
     return True
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload entry when options change."""
+    _LOGGER.debug("Reloading MiGO integration due to options change")
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool:

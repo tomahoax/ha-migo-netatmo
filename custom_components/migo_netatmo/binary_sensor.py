@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoDeviceEntity, MigoRoomEntity
+from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -99,7 +99,7 @@ async def async_setup_entry(
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
         for config in GATEWAY_BINARY_SENSORS:
             entities.append(
-                MigoDeviceBinarySensor(
+                MigoGatewayBinarySensor(
                     coordinator=coordinator,
                     device_id=device_id,
                     config=config,
@@ -110,7 +110,7 @@ async def async_setup_entry(
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT):
         for config in THERMOSTAT_BINARY_SENSORS:
             entities.append(
-                MigoDeviceBinarySensor(
+                MigoThermostatBinarySensor(
                     coordinator=coordinator,
                     device_id=device_id,
                     config=config,
@@ -146,17 +146,14 @@ class MigoRoomBinarySensor(MigoRoomEntity, BinarySensorEntity):
         return value
 
 
-class MigoDeviceBinarySensor(MigoDeviceEntity, BinarySensorEntity):
-    """MiGO device-based binary sensor using configuration."""
+class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
+    """Mixin for device-based binary sensors with common functionality."""
 
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-        config: BinarySensorConfig,
-    ) -> None:
-        """Initialize the device binary sensor."""
-        super().__init__(coordinator, device_id)
+    _config: BinarySensorConfig
+    _device_data: dict[str, Any]
+
+    def _init_binary_sensor(self, device_id: str, config: BinarySensorConfig) -> None:
+        """Initialize binary sensor attributes from config."""
         self._config = config
         self._attr_unique_id = generate_unique_id(config.unique_id_key, device_id)
         self._attr_translation_key = config.translation_key
@@ -170,3 +167,31 @@ class MigoDeviceBinarySensor(MigoDeviceEntity, BinarySensorEntity):
         if self._config.value_fn:
             return self._config.value_fn(value)
         return value
+
+
+class MigoGatewayBinarySensor(MigoGatewayEntity, _MigoDeviceBinarySensorMixin):
+    """MiGO gateway binary sensor entity."""
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        config: BinarySensorConfig,
+    ) -> None:
+        """Initialize the gateway binary sensor."""
+        super().__init__(coordinator, device_id)
+        self._init_binary_sensor(device_id, config)
+
+
+class MigoThermostatBinarySensor(MigoThermostatEntity, _MigoDeviceBinarySensorMixin):
+    """MiGO thermostat binary sensor entity."""
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        config: BinarySensorConfig,
+    ) -> None:
+        """Initialize the thermostat binary sensor."""
+        super().__init__(coordinator, device_id)
+        self._init_binary_sensor(device_id, config)
