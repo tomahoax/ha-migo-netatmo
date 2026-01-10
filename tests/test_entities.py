@@ -156,11 +156,6 @@ class TestMigoClimate:
         """Test unique ID generation."""
         assert climate.unique_id == "migo_netatmo_climate_room_456"
 
-    def test_translation_placeholders(self, climate):
-        """Test translation placeholders."""
-        placeholders = climate.translation_placeholders
-        assert placeholders["room_name"] == "Living Room"
-
 
 class TestModeMapping:
     """Tests for mode mapping."""

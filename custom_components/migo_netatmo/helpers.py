@@ -215,3 +215,24 @@ def get_home_id_or_log_error(
         _LOGGER.error("No home_id found for %s %s", entity_type, entity_id)
         return None
     return home_id
+
+
+def get_gateway_mac_for_home(
+    coordinator: MigoDataUpdateCoordinator,
+    home_id: str,
+) -> str | None:
+    """Get the gateway MAC address for a home.
+
+    Args:
+        coordinator: The data update coordinator.
+        home_id: The home ID to find the gateway for.
+
+    Returns:
+        The gateway MAC address, or None if not found.
+    """
+    from .const import DEVICE_TYPE_GATEWAY
+
+    for device_id, device_data in coordinator.devices.items():
+        if device_data.get("type") == DEVICE_TYPE_GATEWAY and device_data.get("home_id") == home_id:
+            return device_id
+    return None

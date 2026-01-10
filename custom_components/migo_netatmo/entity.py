@@ -6,10 +6,11 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import callback
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, MODEL_NAME
+from .helpers import get_gateway_mac_for_home
 
 if TYPE_CHECKING:
     from .api import MigoApi
@@ -75,12 +76,18 @@ class MigoRoomEntity(MigoEntity):
         home_id = self._room_data.get("home_id", "")
         home_name = self._room_data.get("home_name", "MiGO Home")
 
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, home_id)},
             name=home_name,
             manufacturer=MANUFACTURER,
             model=MODEL_NAME,
         )
+
+        # Add gateway MAC address as connection
+        if gateway_mac := get_gateway_mac_for_home(self.coordinator, home_id):
+            info["connections"] = {(CONNECTION_NETWORK_MAC, gateway_mac)}
+
+        return info
 
 
 class MigoDeviceEntity(MigoEntity):
@@ -115,6 +122,10 @@ class MigoDeviceEntity(MigoEntity):
             model=MODEL_NAME,
         )
 
+        # Add gateway MAC address as connection
+        if gateway_mac := get_gateway_mac_for_home(self.coordinator, home_id):
+            info["connections"] = {(CONNECTION_NETWORK_MAC, gateway_mac)}
+
         # Add diagnostic information if available
         if firmware := self._device_data.get("firmware_revision"):
             info["sw_version"] = str(firmware)
@@ -148,12 +159,18 @@ class MigoHomeEntity(MigoEntity):
         """Return device info."""
         home_name = self._home_data.get("name", "MiGO Home")
 
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._home_id)},
             name=home_name,
             manufacturer=MANUFACTURER,
             model=MODEL_NAME,
         )
+
+        # Add gateway MAC address as connection
+        if gateway_mac := get_gateway_mac_for_home(self.coordinator, self._home_id):
+            info["connections"] = {(CONNECTION_NETWORK_MAC, gateway_mac)}
+
+        return info
 
 
 class MigoControlEntity(MigoDeviceEntity, MigoApiControlMixin):

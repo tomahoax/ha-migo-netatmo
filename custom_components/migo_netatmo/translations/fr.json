@@ -50,7 +50,7 @@
     },
     "climate": {
       "thermostat": {
-        "name": "{room_name}",
+        "name": "Thermostat",
         "state_attributes": {
           "preset_mode": {
             "state": {

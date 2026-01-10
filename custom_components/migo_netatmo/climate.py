@@ -130,12 +130,6 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         self._attr_translation_key = "thermostat"
 
     @property
-    def translation_placeholders(self) -> dict[str, str]:
-        """Return translation placeholders."""
-        room_name = self._room_data.get("name", f"Room {self._room_id}")
-        return {"room_name": room_name}
-
-    @property
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
         return safe_float(self._room_data.get("therm_measured_temperature"))
