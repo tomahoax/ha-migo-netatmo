@@ -11,12 +11,12 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoDeviceEntity, MigoRoomEntity
+from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
 from .helpers import generate_unique_id, get_devices_by_type, safe_float
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ class SensorConfig:
     icon: str | None = None
     value_fn: Callable[[Any], Any] | None = None
     extra_attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    suggested_display_precision: int | None = None
 
 
 # Room-based sensor configurations
@@ -50,6 +51,7 @@ ROOM_SENSORS: tuple[SensorConfig, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         unit=UnitOfTemperature.CELSIUS,
         value_fn=safe_float,
+        suggested_display_precision=1,
     ),
     SensorConfig(
         data_key="humidity",
@@ -72,6 +74,7 @@ GATEWAY_SENSORS: tuple[SensorConfig, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         unit=UnitOfTemperature.CELSIUS,
         value_fn=safe_float,
+        suggested_display_precision=1,
     ),
     SensorConfig(
         data_key="wifi_strength",
@@ -111,6 +114,7 @@ THERMOSTAT_SENSORS: tuple[SensorConfig, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         unit=PERCENTAGE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         extra_attrs_fn=_battery_extra_attrs,
     ),
     SensorConfig(
@@ -160,7 +164,7 @@ async def async_setup_entry(
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
         for config in GATEWAY_SENSORS:
             entities.append(
-                MigoDeviceSensor(
+                MigoGatewaySensor(
                     coordinator=coordinator,
                     device_id=device_id,
                     config=config,
@@ -171,12 +175,23 @@ async def async_setup_entry(
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT):
         for config in THERMOSTAT_SENSORS:
             entities.append(
-                MigoDeviceSensor(
+                MigoThermostatSensor(
                     coordinator=coordinator,
                     device_id=device_id,
                     config=config,
                 )
             )
+
+    # Consumption sensors - one per gateway (daily boiler runtime)
+    # The boiler is connected to the gateway, so consumption data belongs there
+    # Data is now indexed by device_id (gateway) instead of room_id
+    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        entities.append(
+            MigoBoilerRuntimeSensor(
+                coordinator=coordinator,
+                device_id=device_id,
+            )
+        )
 
     async_add_entities(entities)
 
@@ -201,6 +216,8 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         self._attr_entity_category = config.entity_category
         if config.icon:
             self._attr_icon = config.icon
+        if config.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = config.suggested_display_precision
 
     @property
     def translation_placeholders(self) -> dict[str, str]:
@@ -217,17 +234,14 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         return value
 
 
-class MigoDeviceSensor(MigoDeviceEntity, SensorEntity):
-    """MiGO device-based sensor using configuration."""
+class _MigoDeviceSensorMixin(SensorEntity):
+    """Mixin for device-based sensors with common functionality."""
 
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-        config: SensorConfig,
-    ) -> None:
-        """Initialize the device sensor."""
-        super().__init__(coordinator, device_id)
+    _config: SensorConfig
+    _device_data: dict[str, Any]
+
+    def _init_sensor(self, device_id: str, config: SensorConfig) -> None:
+        """Initialize sensor attributes from config."""
         self._config = config
         self._attr_unique_id = generate_unique_id(config.unique_id_key, device_id)
         self._attr_translation_key = config.translation_key
@@ -237,6 +251,8 @@ class MigoDeviceSensor(MigoDeviceEntity, SensorEntity):
         self._attr_entity_category = config.entity_category
         if config.icon:
             self._attr_icon = config.icon
+        if config.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = config.suggested_display_precision
 
     @property
     def native_value(self) -> Any:
@@ -251,4 +267,78 @@ class MigoDeviceSensor(MigoDeviceEntity, SensorEntity):
         """Return extra state attributes."""
         if self._config.extra_attrs_fn:
             return self._config.extra_attrs_fn(self._device_data)
+        return {}
+
+
+class MigoGatewaySensor(MigoGatewayEntity, _MigoDeviceSensorMixin):
+    """MiGO gateway sensor entity."""
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        config: SensorConfig,
+    ) -> None:
+        """Initialize the gateway sensor."""
+        super().__init__(coordinator, device_id)
+        self._init_sensor(device_id, config)
+
+
+class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
+    """MiGO thermostat sensor entity."""
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        config: SensorConfig,
+    ) -> None:
+        """Initialize the thermostat sensor."""
+        super().__init__(coordinator, device_id)
+        self._init_sensor(device_id, config)
+
+
+class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
+    """MiGO daily boiler runtime sensor for Energy Dashboard.
+
+    This sensor tracks the daily boiler runtime in seconds,
+    which can be used to estimate energy consumption.
+    The boiler is connected to the gateway, so this sensor belongs to the Gateway device.
+    Data is retrieved using the getmeasure API with device_id and module_id.
+    """
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_translation_key = "daily_boiler_runtime"
+    _attr_icon = "mdi:fire"
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+    ) -> None:
+        """Initialize the boiler runtime sensor."""
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = generate_unique_id("boiler_runtime", device_id)
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the daily boiler runtime in seconds."""
+        # Consumption data is now indexed by device_id (gateway)
+        consumption = self.coordinator.get_consumption(self._device_id)
+        if consumption:
+            return consumption.get("sum_boiler_on")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        consumption = self.coordinator.get_consumption(self._device_id)
+        if consumption:
+            return {
+                "boiler_off_time": consumption.get("sum_boiler_off"),
+                "measurement_timestamp": consumption.get("timestamp"),
+            }
         return {}

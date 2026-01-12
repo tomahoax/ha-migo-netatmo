@@ -56,6 +56,7 @@ def mock_config_entry() -> MagicMock:
         CONF_USERNAME: "test@example.com",
         CONF_PASSWORD: "test_password",
     }
+    entry.options = {}  # Add empty options dict for coordinator tests
     entry.title = "MiGo (Netatmo)"
 
     def add_to_hass(hass):
@@ -159,15 +160,36 @@ def home_status_response() -> dict[str, Any]:
 
 
 @pytest.fixture
+def consumption_response() -> dict[str, Any]:
+    """Return mock consumption data response from /api/getmeasure.
+
+    The response format is a dict with timestamps as keys and
+    [sum_boiler_on, sum_boiler_off] arrays as values.
+    """
+    return {
+        "body": {
+            "1704067200": [3600, 82800],  # 1 hour on, 23 hours off
+            "1704153600": [7200, 79200],  # 2 hours on, 22 hours off
+            "1704240000": [5400, 81000],  # 1.5 hours on, 22.5 hours off
+        },
+        "status": "ok",
+        "time_exec": 0.05,
+        "time_server": 1704326400,
+    }
+
+
+@pytest.fixture
 def mock_api(
     homes_data_response: dict[str, Any],
     home_status_response: dict[str, Any],
+    consumption_response: dict[str, Any],
 ) -> MagicMock:
     """Create a mock MiGO API client."""
     api = MagicMock(spec=MigoApi)
     api.authenticate = AsyncMock(return_value=True)
     api.get_homes_data = AsyncMock(return_value=homes_data_response)
     api.get_home_status = AsyncMock(return_value=home_status_response)
+    api.get_measure = AsyncMock(return_value=consumption_response)
     api.set_temperature = AsyncMock(return_value={"status": "ok"})
     api.set_mode = AsyncMock(return_value={"status": "ok"})
     api.set_therm_mode = AsyncMock(return_value={"status": "ok"})

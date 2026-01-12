@@ -6,7 +6,15 @@
         "description": "Entrez vos identifiants de l'application **MiGO** (icône flamme orange).\n\n**Note :** Cette intégration ne fonctionne PAS avec MiGO Link ou myVAILLANT.",
         "data": {
           "username": "Email",
-          "password": "Mot de passe"
+          "password": "Mot de passe",
+          "client_id": "Client ID (optionnel)",
+          "client_secret": "Client Secret (optionnel)",
+          "user_prefix": "Préfixe utilisateur (optionnel)"
+        },
+        "data_description": {
+          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)"
         }
       },
       "reauth_confirm": {
@@ -14,7 +22,15 @@
         "description": "Veuillez re-saisir vos identifiants MiGO",
         "data": {
           "username": "Email",
-          "password": "Mot de passe"
+          "password": "Mot de passe",
+          "client_id": "Client ID (optionnel)",
+          "client_secret": "Client Secret (optionnel)",
+          "user_prefix": "Préfixe utilisateur (optionnel)"
+        },
+        "data_description": {
+          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)"
         }
       }
     },
@@ -26,6 +42,32 @@
     "abort": {
       "already_configured": "Ce compte est déjà configuré",
       "reauth_successful": "Re-authentification réussie"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options MiGO",
+        "description": "Configurer les identifiants et l'intervalle de mise à jour",
+        "data": {
+          "username": "Email",
+          "password": "Mot de passe",
+          "client_id": "Client ID (optionnel)",
+          "client_secret": "Client Secret (optionnel)",
+          "user_prefix": "Préfixe utilisateur (optionnel)",
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        },
+        "data_description": {
+          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
+          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)",
+          "update_interval": "Fréquence de mise à jour des données (60-3600 secondes)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Email ou mot de passe incorrect",
+      "unknown": "Une erreur inconnue s'est produite"
     }
   },
   "entity": {
@@ -46,6 +88,9 @@
     "button": {
       "refresh": {
         "name": "Rafraîchir"
+      },
+      "reset_heating_curve": {
+        "name": "Réinitialiser courbe de chauffe"
       }
     },
     "climate": {
@@ -55,8 +100,8 @@
           "preset_mode": {
             "state": {
               "away": "Absent",
-              "hot_water_only": "Eau chaude seulement",
-              "frost_guard": "Hors-gel"
+              "frost_guard": "Hors-gel",
+              "boost": "Boost"
             }
           }
         }
@@ -74,17 +119,12 @@
       },
       "hysteresis": {
         "name": "Seuil d'hystérésis"
+      },
+      "heating_curve": {
+        "name": "Courbe de chauffe"
       }
     },
     "select": {
-      "therm_mode": {
-        "name": "Mode thermostat",
-        "state": {
-          "schedule": "Auto",
-          "away": "Absent",
-          "hg": "Hors-gel"
-        }
-      },
       "schedule": {
         "name": "Programme actif"
       }
@@ -113,6 +153,9 @@
       },
       "outdoor_temperature": {
         "name": "Température extérieure"
+      },
+      "daily_boiler_runtime": {
+        "name": "Temps de fonctionnement chaudière"
       }
     },
     "switch": {

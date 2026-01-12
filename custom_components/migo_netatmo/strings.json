@@ -6,7 +6,15 @@
         "description": "Enter your credentials from the **MiGO** app (orange flame icon).\n\n**Note:** This does NOT work with MiGO Link or myVAILLANT apps.",
         "data": {
           "username": "Email",
-          "password": "Password"
+          "password": "Password",
+          "client_id": "Client ID (optional)",
+          "client_secret": "Client Secret (optional)",
+          "user_prefix": "User prefix (optional)"
+        },
+        "data_description": {
+          "client_id": "Leave empty to use default MiGO app credentials",
+          "client_secret": "Leave empty to use default MiGO app credentials",
+          "user_prefix": "Leave empty to use default prefix (sdbg)"
         }
       },
       "reauth_confirm": {
@@ -14,7 +22,15 @@
         "description": "Please re-enter your MiGO app credentials",
         "data": {
           "username": "Email",
-          "password": "Password"
+          "password": "Password",
+          "client_id": "Client ID (optional)",
+          "client_secret": "Client Secret (optional)",
+          "user_prefix": "User prefix (optional)"
+        },
+        "data_description": {
+          "client_id": "Leave empty to use default MiGO app credentials",
+          "client_secret": "Leave empty to use default MiGO app credentials",
+          "user_prefix": "Leave empty to use default prefix (sdbg)"
         }
       }
     },
@@ -26,6 +42,32 @@
     "abort": {
       "already_configured": "This account is already configured",
       "reauth_successful": "Re-authentication successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MiGO Options",
+        "description": "Configure credentials and polling interval",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "client_id": "Client ID (optional)",
+          "client_secret": "Client Secret (optional)",
+          "user_prefix": "User prefix (optional)",
+          "update_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "client_id": "Leave empty to use default MiGO app credentials",
+          "client_secret": "Leave empty to use default MiGO app credentials",
+          "user_prefix": "Leave empty to use default prefix (sdbg)",
+          "update_interval": "How often to poll the API for updates (60-3600 seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password",
+      "unknown": "An unknown error occurred"
     }
   },
   "entity": {
@@ -46,6 +88,9 @@
     "button": {
       "refresh": {
         "name": "Refresh"
+      },
+      "reset_heating_curve": {
+        "name": "Reset heating curve"
       }
     },
     "climate": {
@@ -55,8 +100,8 @@
           "preset_mode": {
             "state": {
               "away": "Away",
-              "hot_water_only": "Hot water only",
-              "frost_guard": "Frost guard"
+              "frost_guard": "Frost guard",
+              "boost": "Boost"
             }
           }
         }
@@ -74,17 +119,12 @@
       },
       "hysteresis": {
         "name": "Hysteresis threshold"
+      },
+      "heating_curve": {
+        "name": "Heating curve"
       }
     },
     "select": {
-      "therm_mode": {
-        "name": "Thermostat mode",
-        "state": {
-          "schedule": "Auto",
-          "away": "Away",
-          "hg": "Frost guard"
-        }
-      },
       "schedule": {
         "name": "Active schedule"
       }
@@ -113,6 +153,9 @@
       },
       "outdoor_temperature": {
         "name": "Outdoor temperature"
+      },
+      "daily_boiler_runtime": {
+        "name": "Daily boiler runtime"
       }
     },
     "switch": {

@@ -63,6 +63,7 @@ The coordinator manages data fetching and caching using Home Assistant's DataUpd
 - `homes`: Dict of home configurations
 - `rooms`: Dict of room states
 - `devices`: Dict of device states
+- `consumption`: Dict of boiler consumption data (indexed by gateway device_id)
 
 ### Entity Base Classes (`entity.py`)
 
@@ -103,9 +104,12 @@ class MigoApiControlMixin:
 
 1. Coordinator timer triggers (every 5 minutes)
 2. API client fetches home status
-3. Coordinator normalizes data into dicts
-4. Entities read from coordinator dicts
-5. Home Assistant updates entity states
+3. API client fetches consumption data via `/api/getmeasure`
+   - Uses gateway `device_id` and thermostat `module_id`
+   - Gateway/thermostat pairing is discovered automatically
+4. Coordinator normalizes data into dicts
+5. Entities read from coordinator dicts
+6. Home Assistant updates entity states
 
 ### Control Flow
 

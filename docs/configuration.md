@@ -24,7 +24,7 @@ The climate entity provides thermostat control:
 | Feature | Description |
 |---------|-------------|
 | HVAC Modes | Off, Heat, Auto |
-| Preset Modes | Away, Hot water only, Frost guard |
+| Preset Modes | Away, Frost guard, Boost |
 | Temperature Range | 7°C - 30°C |
 | Temperature Step | 0.5°C |
 
@@ -54,7 +54,6 @@ Dropdown selections:
 
 | Entity | Options | Description |
 |--------|---------|-------------|
-| Thermostat Mode | Auto, Away, Frost guard | Global operating mode |
 | Active Schedule | (Your schedules) | Select active heating schedule |
 
 ## Debug Logging

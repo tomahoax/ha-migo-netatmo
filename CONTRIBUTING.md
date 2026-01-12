@@ -82,22 +82,70 @@ pytest tests/ --cov=custom_components/migo_netatmo --cov-report=html
 - Mock external API calls using `aiohttp` mocks
 - Use fixtures from `conftest.py` for common setup
 
+## Git Workflow (GitHub Flow)
+
+This project follows [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow):
+
+### Branch Structure
+
+- **`main`** - Production-ready code, always stable
+- **`dev`** - Development branch for ongoing work
+- **Feature branches** - Created from `dev` for specific features/fixes
+
+### Development Process
+
+1. **Create a feature branch from `dev`**
+   ```bash
+   git checkout dev
+   git pull origin dev
+   git checkout -b feature/my-feature
+   ```
+
+2. **Make your changes** following the code style guidelines
+
+3. **Commit your changes** with clear messages
+   ```bash
+   git add .
+   git commit -m "feat: add new feature description"
+   ```
+
+4. **Push and create a Pull Request to `dev`**
+   ```bash
+   git push origin feature/my-feature
+   ```
+
+5. **After review, merge to `dev`**
+
+6. **Releases**: When `dev` is stable, it gets merged to `main` and tagged
+
+### Commit Message Convention
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation only
+- `chore:` - Maintenance tasks
+- `refactor:` - Code refactoring
+- `test:` - Adding tests
+
 ## Pull Request Process
 
-1. **Fork the repository** and create your branch from `main`
+1. **Create your branch from `dev`** (not `main`)
 2. **Make your changes** following the code style guidelines
 3. **Add tests** for any new functionality
 4. **Update documentation** if needed (README, docstrings, etc.)
 5. **Run the full test suite** and ensure all tests pass
 6. **Run pre-commit hooks** to ensure code quality
-7. **Submit a pull request** with a clear description of your changes
+7. **Submit a pull request to `dev`** with a clear description of your changes
 
 ### PR Guidelines
 
 - Keep PRs focused on a single feature or fix
-- Write clear commit messages
+- Write clear commit messages following Conventional Commits
 - Reference any related issues in your PR description
 - Be responsive to code review feedback
+- PRs must target `dev` branch (not `main`)
 
 ## Reporting Issues
 

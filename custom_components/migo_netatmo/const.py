@@ -21,16 +21,12 @@ API_HOMESTATUS_URL: Final = f"{API_BASE_URL}/api/homestatus"
 API_SETSTATE_URL: Final = f"{API_BASE_URL}/api/setstate"
 API_SETTHERMMODE_URL: Final = f"{API_BASE_URL}/api/setthermmode"
 API_SETHOMEDATA_URL: Final = f"{API_BASE_URL}/api/sethomedata"
-API_SYNCHOMESCHEDULE_URL: Final = f"{API_BASE_URL}/api/synchomeschedule"
 API_SWITCHHOMESCHEDULE_URL: Final = f"{API_BASE_URL}/api/switchhomeschedule"
 API_CHANGEHEATINGCURVE_URL: Final = f"{API_BASE_URL}/api/changeheatingcurve"
 API_SETHEATINGSYSTEM_URL: Final = f"{API_BASE_URL}/api/setheatingsystem"
 API_SETCONFIGS_URL: Final = f"{API_BASE_URL}/syncapi/v1/setconfigs"
 API_CHANGEHEATINGALGO_URL: Final = f"{API_BASE_URL}/api/changeheatingalgo"
-
-# Sync API endpoints (used by mobile app for real-time updates)
-API_SYNC_HOMESTATUS_URL: Final = f"{API_BASE_URL}/syncapi/v1/homestatus"
-API_SYNC_SETSTATE_URL: Final = f"{API_BASE_URL}/syncapi/v1/setstate"
+API_GETMEASURE_URL: Final = f"{API_BASE_URL}/api/getmeasure"
 
 # =============================================================================
 # OAuth2 Credentials
@@ -176,11 +172,20 @@ HYSTERESIS_MIN: Final = 0.1
 HYSTERESIS_MAX: Final = 2.0
 HYSTERESIS_STEP: Final = 0.1
 
+# Heating curve (slope) - 0 to 5 in UI
+# API uses slope * 10 (0-50)
+HEATING_CURVE_MIN: Final = 0.0
+HEATING_CURVE_MAX: Final = 5.0
+HEATING_CURVE_STEP: Final = 0.1
+DEFAULT_HEATING_CURVE: Final = 1.5
+
 # =============================================================================
 # Timing Constants
 # =============================================================================
 
 DEFAULT_UPDATE_INTERVAL: Final = 300  # 5 minutes in seconds
+MIN_UPDATE_INTERVAL: Final = 60  # 1 minute minimum
+MAX_UPDATE_INTERVAL: Final = 3600  # 1 hour maximum
 TOKEN_EXPIRY_BUFFER: Final = 300  # Refresh 5 minutes before expiry
 API_TIMEOUT: Final = 30  # API request timeout in seconds
 
@@ -213,6 +218,10 @@ BATTERY_LOW: Final = 3000
 
 CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
+CONF_CLIENT_ID: Final = "client_id"
+CONF_CLIENT_SECRET: Final = "client_secret"
+CONF_USER_PREFIX: Final = "user_prefix"
+CONF_UPDATE_INTERVAL: Final = "update_interval"
 
 # =============================================================================
 # Entity ID Prefixes
@@ -225,28 +234,7 @@ ENTITY_ID_PREFIX: Final = "migo_netatmo"
 # =============================================================================
 
 DEFAULT_MANUAL_SETPOINT_DURATION: Final = 180  # 3 hours in minutes
+DEFAULT_BOOST_DURATION: Final = 60  # 1 hour in minutes
 DEFAULT_DHW_TEMPERATURE: Final = 60  # °C
 DEFAULT_HYSTERESIS: Final = 1.6  # °C (deadband=15)
 DEFAULT_TEMP_OFFSET: Final = 0.0  # °C
-
-# =============================================================================
-# Climate Mode Mappings
-# =============================================================================
-
-# Preset modes for climate entity
-CLIMATE_PRESET_AWAY: Final = "away"
-CLIMATE_PRESET_HOT_WATER_ONLY: Final = "hot_water_only"
-CLIMATE_PRESET_FROST_GUARD: Final = "frost_guard"
-
-CLIMATE_PRESET_MODES: Final = [
-    CLIMATE_PRESET_AWAY,
-    CLIMATE_PRESET_HOT_WATER_ONLY,
-    CLIMATE_PRESET_FROST_GUARD,
-]
-
-# Mapping from preset mode to API mode
-PRESET_TO_API_MODE: Final = {
-    CLIMATE_PRESET_AWAY: MODE_AWAY,
-    CLIMATE_PRESET_FROST_GUARD: MODE_FROST_GUARD,
-    CLIMATE_PRESET_HOT_WATER_ONLY: MODE_FROST_GUARD,
-}

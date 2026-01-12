@@ -9,12 +9,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    MODE_AWAY,
-    MODE_FROST_GUARD,
-    MODE_SCHEDULE,
-    SCHEDULE_TYPE_THERM,
-)
+from .const import SCHEDULE_TYPE_THERM
 from .entity import MigoHomeControlEntity
 from .helpers import generate_unique_id
 
@@ -24,9 +19,6 @@ if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
-# Thermostat mode options
-THERM_MODE_OPTIONS: list[str] = [MODE_SCHEDULE, MODE_AWAY, MODE_FROST_GUARD]
 
 
 async def async_setup_entry(
@@ -41,15 +33,6 @@ async def async_setup_entry(
     entities: list[SelectEntity] = []
 
     for home_id, home_data in coordinator.homes.items():
-        # Thermostat mode select
-        entities.append(
-            MigoThermModeSelect(
-                coordinator=coordinator,
-                home_id=home_id,
-                api=data.api,
-            )
-        )
-
         # Schedule select (only if schedules are available)
         schedules = home_data.get("schedules", [])
         therm_schedules = [s for s in schedules if s.get("type") == SCHEDULE_TYPE_THERM]
@@ -63,42 +46,6 @@ async def async_setup_entry(
             )
 
     async_add_entities(entities)
-
-
-class MigoThermModeSelect(MigoHomeControlEntity, SelectEntity):
-    """MiGO Thermostat mode select entity."""
-
-    _attr_translation_key = "therm_mode"
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        home_id: str,
-        api: MigoApi,
-    ) -> None:
-        """Initialize the thermostat mode select entity."""
-        super().__init__(coordinator, home_id, api)
-        self._attr_unique_id = generate_unique_id("therm_mode", home_id)
-        self._attr_options = THERM_MODE_OPTIONS
-
-    @property
-    def current_option(self) -> str | None:
-        """Return the current thermostat mode."""
-        return self._home_data.get("therm_mode")
-
-    async def async_select_option(self, option: str) -> None:
-        """Change the thermostat mode."""
-        if option not in THERM_MODE_OPTIONS:
-            _LOGGER.error("Invalid therm mode: %s", option)
-            return
-
-        _LOGGER.debug("Setting therm mode to %s for home %s", option, self._home_id)
-        await self._call_api_and_refresh(
-            self._api.set_therm_mode,
-            home_id=self._home_id,
-            mode=option,
-        )
-        _LOGGER.debug("Therm mode set to %s for home %s", option, self._home_id)
 
 
 class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):
