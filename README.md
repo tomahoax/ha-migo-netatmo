@@ -65,8 +65,8 @@ This integration creates **two separate devices** in Home Assistant:
   - **Off** (Frost guard)
 - Preset modes:
   - **Away** - Away mode
-  - **Hot water only** - Heating off, DHW only
   - **Frost guard** - Minimum temperature protection
+  - **Boost** - Forces maximum temperature (30°C) for 1 hour
 
 ### Sensors
 
@@ -114,7 +114,6 @@ This integration creates **two separate devices** in Home Assistant:
 
 ### Select
 
-- Thermostat mode (Auto/Away/Frost guard)
 - Active schedule
 
 ### Button
@@ -274,7 +273,7 @@ This integration uses the Netatmo API (`app.netatmo.net`) which is the backend f
 | `/oauth2/token` | Authentication |
 | `/api/homesdata` | Home structure and configuration |
 | `/api/homestatus` | Real-time status |
-| `/api/getroommeasure` | Historical data and consumption |
+| `/api/getmeasure` | Historical data and consumption |
 | `/api/setstate` | Control room temperature and DHW |
 | `/api/setthermmode` | Set global mode |
 | `/api/sethomedata` | Home settings (anticipation, duration) |

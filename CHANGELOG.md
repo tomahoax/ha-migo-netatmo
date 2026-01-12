@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configuration options** - Ability to modify credentials and OAuth settings in options flow
   - Email, Password, Client ID, Client Secret, User Prefix can now be changed after setup
   - Credentials are validated before saving
+- **Boost preset** - New climate preset that forces maximum temperature (30°C) for 1 hour
 
 ### Fixed
 - **Boiler runtime sensor not reporting data** - Fixed issue where the Daily Boiler Runtime sensor showed "Unknown"
@@ -22,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Aligned with Vaillant vSmart integration approach
 
 ### Changed
+- **Climate simplification** - Streamlined climate entity controls
+  - Removed "Thermostat mode" select entity (redundant with climate presets)
+  - Removed "Hot water only" preset (not a user-facing preset)
+  - HVAC "Heat" mode now uses the configurable "Manual setpoint duration" setting
+- **Sensor graph display** - Added `suggested_display_precision` for graph display
+  - Outdoor temperature and boiler runtime sensors now show graph by default when clicked
 - **Code cleanup** - Removed unused code and constants
   - Removed `get_room_measure()` API method (replaced by `get_measure()`)
   - Removed unused API endpoint constants
@@ -34,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated entities documentation to explain boiler runtime data source
 - Updated architecture documentation with consumption data flow
 - Added configuration options documentation
+- Updated entities documentation with new HVAC modes and presets behavior
 
 ---
 

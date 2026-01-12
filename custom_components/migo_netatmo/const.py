@@ -21,7 +21,6 @@ API_HOMESTATUS_URL: Final = f"{API_BASE_URL}/api/homestatus"
 API_SETSTATE_URL: Final = f"{API_BASE_URL}/api/setstate"
 API_SETTHERMMODE_URL: Final = f"{API_BASE_URL}/api/setthermmode"
 API_SETHOMEDATA_URL: Final = f"{API_BASE_URL}/api/sethomedata"
-API_SYNCHOMESCHEDULE_URL: Final = f"{API_BASE_URL}/api/synchomeschedule"
 API_SWITCHHOMESCHEDULE_URL: Final = f"{API_BASE_URL}/api/switchhomeschedule"
 API_CHANGEHEATINGCURVE_URL: Final = f"{API_BASE_URL}/api/changeheatingcurve"
 API_SETHEATINGSYSTEM_URL: Final = f"{API_BASE_URL}/api/setheatingsystem"
@@ -235,6 +234,7 @@ ENTITY_ID_PREFIX: Final = "migo_netatmo"
 # =============================================================================
 
 DEFAULT_MANUAL_SETPOINT_DURATION: Final = 180  # 3 hours in minutes
+DEFAULT_BOOST_DURATION: Final = 60  # 1 hour in minutes
 DEFAULT_DHW_TEMPERATURE: Final = 60  # °C
 DEFAULT_HYSTERESIS: Final = 1.6  # °C (deadband=15)
 DEFAULT_TEMP_OFFSET: Final = 0.0  # °C

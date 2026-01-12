@@ -32,13 +32,31 @@ The wall-mounted thermostat connected to the Gateway via RF (radio). Battery pow
 |-------------------|------|--------|-------------|
 | `climate.migo_netatmo_climate_{room_id}` | {Home Name} Thermostat | Thermostat | Main thermostat control |
 
+### HVAC Modes
+
+| Mode | API Mode | Description |
+|------|----------|-------------|
+| **Auto** | `schedule` | Follows the active schedule from MiGO app |
+| **Heat** | `manual` | Manual override using configured duration (see "Manual setpoint duration" setting) |
+| **Off** | `hg` | Frost guard protection (keeps minimum temperature) |
+
+### Presets
+
+| Preset | API Mode | Description |
+|--------|----------|-------------|
+| **Away** | `away` | Away mode - reduced temperature |
+| **Frost guard** | `hg` | Frost protection mode |
+| **Boost** | `manual` | Forces maximum temperature (30°C) for 1 hour |
+
+> **Note:** The preset is cleared (set to None) when switching back to Auto mode.
+
 ### Attributes
 
 - `current_temperature`: Current room temperature
 - `temperature`: Target temperature
 - `hvac_mode`: Current mode (off, heat, auto)
 - `hvac_action`: Current action (off, heating, idle)
-- `preset_mode`: Active preset (away, hot_water_only, frost_guard, or None)
+- `preset_mode`: Active preset (away, frost_guard, boost, or None)
 
 ### Services
 
@@ -145,7 +163,6 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 
 | Entity ID Pattern | Name | Options | Description |
 |-------------------|------|---------|-------------|
-| `select.migo_{home}_therm_mode` | Thermostat Mode | Auto, Away, Frost guard | Global home mode |
 | `select.migo_{home}_schedule` | Active Schedule | (Your configured schedules) | Switch between schedules |
 
 ---

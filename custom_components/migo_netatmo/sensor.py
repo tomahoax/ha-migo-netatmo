@@ -38,6 +38,7 @@ class SensorConfig:
     icon: str | None = None
     value_fn: Callable[[Any], Any] | None = None
     extra_attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    suggested_display_precision: int | None = None
 
 
 # Room-based sensor configurations
@@ -50,6 +51,7 @@ ROOM_SENSORS: tuple[SensorConfig, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         unit=UnitOfTemperature.CELSIUS,
         value_fn=safe_float,
+        suggested_display_precision=1,
     ),
     SensorConfig(
         data_key="humidity",
@@ -72,6 +74,7 @@ GATEWAY_SENSORS: tuple[SensorConfig, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         unit=UnitOfTemperature.CELSIUS,
         value_fn=safe_float,
+        suggested_display_precision=1,
     ),
     SensorConfig(
         data_key="wifi_strength",
@@ -213,6 +216,8 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         self._attr_entity_category = config.entity_category
         if config.icon:
             self._attr_icon = config.icon
+        if config.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = config.suggested_display_precision
 
     @property
     def translation_placeholders(self) -> dict[str, str]:
@@ -246,6 +251,8 @@ class _MigoDeviceSensorMixin(SensorEntity):
         self._attr_entity_category = config.entity_category
         if config.icon:
             self._attr_icon = config.icon
+        if config.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = config.suggested_display_precision
 
     @property
     def native_value(self) -> Any:
@@ -305,6 +312,7 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfTime.SECONDS
     _attr_translation_key = "daily_boiler_runtime"
     _attr_icon = "mdi:fire"
+    _attr_suggested_display_precision = 0
 
     def __init__(
         self,

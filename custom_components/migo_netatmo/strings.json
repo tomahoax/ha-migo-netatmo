@@ -100,8 +100,8 @@
           "preset_mode": {
             "state": {
               "away": "Away",
-              "hot_water_only": "Hot water only",
-              "frost_guard": "Frost guard"
+              "frost_guard": "Frost guard",
+              "boost": "Boost"
             }
           }
         }
@@ -125,14 +125,6 @@
       }
     },
     "select": {
-      "therm_mode": {
-        "name": "Thermostat mode",
-        "state": {
-          "schedule": "Auto",
-          "away": "Away",
-          "hg": "Frost guard"
-        }
-      },
       "schedule": {
         "name": "Active schedule"
       }

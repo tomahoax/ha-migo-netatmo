@@ -100,8 +100,8 @@
           "preset_mode": {
             "state": {
               "away": "Absent",
-              "hot_water_only": "Eau chaude seulement",
-              "frost_guard": "Hors-gel"
+              "frost_guard": "Hors-gel",
+              "boost": "Boost"
             }
           }
         }
@@ -125,14 +125,6 @@
       }
     },
     "select": {
-      "therm_mode": {
-        "name": "Mode thermostat",
-        "state": {
-          "schedule": "Auto",
-          "away": "Absent",
-          "hg": "Hors-gel"
-        }
-      },
       "schedule": {
         "name": "Programme actif"
       }

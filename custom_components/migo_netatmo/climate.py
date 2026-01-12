@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import (
     PRESET_AWAY,
+    PRESET_BOOST,
     ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
@@ -18,6 +19,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    DEFAULT_BOOST_DURATION,
+    DEFAULT_MANUAL_SETPOINT_DURATION,
     DEVICE_TYPE_THERMOSTAT,
     DOMAIN,
     MANUFACTURER,
@@ -42,6 +45,9 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Custom preset mode name for frost guard
+PRESET_FROST_GUARD = "frost_guard"
+
 # Map MiGO modes to HVAC modes
 MIGO_TO_HVAC_MODE: dict[str, HVACMode] = {
     MODE_SCHEDULE: HVACMode.AUTO,
@@ -59,26 +65,21 @@ HVAC_TO_MIGO_MODE: dict[HVACMode, str] = {
     HVACMode.OFF: MODE_FROST_GUARD,
 }
 
-# Custom preset mode names
-PRESET_HOT_WATER_ONLY = "hot_water_only"
-PRESET_FROST_GUARD = "frost_guard"
-
-# Map preset names to MiGO modes
+# Map preset names to MiGO modes (boost is handled separately)
 PRESET_TO_MIGO_MODE: dict[str, str] = {
     PRESET_AWAY: MODE_AWAY,
-    PRESET_HOT_WATER_ONLY: MODE_OFF,
     PRESET_FROST_GUARD: MODE_FROST_GUARD,
 }
 
 # Map MiGO modes to preset names (None means no preset active)
 MIGO_MODE_TO_PRESET: dict[str, str | None] = {
     MODE_AWAY: PRESET_AWAY,
-    MODE_OFF: PRESET_HOT_WATER_ONLY,
     MODE_FROST_GUARD: PRESET_FROST_GUARD,
     MODE_SCHEDULE: None,
-    MODE_MANUAL: None,
+    MODE_MANUAL: None,  # Could be boost, checked separately
     MODE_HOME: None,
     MODE_MAX: None,
+    MODE_OFF: None,
 }
 
 
@@ -116,7 +117,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.PRESET_MODE
     )
-    _attr_preset_modes = [PRESET_AWAY, PRESET_HOT_WATER_ONLY, PRESET_FROST_GUARD]
+    _attr_preset_modes = [PRESET_AWAY, PRESET_FROST_GUARD, PRESET_BOOST]
     _attr_min_temp = TEMP_MIN
     _attr_max_temp = TEMP_MAX
     _attr_target_temperature_step = TEMP_STEP
@@ -221,20 +222,44 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         if not home_id:
             return
 
-        migo_mode = HVAC_TO_MIGO_MODE.get(hvac_mode, MODE_SCHEDULE)
+        if hvac_mode == HVACMode.HEAT:
+            # Heat mode = manual override with configurable duration
+            # Get duration from home settings or use default
+            home_data = self.coordinator.homes.get(home_id, {})
+            duration = home_data.get("therm_setpoint_default_duration", DEFAULT_MANUAL_SETPOINT_DURATION)
 
-        _LOGGER.debug(
-            "Setting room %s HVAC mode to %s (migo: %s)",
-            self._room_id,
-            hvac_mode,
-            migo_mode,
-        )
-        await self._call_api_and_refresh(
-            self._api.set_mode,
-            home_id=home_id,
-            room_id=self._room_id,
-            mode=migo_mode,
-        )
+            # Keep current target temperature or use a sensible default
+            temperature = self.target_temperature or 20.0
+
+            _LOGGER.debug(
+                "Setting manual mode for room %s: temp=%s°C, duration=%s min",
+                self._room_id,
+                temperature,
+                duration,
+            )
+            await self._call_api_and_refresh(
+                self._api.set_temperature,
+                home_id=home_id,
+                room_id=self._room_id,
+                temperature=temperature,
+                duration=duration,
+            )
+        else:
+            # Auto or Off
+            migo_mode = HVAC_TO_MIGO_MODE.get(hvac_mode, MODE_SCHEDULE)
+            _LOGGER.debug(
+                "Setting room %s HVAC mode to %s (migo: %s)",
+                self._room_id,
+                hvac_mode,
+                migo_mode,
+            )
+            await self._call_api_and_refresh(
+                self._api.set_mode,
+                home_id=home_id,
+                room_id=self._room_id,
+                mode=migo_mode,
+            )
+
         _LOGGER.debug("Room %s HVAC mode set successfully", self._room_id)
 
     async def async_turn_on(self) -> None:
@@ -249,6 +274,13 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
     def preset_mode(self) -> str | None:
         """Return the current preset mode."""
         mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
+
+        # Check if it's a boost (manual mode at max temperature)
+        if mode == MODE_MANUAL:
+            target = self.target_temperature
+            if target is not None and target >= TEMP_MAX - 0.5:
+                return PRESET_BOOST
+
         return MIGO_MODE_TO_PRESET.get(mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -257,21 +289,38 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         if not home_id:
             return
 
-        migo_mode = PRESET_TO_MIGO_MODE.get(preset_mode)
-        if not migo_mode:
-            _LOGGER.error("Unknown preset mode: %s", preset_mode)
-            return
+        if preset_mode == PRESET_BOOST:
+            # Boost = force heating at max temperature for 1 hour
+            _LOGGER.debug(
+                "Setting boost mode for room %s: temp=%s°C, duration=%s min",
+                self._room_id,
+                TEMP_MAX,
+                DEFAULT_BOOST_DURATION,
+            )
+            await self._call_api_and_refresh(
+                self._api.set_temperature,
+                home_id=home_id,
+                room_id=self._room_id,
+                temperature=TEMP_MAX,
+                duration=DEFAULT_BOOST_DURATION,
+            )
+        else:
+            migo_mode = PRESET_TO_MIGO_MODE.get(preset_mode)
+            if not migo_mode:
+                _LOGGER.error("Unknown preset mode: %s", preset_mode)
+                return
 
-        _LOGGER.debug(
-            "Setting room %s preset to %s (migo: %s)",
-            self._room_id,
-            preset_mode,
-            migo_mode,
-        )
-        await self._call_api_and_refresh(
-            self._api.set_mode,
-            home_id=home_id,
-            room_id=self._room_id,
-            mode=migo_mode,
-        )
+            _LOGGER.debug(
+                "Setting room %s preset to %s (migo: %s)",
+                self._room_id,
+                preset_mode,
+                migo_mode,
+            )
+            await self._call_api_and_refresh(
+                self._api.set_mode,
+                home_id=home_id,
+                room_id=self._room_id,
+                mode=migo_mode,
+            )
+
         _LOGGER.debug("Room %s preset set successfully", self._room_id)
