@@ -12,6 +12,7 @@ from .const import (
     API_AUTH_URL,
     API_CHANGEHEATINGALGO_URL,
     API_CHANGEHEATINGCURVE_URL,
+    API_GETCONFIGS_URL,
     API_GETMEASURE_URL,
     API_HOMESDATA_URL,
     API_HOMESTATUS_URL,
@@ -413,6 +414,23 @@ class MigoApi:
 
         _LOGGER.debug("Fetching home status for: %s", home_id)
         return await self._api_request(API_HOMESTATUS_URL, data)
+
+    async def get_configs(self, home_id: str) -> dict[str, Any]:
+        """Get module configurations from API.
+
+        This returns configuration data that may not be in homesdata/homestatus,
+        such as DHW setpoint temperature.
+
+        Args:
+            home_id: The ID of the home to get configs for.
+
+        Returns:
+            The getconfigs response containing module configurations.
+        """
+        data = {"home_id": home_id}
+
+        _LOGGER.debug("Fetching configs for: %s", home_id)
+        return await self._api_request(API_GETCONFIGS_URL, data)
 
     async def get_measure(
         self,

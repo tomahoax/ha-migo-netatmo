@@ -156,13 +156,16 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Get real-time status for this home
         room_status, module_status = await self._fetch_home_status(home_id)
 
+        # Get module configurations (DHW temperature, etc.)
+        module_configs = await self._fetch_home_configs(home_id)
+
         # Process rooms
         for room in rooms:
             self._process_room(room, home_id, home_name, room_status)
 
         # Process modules/devices
         for module in modules:
-            self._process_module(module, home_id, module_status)
+            self._process_module(module, home_id, module_status, module_configs)
 
     async def _fetch_home_status(
         self,
@@ -204,6 +207,39 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return room_status, module_status
 
+    async def _fetch_home_configs(self, home_id: str) -> dict[str, Any]:
+        """Fetch module configurations for a home.
+
+        This retrieves configuration data not available in homesdata/homestatus,
+        such as DHW setpoint temperature.
+
+        Args:
+            home_id: The home ID to fetch configs for.
+
+        Returns:
+            Dictionary of module_id -> config data.
+        """
+        module_configs: dict[str, Any] = {}
+
+        try:
+            configs = await self.api.get_configs(home_id)
+            home_data = safe_get(configs, KEY_BODY, KEY_HOME, default={})
+
+            for module in home_data.get(KEY_MODULES, []):
+                module_id = module.get("id")
+                if module_id:
+                    module_configs[module_id] = module
+                    _LOGGER.debug(
+                        "Got config for module %s: %s",
+                        module_id,
+                        module,
+                    )
+
+        except MigoApiError as err:
+            _LOGGER.debug("Failed to get configs for home %s: %s", home_id, err)
+
+        return module_configs
+
     def _process_room(
         self,
         room: dict[str, Any],
@@ -237,13 +273,15 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         module: dict[str, Any],
         home_id: str,
         module_status: dict[str, Any],
+        module_configs: dict[str, Any] | None = None,
     ) -> None:
-        """Process a module and merge with status data.
+        """Process a module and merge with status and config data.
 
         Args:
             module: The static module configuration.
             home_id: The home ID this module belongs to.
             module_status: Dictionary of module status by module ID.
+            module_configs: Dictionary of module configs by module ID (optional).
         """
         module_id = module.get("id")
         if not module_id:
@@ -251,9 +289,11 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Merge static module data with real-time status
         status_data = module_status.get(module_id, {})
+        config_data = (module_configs or {}).get(module_id, {})
         self.devices[module_id] = {
             **module,
             **status_data,
+            **config_data,
             "home_id": home_id,
         }
 

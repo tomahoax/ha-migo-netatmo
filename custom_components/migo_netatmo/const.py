@@ -27,6 +27,7 @@ API_SETHEATINGSYSTEM_URL: Final = f"{API_BASE_URL}/api/setheatingsystem"
 API_SETCONFIGS_URL: Final = f"{API_BASE_URL}/syncapi/v1/setconfigs"
 API_CHANGEHEATINGALGO_URL: Final = f"{API_BASE_URL}/api/changeheatingalgo"
 API_GETMEASURE_URL: Final = f"{API_BASE_URL}/api/getmeasure"
+API_GETCONFIGS_URL: Final = f"{API_BASE_URL}/syncapi/v1/getconfigs"
 
 # =============================================================================
 # OAuth2 Credentials
