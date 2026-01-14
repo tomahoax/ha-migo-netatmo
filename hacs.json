@@ -2,5 +2,6 @@
   "name": "MiGo (Netatmo) - Integration",
   "render_readme": true,
   "homeassistant": "2024.1.0",
-  "content_in_root": false
+  "content_in_root": false,
+  "hide_default_branch": true
 }
