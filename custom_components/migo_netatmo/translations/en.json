@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "MiGO - Your Heating Assistant",
-        "description": "Enter your credentials from the **MiGO** app (orange flame icon).\n\n**Note:** This does NOT work with MiGO Link or myVAILLANT apps.",
+        "description": "Enter your credentials from the **MiGo** app.\n\n**Note:** This does NOT work with MiGO Link.",
         "data": {
           "username": "Email",
           "password": "Password",

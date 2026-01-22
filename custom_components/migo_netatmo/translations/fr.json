@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "MiGO - Your Heating Assistant",
-        "description": "Entrez vos identifiants de l'application **MiGO** (icône flamme orange).\n\n**Note :** Cette intégration ne fonctionne PAS avec MiGO Link ou myVAILLANT.",
+        "description": "Entrez vos identifiants de l'application **MiGo**.\n\n**Note :** Cette intégration ne fonctionne PAS avec MiGO Link.",
         "data": {
           "username": "Email",
           "password": "Mot de passe",

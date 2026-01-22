@@ -11,7 +11,7 @@ This guide helps you resolve common issues with the MiGo integration.
 **Solutions**:
 1. Verify credentials work in the MiGO mobile app
 2. Check you're using the correct app:
-   - **Correct**: MiGo (orange flame icon)
+   - **Correct**: MiGo
    - **Incorrect**: MiGO Link (different API)
 3. Ensure at least one home is configured in the app
 4. Try resetting your password in the MiGO app
