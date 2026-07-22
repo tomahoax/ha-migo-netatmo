@@ -15,15 +15,11 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DEFAULT_BOOST_DURATION,
     DEFAULT_MANUAL_SETPOINT_DURATION,
-    DEVICE_TYPE_THERMOSTAT,
-    DOMAIN,
-    MANUFACTURER,
     MODE_AWAY,
     MODE_FROST_GUARD,
     MODE_HOME,
@@ -37,13 +33,16 @@ from .const import (
 )
 from .coordinator import MigoDataUpdateCoordinator
 from .entity import MigoRoomControlEntity
-from .helpers import get_home_id_or_raise, get_thermostat_for_room, safe_float
+from .helpers import get_home_id_or_raise, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
     from .api import MigoApi
 
 _LOGGER = logging.getLogger(__name__)
+
+# Serialise write commands against the cloud API
+PARALLEL_UPDATES = 1
 
 # Custom preset mode name for frost guard
 PRESET_FROST_GUARD = "frost_guard"
@@ -133,37 +132,6 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         super().__init__(coordinator, room_id, api)
         self._attr_unique_id = f"migo_netatmo_climate_{room_id}"
         self._attr_translation_key = "thermostat"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info - climate belongs to thermostat device."""
-        thermostat_id = get_thermostat_for_room(self.coordinator, self._room_id)
-        if thermostat_id:
-            thermostat_data = self.coordinator.devices.get(thermostat_id, {})
-            home_id = self._room_data.get("home_id", "")
-            home_data = self.coordinator.homes.get(home_id, {})
-            home_name = home_data.get("name", "MiGO")
-
-            # Get the gateway ID for via_device
-            gateway_id = thermostat_data.get("bridge")
-
-            info = DeviceInfo(
-                identifiers={(DOMAIN, thermostat_id)},
-                name=f"{home_name} Thermostat",
-                manufacturer=MANUFACTURER,
-                model=DEVICE_TYPE_THERMOSTAT,
-            )
-
-            if gateway_id:
-                info["via_device"] = (DOMAIN, gateway_id)
-
-            if firmware := thermostat_data.get("firmware_revision"):
-                info["sw_version"] = str(firmware)
-
-            return info
-
-        # Fallback to parent implementation
-        return super().device_info
 
     @property
     def current_temperature(self) -> float | None:

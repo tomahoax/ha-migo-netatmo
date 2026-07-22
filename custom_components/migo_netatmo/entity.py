@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -17,6 +16,84 @@ from .helpers import get_gateway_mac_for_home, get_thermostat_for_room
 if TYPE_CHECKING:
     from .api import MigoApi
     from .coordinator import MigoDataUpdateCoordinator
+
+
+def _home_name(coordinator: MigoDataUpdateCoordinator, home_id: str) -> str:
+    """Return the display name of a home."""
+    return coordinator.homes.get(home_id, {}).get("name", "MiGO")
+
+
+def build_gateway_device_info(
+    coordinator: MigoDataUpdateCoordinator,
+    gateway_id: str,
+    home_id: str,
+) -> DeviceInfo:
+    """Build the DeviceInfo for a gateway (NAVaillant) device.
+
+    Single source of truth: every entity attached to the gateway device
+    must produce exactly this structure.
+    """
+    device_data = coordinator.devices.get(gateway_id, {})
+    info = DeviceInfo(
+        identifiers={(DOMAIN, gateway_id)},
+        name=f"{_home_name(coordinator, home_id)} Gateway",
+        manufacturer=MANUFACTURER,
+        model=DEVICE_TYPE_GATEWAY,
+        connections={(CONNECTION_NETWORK_MAC, gateway_id)},
+    )
+    if firmware := device_data.get("firmware_revision"):
+        info["sw_version"] = str(firmware)
+    if hw_version := device_data.get("hardware_version"):
+        info["hw_version"] = str(hw_version)
+    if serial := device_data.get("oem_serial"):
+        info["serial_number"] = serial
+    return info
+
+
+def build_thermostat_device_info(
+    coordinator: MigoDataUpdateCoordinator,
+    thermostat_id: str,
+    home_id: str,
+) -> DeviceInfo:
+    """Build the DeviceInfo for a thermostat (NAThermVaillant) device.
+
+    Single source of truth: every entity attached to the thermostat
+    device must produce exactly this structure.
+    """
+    device_data = coordinator.devices.get(thermostat_id, {})
+    info = DeviceInfo(
+        identifiers={(DOMAIN, thermostat_id)},
+        name=f"{_home_name(coordinator, home_id)} Thermostat",
+        manufacturer=MANUFACTURER,
+        model=DEVICE_TYPE_THERMOSTAT,
+    )
+
+    # Add MAC address connection if the device_id looks like a MAC address
+    if ":" in thermostat_id and len(thermostat_id) == 17:
+        info["connections"] = {(CONNECTION_NETWORK_MAC, thermostat_id)}
+
+    # Link to the parent gateway device.
+    # via_device is deprecated for HA 2026.8 (via_device_id, compat until
+    # 2027.8); migrating requires a device registry lookup and is planned
+    # for a later release.
+    if gateway_id := device_data.get("bridge"):
+        info["via_device"] = (DOMAIN, gateway_id)
+
+    if firmware := device_data.get("firmware_revision"):
+        info["sw_version"] = str(firmware)
+    return info
+
+
+def build_home_fallback_device_info(
+    coordinator: MigoDataUpdateCoordinator,
+    home_id: str,
+) -> DeviceInfo:
+    """Build the last-resort DeviceInfo when no physical device is known."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, home_id)},
+        name=_home_name(coordinator, home_id),
+        manufacturer=MANUFACTURER,
+    )
 
 
 class MigoApiControlMixin:
@@ -84,11 +161,6 @@ class MigoEntity(CoordinatorEntity["MigoDataUpdateCoordinator"]):
 
     _attr_has_entity_name = True
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
-
 
 class MigoRoomEntity(MigoEntity):
     """Base class for MiGO room-based entities (climate, room sensors).
@@ -115,57 +187,19 @@ class MigoRoomEntity(MigoEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info for the Thermostat device."""
         home_id = self._room_data.get("home_id", "")
-        home_data = self.coordinator.homes.get(home_id, {})
-        home_name = home_data.get("name", "MiGO")
 
-        # Find the thermostat ID for this room
-        thermostat_id = get_thermostat_for_room(self.coordinator, self._room_id)
-        if thermostat_id:
-            # Get the thermostat device data from coordinator
-            thermostat_data = self.coordinator.devices.get(thermostat_id, {})
-            gateway_id = thermostat_data.get("bridge")
-
-            info = DeviceInfo(
-                identifiers={(DOMAIN, thermostat_id)},
-                name=f"{home_name} Thermostat",
-                manufacturer=MANUFACTURER,
-                model=DEVICE_TYPE_THERMOSTAT,
-            )
-
-            # Link to parent gateway device
-            if gateway_id:
-                info["via_device"] = (DOMAIN, gateway_id)
-
-            # Add diagnostic information if available
-            if firmware := thermostat_data.get("firmware_revision"):
-                info["sw_version"] = str(firmware)
-
-            return info
+        if thermostat_id := get_thermostat_for_room(self.coordinator, self._room_id):
+            return build_thermostat_device_info(self.coordinator, thermostat_id, home_id)
 
         # Fallback: use gateway device if no thermostat found
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, home_id):
-            return DeviceInfo(
-                identifiers={(DOMAIN, gateway_mac)},
-                name=f"{home_name} Gateway",
-                manufacturer=MANUFACTURER,
-                model=DEVICE_TYPE_GATEWAY,
-                connections={(CONNECTION_NETWORK_MAC, gateway_mac)},
-            )
+            return build_gateway_device_info(self.coordinator, gateway_mac, home_id)
 
-        # Last resort fallback
-        return DeviceInfo(
-            identifiers={(DOMAIN, home_id)},
-            name=home_name,
-            manufacturer=MANUFACTURER,
-        )
+        return build_home_fallback_device_info(self.coordinator, home_id)
 
 
 class MigoDeviceEntity(MigoEntity):
-    """Base class for MiGO device-based entities (gateway/thermostat sensors, switch).
-
-    This base class uses the device_id as identifier. Subclasses (MigoGatewayEntity,
-    MigoThermostatEntity) override device_info for device-specific information.
-    """
+    """Base class for MiGO device-based entities (gateway/thermostat sensors, switch)."""
 
     def __init__(
         self,
@@ -182,31 +216,9 @@ class MigoDeviceEntity(MigoEntity):
         return self.coordinator.devices.get(self._device_id, {})
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info with diagnostic information.
-
-        Note: Subclasses should override this for device-specific info.
-        """
-        home_id = self._device_data.get("home_id", "")
-        home_data = self.coordinator.homes.get(home_id, {})
-        home_name = home_data.get("name", "MiGO")
-
-        # Build device info using device_id as identifier
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=f"{home_name} Device",
-            manufacturer=MANUFACTURER,
-        )
-
-        # Add diagnostic information if available
-        if firmware := self._device_data.get("firmware_revision"):
-            info["sw_version"] = str(firmware)
-        if hw_version := self._device_data.get("hardware_version"):
-            info["hw_version"] = str(hw_version)
-        if serial := self._device_data.get("oem_serial"):
-            info["serial_number"] = serial
-
-        return info
+    def _home_id(self) -> str:
+        """Get the home ID this device belongs to."""
+        return self._device_data.get("home_id", "")
 
 
 class MigoGatewayEntity(MigoDeviceEntity):
@@ -219,27 +231,7 @@ class MigoGatewayEntity(MigoDeviceEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for the gateway."""
-        home_id = self._device_data.get("home_id", "")
-        home_data = self.coordinator.homes.get(home_id, {})
-        home_name = home_data.get("name", "MiGO")
-
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=f"{home_name} Gateway",
-            manufacturer=MANUFACTURER,
-            model=DEVICE_TYPE_GATEWAY,
-            connections={(CONNECTION_NETWORK_MAC, self._device_id)},
-        )
-
-        # Add diagnostic information if available
-        if firmware := self._device_data.get("firmware_revision"):
-            info["sw_version"] = str(firmware)
-        if hw_version := self._device_data.get("hardware_version"):
-            info["hw_version"] = str(hw_version)
-        if serial := self._device_data.get("oem_serial"):
-            info["serial_number"] = serial
-
-        return info
+        return build_gateway_device_info(self.coordinator, self._device_id, self._home_id)
 
 
 class MigoThermostatEntity(MigoDeviceEntity):
@@ -253,33 +245,7 @@ class MigoThermostatEntity(MigoDeviceEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for the thermostat."""
-        home_id = self._device_data.get("home_id", "")
-        home_data = self.coordinator.homes.get(home_id, {})
-        home_name = home_data.get("name", "MiGO")
-
-        # Get the gateway ID (bridge) for via_device
-        gateway_id = self._device_data.get("bridge")
-
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=f"{home_name} Thermostat",
-            manufacturer=MANUFACTURER,
-            model=DEVICE_TYPE_THERMOSTAT,
-        )
-
-        # Add MAC address connection if device_id looks like a MAC address
-        if ":" in self._device_id and len(self._device_id) == 17:
-            info["connections"] = {(CONNECTION_NETWORK_MAC, self._device_id)}
-
-        # Link to parent gateway device
-        if gateway_id:
-            info["via_device"] = (DOMAIN, gateway_id)
-
-        # Add diagnostic information if available
-        if firmware := self._device_data.get("firmware_revision"):
-            info["sw_version"] = str(firmware)
-
-        return info
+        return build_thermostat_device_info(self.coordinator, self._device_id, self._home_id)
 
 
 class MigoGatewayControlEntity(MigoGatewayEntity, MigoApiControlMixin):
@@ -295,23 +261,6 @@ class MigoGatewayControlEntity(MigoGatewayEntity, MigoApiControlMixin):
         api: MigoApi,
     ) -> None:
         """Initialize the gateway control entity."""
-        super().__init__(coordinator, device_id)
-        self._api = api
-
-
-class MigoThermostatControlEntity(MigoThermostatEntity, MigoApiControlMixin):
-    """Base class for thermostat entities that control the device via API.
-
-    Used for controls like temperature offset, manual setpoint duration, anticipation.
-    """
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-        api: MigoApi,
-    ) -> None:
-        """Initialize the thermostat control entity."""
         super().__init__(coordinator, device_id)
         self._api = api
 
@@ -340,61 +289,10 @@ class MigoHomeEntity(MigoEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for the Gateway device."""
-        home_name = self._home_data.get("name", "MiGO")
-
-        # Use gateway as the device for home-level entities
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, self._home_id):
-            # Get gateway device data for additional info
-            gateway_data = self.coordinator.devices.get(gateway_mac, {})
+            return build_gateway_device_info(self.coordinator, gateway_mac, self._home_id)
 
-            info = DeviceInfo(
-                identifiers={(DOMAIN, gateway_mac)},
-                name=f"{home_name} Gateway",
-                manufacturer=MANUFACTURER,
-                model=DEVICE_TYPE_GATEWAY,
-                connections={(CONNECTION_NETWORK_MAC, gateway_mac)},
-            )
-
-            # Add diagnostic information if available
-            if firmware := gateway_data.get("firmware_revision"):
-                info["sw_version"] = str(firmware)
-            if hw_version := gateway_data.get("hardware_version"):
-                info["hw_version"] = str(hw_version)
-            if serial := gateway_data.get("oem_serial"):
-                info["serial_number"] = serial
-
-            return info
-
-        # Fallback if no gateway found
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._home_id)},
-            name=home_name,
-            manufacturer=MANUFACTURER,
-        )
-
-
-class MigoControlEntity(MigoDeviceEntity, MigoApiControlMixin):
-    """Base class for entities that control the device via API.
-
-    This class provides common functionality for entities that need to
-    call API methods and refresh the coordinator after changes.
-    """
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-        api: MigoApi,
-    ) -> None:
-        """Initialize the control entity.
-
-        Args:
-            coordinator: The data update coordinator.
-            device_id: The device ID this entity controls.
-            api: The API client for making control calls.
-        """
-        super().__init__(coordinator, device_id)
-        self._api = api
+        return build_home_fallback_device_info(self.coordinator, self._home_id)
 
 
 class MigoHomeControlEntity(MigoHomeEntity, MigoApiControlMixin):
@@ -417,7 +315,7 @@ class MigoHomeControlEntity(MigoHomeEntity, MigoApiControlMixin):
         self._api = api
 
 
-class MigoThermostatHomeControlEntity(MigoEntity, MigoApiControlMixin):
+class MigoThermostatHomeEntity(MigoEntity):
     """Base class for home-level entities assigned to the Thermostat device.
 
     Used for settings like anticipation, manual setpoint duration, hysteresis
@@ -429,12 +327,10 @@ class MigoThermostatHomeControlEntity(MigoEntity, MigoApiControlMixin):
         self,
         coordinator: MigoDataUpdateCoordinator,
         home_id: str,
-        api: MigoApi,
     ) -> None:
-        """Initialize the thermostat home control entity."""
+        """Initialize the thermostat home entity."""
         super().__init__(coordinator)
         self._home_id = home_id
-        self._api = api
 
     @property
     def _home_data(self) -> dict[str, Any]:
@@ -444,46 +340,30 @@ class MigoThermostatHomeControlEntity(MigoEntity, MigoApiControlMixin):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for the Thermostat device."""
-        home_name = self._home_data.get("name", "MiGO")
-
         # Find the thermostat for this home
         for device_id, device_data in self.coordinator.devices.items():
             if device_data.get("type") == DEVICE_TYPE_THERMOSTAT and device_data.get("home_id") == self._home_id:
-                gateway_id = device_data.get("bridge")
-
-                info = DeviceInfo(
-                    identifiers={(DOMAIN, device_id)},
-                    name=f"{home_name} Thermostat",
-                    manufacturer=MANUFACTURER,
-                    model=DEVICE_TYPE_THERMOSTAT,
-                )
-
-                # Add MAC address connection if device_id looks like a MAC address
-                if ":" in device_id and len(device_id) == 17:
-                    info["connections"] = {(CONNECTION_NETWORK_MAC, device_id)}
-
-                if gateway_id:
-                    info["via_device"] = (DOMAIN, gateway_id)
-
-                if firmware := device_data.get("firmware_revision"):
-                    info["sw_version"] = str(firmware)
-
-                return info
+                return build_thermostat_device_info(self.coordinator, device_id, self._home_id)
 
         # Fallback to gateway if no thermostat found
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, self._home_id):
-            return DeviceInfo(
-                identifiers={(DOMAIN, gateway_mac)},
-                name=f"{home_name} Gateway",
-                manufacturer=MANUFACTURER,
-                model=DEVICE_TYPE_GATEWAY,
-            )
+            return build_gateway_device_info(self.coordinator, gateway_mac, self._home_id)
 
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._home_id)},
-            name=home_name,
-            manufacturer=MANUFACTURER,
-        )
+        return build_home_fallback_device_info(self.coordinator, self._home_id)
+
+
+class MigoThermostatHomeControlEntity(MigoThermostatHomeEntity, MigoApiControlMixin):
+    """Home-level entity on the Thermostat device, with API control."""
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        home_id: str,
+        api: MigoApi,
+    ) -> None:
+        """Initialize the thermostat home control entity."""
+        super().__init__(coordinator, home_id)
+        self._api = api
 
 
 class MigoRoomControlEntity(MigoRoomEntity, MigoApiControlMixin):
