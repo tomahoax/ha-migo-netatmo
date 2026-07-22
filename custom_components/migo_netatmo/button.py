@@ -145,7 +145,8 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
             DEFAULT_HEATING_CURVE,
             self._device_id,
         )
-        await self._api.set_heating_curve(
+        await self._call_api(
+            self._api.set_heating_curve,
             device_id=self._device_id,
             slope=DEFAULT_HEATING_CURVE,
         )

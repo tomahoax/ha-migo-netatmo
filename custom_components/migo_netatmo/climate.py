@@ -37,7 +37,7 @@ from .const import (
 )
 from .coordinator import MigoDataUpdateCoordinator
 from .entity import MigoRoomControlEntity
-from .helpers import get_home_id_or_log_error, get_thermostat_for_room, safe_float
+from .helpers import get_home_id_or_raise, get_thermostat_for_room, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -203,9 +203,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         if temperature is None:
             return
 
-        home_id = get_home_id_or_log_error(self._room_data, "room", self._room_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         _LOGGER.debug("Setting room %s temperature to %s°C", self._room_id, temperature)
         await self._call_api_and_refresh(
@@ -218,9 +216,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
-        home_id = get_home_id_or_log_error(self._room_data, "room", self._room_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         if hvac_mode == HVACMode.HEAT:
             # Heat mode = manual override with configurable duration
@@ -285,9 +281,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
-        home_id = get_home_id_or_log_error(self._room_data, "room", self._room_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         if preset_mode == PRESET_BOOST:
             # Boost = force heating at max temperature for 1 hour

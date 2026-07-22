@@ -6,9 +6,11 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import MigoApiError, MigoAuthError, MigoConnectionError
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, MANUFACTURER
 from .helpers import get_gateway_mac_for_home, get_thermostat_for_room
 
@@ -27,6 +29,41 @@ class MigoApiControlMixin:
     _api: MigoApi
     coordinator: MigoDataUpdateCoordinator
 
+    async def _call_api(
+        self,
+        api_method: Callable[..., Awaitable[Any]],
+        **kwargs: Any,
+    ) -> Any:
+        """Call an API method, translating failures into UI-visible errors.
+
+        Args:
+            api_method: The async API method to call.
+            **kwargs: Arguments to pass to the API method.
+
+        Raises:
+            HomeAssistantError: On any API failure, with a translated message.
+        """
+        try:
+            return await api_method(**kwargs)
+        except MigoAuthError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        except MigoConnectionError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_connect",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        except MigoApiError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="api_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
     async def _call_api_and_refresh(
         self,
         api_method: Callable[..., Awaitable[Any]],
@@ -38,7 +75,7 @@ class MigoApiControlMixin:
             api_method: The async API method to call.
             **kwargs: Arguments to pass to the API method.
         """
-        await api_method(**kwargs)
+        await self._call_api(api_method, **kwargs)
         await self.coordinator.async_request_refresh()
 
 

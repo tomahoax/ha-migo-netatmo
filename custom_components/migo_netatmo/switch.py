@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY
 from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -80,9 +80,7 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on DHW."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Enabling DHW for device %s", self._device_id)
         await self._call_api_and_refresh(
@@ -95,9 +93,7 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off DHW."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Disabling DHW for device %s", self._device_id)
         await self._call_api_and_refresh(

@@ -33,8 +33,13 @@ from .const import (
     TEMP_OFFSET_MIN,
     TEMP_OFFSET_STEP,
 )
-from .entity import MigoGatewayControlEntity, MigoRoomEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type
+from .entity import (
+    MigoApiControlMixin,
+    MigoGatewayControlEntity,
+    MigoRoomEntity,
+    MigoThermostatHomeControlEntity,
+)
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -164,7 +169,8 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
             minutes,
             self._home_id,
         )
-        await self._api.set_manual_setpoint_duration(
+        await self._call_api(
+            self._api.set_manual_setpoint_duration,
             home_id=self._home_id,
             duration=minutes,
         )
@@ -174,7 +180,7 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         await self.coordinator.async_request_refresh()
 
 
-class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
+class MigoTemperatureOffsetNumber(MigoRoomEntity, MigoApiControlMixin, NumberEntity):
     """MiGO Temperature offset number entity for rooms."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -223,7 +229,8 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the temperature offset."""
         _LOGGER.debug("Setting temperature offset to %s°C for room %s", value, self._room_id)
-        await self._api.set_temperature_offset(
+        await self._call_api(
+            self._api.set_temperature_offset,
             home_id=self._home_id,
             room_id=self._room_id,
             offset=value,
@@ -278,18 +285,15 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHW temperature."""
         temperature = int(value)
-        home_id = self._device_data.get("home_id")
-
-        if not home_id:
-            _LOGGER.error("Cannot set DHW temperature: home_id not found for device %s", self._device_id)
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug(
             "Setting DHW temperature to %s°C for device %s",
             temperature,
             self._device_id,
         )
-        await self._api.set_dhw_temperature(
+        await self._call_api(
+            self._api.set_dhw_temperature,
             home_id=home_id,
             module_id=self._device_id,
             temperature=temperature,
@@ -361,7 +365,8 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
             hysteresis,
             self._device_id,
         )
-        await self._api.set_hysteresis(
+        await self._call_api(
+            self._api.set_hysteresis,
             device_id=self._device_id,
             hysteresis=hysteresis,
         )
@@ -431,7 +436,8 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
             slope,
             self._device_id,
         )
-        await self._api.set_heating_curve(
+        await self._call_api(
+            self._api.set_heating_curve,
             device_id=self._device_id,
             slope=slope,
         )

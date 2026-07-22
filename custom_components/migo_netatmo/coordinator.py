@@ -8,9 +8,10 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import MigoApi, MigoApiError
+from .api import MigoApi, MigoApiError, MigoAuthError
 from .const import (
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -119,6 +120,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "devices": self.devices,
             }
 
+        except MigoAuthError as err:
+            # Triggers the reauthentication flow
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except MigoApiError as err:
             _LOGGER.error("Failed to refresh MiGO data: %s", err)
             raise UpdateFailed(f"Error communicating with API: {err}") from err
@@ -196,6 +200,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if module_id:
                     module_status[module_id] = module
 
+        except MigoAuthError:
+            # Must reach _async_update_data to trigger reauth
+            raise
         except MigoApiError as err:
             _LOGGER.warning("Failed to get status for home %s: %s", home_id, err)
 
@@ -235,6 +242,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         module,
                     )
 
+        except MigoAuthError:
+            # Must reach _async_update_data to trigger reauth
+            raise
         except MigoApiError as err:
             _LOGGER.debug("Failed to get configs for home %s: %s", home_id, err)
 
@@ -411,6 +421,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                     )
                                     break
 
+            except MigoAuthError:
+                # Must reach _async_update_data to trigger reauth
+                raise
             except MigoApiError as err:
                 _LOGGER.debug("Failed to get consumption for device %s: %s", device_id, err)
 

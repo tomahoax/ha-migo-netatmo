@@ -6,10 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.migo_netatmo.api import MigoApiError
+from custom_components.migo_netatmo.api import MigoApiError, MigoAuthError
 from custom_components.migo_netatmo.coordinator import MigoDataUpdateCoordinator
 
 
@@ -101,6 +102,30 @@ class TestMigoDataUpdateCoordinator:
         await coordinator._async_update_data()
 
         assert len(coordinator.homes) == 0
+
+    @pytest.mark.asyncio
+    async def test_update_data_auth_error_raises_auth_failed(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test an auth error during refresh triggers reauth, not UpdateFailed."""
+        mock_api.get_homes_data.side_effect = MigoAuthError("token expired")
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_update_data_auth_error_in_status_raises_auth_failed(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test an auth error in the status fetch is not swallowed."""
+        mock_api.get_home_status.side_effect = MigoAuthError("token expired")
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
 
     @pytest.mark.asyncio
     async def test_update_data_home_status_error_continues(

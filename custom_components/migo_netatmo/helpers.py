@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, KEY_BODY
+from homeassistant.exceptions import HomeAssistantError
+
+from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, KEY_BODY
 
 if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
@@ -193,12 +195,12 @@ def get_devices_by_type(
     return {device_id: data for device_id, data in coordinator.devices.items() if data.get("type") == device_type}
 
 
-def get_home_id_or_log_error(
+def get_home_id_or_raise(
     data: dict[str, Any],
     entity_type: str,
     entity_id: str,
-) -> str | None:
-    """Get home_id from data dict, logging an error if not found.
+) -> str:
+    """Get home_id from data dict, raising a UI-visible error if not found.
 
     Args:
         data: The data dictionary (room_data or device_data).
@@ -206,12 +208,18 @@ def get_home_id_or_log_error(
         entity_id: The entity ID for the error message.
 
     Returns:
-        The home_id if found, None otherwise (with error logged).
+        The home_id.
+
+    Raises:
+        HomeAssistantError: If no home_id is associated with the entity.
     """
     home_id = data.get("home_id")
     if not home_id:
-        _LOGGER.error("No home_id found for %s %s", entity_type, entity_id)
-        return None
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="missing_home_id",
+            translation_placeholders={"entity_type": entity_type, "entity_id": entity_id},
+        )
     return home_id
 
 

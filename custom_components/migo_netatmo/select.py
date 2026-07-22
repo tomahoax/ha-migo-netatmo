@@ -7,9 +7,10 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import SCHEDULE_TYPE_THERM
+from .const import DOMAIN, SCHEDULE_TYPE_THERM
 from .entity import MigoHomeControlEntity
 from .helpers import generate_unique_id
 
@@ -93,8 +94,11 @@ class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):
         """Change the active schedule."""
         schedule_id = self._get_schedule_id_by_name(option)
         if not schedule_id:
-            _LOGGER.error("Schedule not found: %s", option)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="schedule_not_found",
+                translation_placeholders={"schedule": option},
+            )
 
         _LOGGER.debug(
             "Switching to schedule %s (id=%s) for home %s",
