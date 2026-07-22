@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Home Assistant integration for MiGO Netatmo thermostats"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.12"
+requires-python = ">=3.13.2"
 authors = [
     {name = "tomahoax"}
 ]
@@ -17,8 +17,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "aiohttp>=3.8.0",
@@ -26,7 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "homeassistant>=2024.11.0",
+    "homeassistant>=2025.8.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
@@ -46,7 +46,7 @@ where = ["."]
 include = ["custom_components*"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 120
 
 [tool.ruff.lint]
@@ -80,7 +80,7 @@ ignore = [
 known-first-party = ["custom_components.migo_netatmo"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 warn_unused_configs = true
 check_untyped_defs = true
 no_implicit_optional = true
