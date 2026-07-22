@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
@@ -184,18 +184,21 @@ def mock_api(
     home_status_response: dict[str, Any],
     consumption_response: dict[str, Any],
 ) -> MagicMock:
-    """Create a mock MiGO API client."""
-    api = MagicMock(spec=MigoApi)
-    api.authenticate = AsyncMock(return_value=True)
-    api.get_homes_data = AsyncMock(return_value=homes_data_response)
-    api.get_home_status = AsyncMock(return_value=home_status_response)
-    api.get_measure = AsyncMock(return_value=consumption_response)
-    api.set_temperature = AsyncMock(return_value={"status": "ok"})
-    api.set_mode = AsyncMock(return_value={"status": "ok"})
-    api.set_therm_mode = AsyncMock(return_value={"status": "ok"})
-    api.set_dhw_enabled = AsyncMock(return_value={"status": "ok"})
-    api.switch_home_schedule = AsyncMock(return_value={"status": "ok"})
-    api.close = AsyncMock()
+    """Create a mock MiGO API client.
+
+    Autospecced so calls with kwargs unknown to the real MigoApi
+    signatures raise TypeError instead of passing silently.
+    """
+    api = create_autospec(MigoApi, instance=True)
+    api.authenticate.return_value = True
+    api.get_homes_data.return_value = homes_data_response
+    api.get_home_status.return_value = home_status_response
+    api.get_measure.return_value = consumption_response
+    api.set_temperature.return_value = {"status": "ok"}
+    api.set_mode.return_value = {"status": "ok"}
+    api.set_therm_mode.return_value = {"status": "ok"}
+    api.set_dhw_enabled.return_value = {"status": "ok"}
+    api.switch_home_schedule.return_value = {"status": "ok"}
     return api
 
 

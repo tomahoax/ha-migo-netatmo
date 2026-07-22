@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.2] - 2026-07-22
+
+### Fixed
+- **Climate Heat mode and Boost preset crashing** (#13) - `set_hvac_mode` (Heat), `turn_on` and the Boost preset raised `MigoApi.set_temperature() got an unexpected keyword argument 'duration'`
+  - v0.40 passed a `duration` to the API client without implementing it there
+  - `set_temperature()` now accepts an optional `duration` (minutes) and `set_room_state()` an optional `end_time`, sent as `therm_setpoint_end_time` to the setstate endpoint
+  - Heat mode now honours the "Manual setpoint duration" setting; Boost expires after 1 hour as intended
+  - API mocks in tests are now autospecced so signature mismatches fail in CI
+
+### Added
+- **DHW temperature fetching** - `getconfigs` API call to read the domestic hot water temperature
+
+## [0.40.1] - 2026-01-14
+
+### Added
+- **Refresh button** on Gateway and Thermostat configuration
+
+### Changed
+- Enable beta versions in HACS
+
+## [0.40.0] - 2026-01-12
+
 ### Added
 - **Heating curve control** - New number entity to adjust heating curve slope (0.0-5.0)
 - **Reset heating curve button** - Button to reset heating curve to default value (1.5)

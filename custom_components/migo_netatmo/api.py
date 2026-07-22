@@ -12,6 +12,7 @@ from .const import (
     API_AUTH_URL,
     API_CHANGEHEATINGALGO_URL,
     API_CHANGEHEATINGCURVE_URL,
+    API_GETCONFIGS_URL,
     API_GETMEASURE_URL,
     API_HOMESDATA_URL,
     API_HOMESTATUS_URL,
@@ -414,6 +415,23 @@ class MigoApi:
         _LOGGER.debug("Fetching home status for: %s", home_id)
         return await self._api_request(API_HOMESTATUS_URL, data)
 
+    async def get_configs(self, home_id: str) -> dict[str, Any]:
+        """Get module configurations from API.
+
+        This returns configuration data that may not be in homesdata/homestatus,
+        such as DHW setpoint temperature.
+
+        Args:
+            home_id: The ID of the home to get configs for.
+
+        Returns:
+            The getconfigs response containing module configurations.
+        """
+        data = {"home_id": home_id}
+
+        _LOGGER.debug("Fetching configs for: %s", home_id)
+        return await self._api_request(API_GETCONFIGS_URL, data)
+
     async def get_measure(
         self,
         device_id: str,
@@ -478,6 +496,7 @@ class MigoApi:
         room_id: str,
         mode: str | None = None,
         temp: float | None = None,
+        end_time: int | None = None,
     ) -> dict[str, Any]:
         """Set room state using the setstate API.
 
@@ -486,6 +505,8 @@ class MigoApi:
             room_id: The room ID.
             mode: Optional mode to set (manual, home, hg).
             temp: Optional target temperature.
+            end_time: Optional Unix timestamp when the setpoint expires.
+                If omitted, the backend applies therm_setpoint_default_duration.
 
         Returns:
             The API response.
@@ -498,6 +519,9 @@ class MigoApi:
         if temp is not None:
             room_data["therm_setpoint_temperature"] = temp
 
+        if end_time is not None:
+            room_data["therm_setpoint_end_time"] = end_time
+
         data = {
             "home": {
                 "id": home_id,
@@ -505,7 +529,13 @@ class MigoApi:
             }
         }
 
-        _LOGGER.debug("Setting room %s state: mode=%s, temp=%s", room_id, mode, temp)
+        _LOGGER.debug(
+            "Setting room %s state: mode=%s, temp=%s, end_time=%s",
+            room_id,
+            mode,
+            temp,
+            end_time,
+        )
         return await self._api_request(API_SETSTATE_URL, data)
 
     async def set_temperature(
@@ -513,6 +543,7 @@ class MigoApi:
         home_id: str,
         room_id: str,
         temperature: float,
+        duration: int | None = None,
     ) -> dict[str, Any]:
         """Set target temperature for a room.
 
@@ -522,15 +553,22 @@ class MigoApi:
             home_id: The home ID.
             room_id: The room ID.
             temperature: The target temperature in Celsius.
+            duration: Optional override duration in minutes. If omitted, the
+                backend applies therm_setpoint_default_duration.
 
         Returns:
             The API response.
         """
+        end_time: int | None = None
+        if duration is not None:
+            end_time = int(datetime.now(UTC).timestamp()) + duration * 60
+
         return await self.set_room_state(
             home_id=home_id,
             room_id=room_id,
             mode=MODE_MANUAL,
             temp=temperature,
+            end_time=end_time,
         )
 
     async def set_mode(

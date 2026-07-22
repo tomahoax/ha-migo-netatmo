@@ -16,7 +16,7 @@ body:
       options:
         - label: I have searched for existing feature requests
           required: true
-        - label: This feature is related to the MiGO app (Netatmo API)
+        - label: This feature is related to the MiGo app (Netatmo API)
           required: true
 
   - type: textarea

@@ -15,7 +15,7 @@ body:
       label: Prerequisites
       description: Please confirm the following before submitting
       options:
-        - label: I am using the MiGO app (orange flame icon), NOT MiGO Link or myVAILLANT
+        - label: I am using the MiGo app, NOT MiGO Link
           required: true
         - label: I have searched for existing issues with the same problem
           required: true

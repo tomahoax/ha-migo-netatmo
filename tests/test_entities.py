@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 from homeassistant.components.climate import PRESET_AWAY, PRESET_BOOST, HVACAction, HVACMode
 
+from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.climate import (
     HVAC_TO_MIGO_MODE,
     MIGO_TO_HVAC_MODE,
@@ -76,10 +77,14 @@ class TestMigoClimate:
 
     @pytest.fixture
     def climate(self, mock_coordinator):
-        """Create a climate entity for testing."""
-        api = MagicMock()
-        api.set_temperature = AsyncMock(return_value={"status": "ok"})
-        api.set_mode = AsyncMock(return_value={"status": "ok"})
+        """Create a climate entity for testing.
+
+        The API mock is autospecced so kwargs unknown to the real
+        MigoApi signatures raise TypeError (regression guard for #13).
+        """
+        api = create_autospec(MigoApi, instance=True)
+        api.set_temperature.return_value = {"status": "ok"}
+        api.set_mode.return_value = {"status": "ok"}
         return MigoClimate(mock_coordinator, "room_456", api)
 
     def test_current_temperature(self, climate):
