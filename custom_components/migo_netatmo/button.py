@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoGatewayEntity, MigoThermostatHomeControlEntity
+from .entity import MigoGatewayEntity, MigoThermostatHomeControlEntity, MigoThermostatHomeEntity
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Serialise write commands against the cloud API
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -94,7 +97,7 @@ class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
         await self.coordinator.async_request_refresh()
 
 
-class MigoThermostatRefreshButton(MigoThermostatHomeControlEntity, ButtonEntity):
+class MigoThermostatRefreshButton(MigoThermostatHomeEntity, ButtonEntity):
     """MiGO Refresh button entity for Thermostat device."""
 
     _attr_translation_key = "refresh"
@@ -108,8 +111,7 @@ class MigoThermostatRefreshButton(MigoThermostatHomeControlEntity, ButtonEntity)
         device_id: str,
     ) -> None:
         """Initialize the refresh button entity."""
-        # MigoThermostatHomeControlEntity needs home_id and api, but we don't need api for refresh
-        super().__init__(coordinator, home_id, api=None)  # type: ignore[arg-type]
+        super().__init__(coordinator, home_id)
         self._device_id = device_id
         self._attr_unique_id = generate_unique_id("refresh_thermostat", device_id)
 

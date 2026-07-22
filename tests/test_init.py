@@ -36,6 +36,19 @@ async def test_setup_entry_creates_entities(
     assert climate.attributes["current_temperature"] == 21.5
     assert climate.attributes["temperature"] == 20.0
 
+    wifi = hass.states.get("sensor.my_home_gateway_wifi_signal")
+    assert wifi is not None
+    assert wifi.state == "70"
+
+    battery = hass.states.get("sensor.my_home_thermostat_battery")
+    assert battery is not None
+    assert battery.state == "85"
+    assert battery.attributes["battery_state"] == "high"
+
+    boiler = hass.states.get("binary_sensor.my_home_thermostat_boiler_status")
+    assert boiler is not None
+    assert boiler.state == "on"
+
 
 async def test_unload_entry(
     hass: HomeAssistant,
