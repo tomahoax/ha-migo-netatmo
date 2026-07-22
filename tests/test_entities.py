@@ -6,8 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 from homeassistant.components.climate import PRESET_AWAY, PRESET_BOOST, HVACAction, HVACMode
+from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.migo_netatmo.api import MigoApi
+from custom_components.migo_netatmo.api import MigoApi, MigoApiError, MigoAuthError
 from custom_components.migo_netatmo.climate import (
     HVAC_TO_MIGO_MODE,
     MIGO_TO_HVAC_MODE,
@@ -251,3 +252,48 @@ class TestModeMapping:
         assert PRESET_TO_MIGO_MODE[PRESET_AWAY] == MODE_AWAY
         assert PRESET_TO_MIGO_MODE[PRESET_FROST_GUARD] == MODE_FROST_GUARD
         # Note: PRESET_BOOST is handled separately (not in mapping)
+
+
+class TestClimateErrorSurfacing:
+    """Tests for API errors surfacing as UI-visible exceptions."""
+
+    @pytest.fixture
+    def climate(self, mock_coordinator):
+        """Create a climate entity with an autospecced API mock."""
+        api = create_autospec(MigoApi, instance=True)
+        api.set_temperature.return_value = {"status": "ok"}
+        api.set_mode.return_value = {"status": "ok"}
+        return MigoClimate(mock_coordinator, "room_456", api)
+
+    @pytest.mark.asyncio
+    async def test_api_error_raises_home_assistant_error(self, climate):
+        """Test a generic API failure raises a translated HomeAssistantError."""
+        climate._api.set_temperature.side_effect = MigoApiError("boom")
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await climate.async_set_temperature(temperature=21.0)
+
+        assert exc_info.value.translation_key == "api_error"
+        # No refresh on failure
+        climate.coordinator.async_request_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auth_error_raises_home_assistant_error(self, climate):
+        """Test an auth failure raises a translated HomeAssistantError."""
+        climate._api.set_mode.side_effect = MigoAuthError("expired")
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await climate.async_set_hvac_mode(HVACMode.AUTO)
+
+        assert exc_info.value.translation_key == "auth_failed"
+
+    @pytest.mark.asyncio
+    async def test_missing_home_id_raises(self, climate, mock_coordinator):
+        """Test a room without home_id raises instead of silently returning."""
+        del mock_coordinator.rooms["room_456"]["home_id"]
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await climate.async_set_temperature(temperature=21.0)
+
+        assert exc_info.value.translation_key == "missing_home_id"
+        climate._api.set_temperature.assert_not_called()

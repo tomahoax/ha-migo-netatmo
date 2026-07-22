@@ -69,6 +69,23 @@
       }
     }
   },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Ошибка аутентификации в API MiGO: {error}"
+    },
+    "cannot_connect": {
+      "message": "Не удалось подключиться к API MiGO: {error}"
+    },
+    "api_error": {
+      "message": "API MiGO вернул ошибку: {error}"
+    },
+    "missing_home_id": {
+      "message": "С {entity_type} {entity_id} не связан ни один дом"
+    },
+    "schedule_not_found": {
+      "message": "Расписание {schedule} не найдено"
+    }
+  },
   "entity": {
     "binary_sensor": {
       "boiler_status": {
