@@ -18,8 +18,16 @@
         }
       },
       "reauth_confirm": {
-        "title": "Re-authentification MiGO",
-        "description": "Veuillez re-saisir vos identifiants MiGO",
+        "title": "Ré-authentifier MiGO",
+        "description": "Veuillez saisir à nouveau vos identifiants de l'app MiGO",
+        "data": {
+          "username": "Email",
+          "password": "Mot de passe"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer MiGO",
+        "description": "Mettez à jour vos identifiants de l'app MiGO.\n\n**Note :** ne fonctionne PAS avec MiGO Link.",
         "data": {
           "username": "Email",
           "password": "Mot de passe",
@@ -37,37 +45,28 @@
     "error": {
       "invalid_auth": "Email ou mot de passe incorrect",
       "no_homes": "Aucun domicile trouvé dans votre compte MiGO",
-      "unknown": "Une erreur inconnue s'est produite"
+      "unknown": "Une erreur inconnue s'est produite",
+      "cannot_connect": "Impossible de se connecter à l'API MiGO"
     },
     "abort": {
       "already_configured": "Ce compte est déjà configuré",
-      "reauth_successful": "Re-authentification réussie"
+      "reauth_successful": "Re-authentification réussie",
+      "reconfigure_successful": "Reconfiguration réussie",
+      "unique_id_mismatch": "Ce flux ne peut mettre à jour que le compte pour lequel il a été lancé"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Options MiGO",
-        "description": "Configurer les identifiants et l'intervalle de mise à jour",
+        "description": "Configurez l'intervalle d'interrogation. Les identifiants se modifient via Reconfigurer sur l'intégration.",
         "data": {
-          "username": "Email",
-          "password": "Mot de passe",
-          "client_id": "Client ID (optionnel)",
-          "client_secret": "Client Secret (optionnel)",
-          "user_prefix": "Préfixe utilisateur (optionnel)",
           "update_interval": "Intervalle de mise à jour (secondes)"
         },
         "data_description": {
-          "client_id": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
-          "client_secret": "Laisser vide pour utiliser les identifiants par défaut de l'app MiGO",
-          "user_prefix": "Laisser vide pour utiliser le préfixe par défaut (sdbg)",
-          "update_interval": "Fréquence de mise à jour des données (60-3600 secondes)"
+          "update_interval": "Fréquence d'interrogation de l'API (60-3600 secondes)"
         }
       }
-    },
-    "error": {
-      "invalid_auth": "Email ou mot de passe incorrect",
-      "unknown": "Une erreur inconnue s'est produite"
     }
   },
   "entity": {

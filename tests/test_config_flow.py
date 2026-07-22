@@ -161,3 +161,92 @@ class TestReauthFlow:
 
         assert result["type"] is FlowResultType.FORM
         assert result["errors"] == {"base": "invalid_auth"}
+
+    async def test_reauth_account_mismatch_aborts(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test reauth with a different account aborts."""
+        mock_config_entry.add_to_hass(hass)
+
+        result = await mock_config_entry.start_reauth_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "other@example.com", "password": "whatever"},
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "unique_id_mismatch"
+
+
+class TestReconfigureFlow:
+    """Tests for the reconfigure flow."""
+
+    async def test_reconfigure_success(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+        mock_setup_entry: MagicMock,
+    ) -> None:
+        """Test a successful reconfigure updates the entry data."""
+        mock_config_entry.add_to_hass(hass)
+
+        result = await mock_config_entry.start_reconfigure_flow(hass)
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+
+        new_input = {"username": "test@example.com", "password": "brand_new_password"}
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], new_input)
+        await hass.async_block_till_done()
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reconfigure_successful"
+        assert mock_config_entry.data["password"] == "brand_new_password"
+
+    async def test_reconfigure_account_mismatch_aborts(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test reconfiguring to a different account aborts."""
+        mock_config_entry.add_to_hass(hass)
+
+        result = await mock_config_entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "other@example.com", "password": "whatever"},
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "unique_id_mismatch"
+
+
+class TestOptionsFlow:
+    """Tests for the options flow."""
+
+    async def test_options_update_interval_reloads(
+        self,
+        hass: HomeAssistant,
+        init_integration: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test setting the polling interval reloads the entry automatically."""
+        setup_calls_before = patch_migo_api.get_homes_data.call_count
+
+        result = await hass.config_entries.options.async_init(init_integration.entry_id)
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "init"
+
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"update_interval": 120})
+        await hass.async_block_till_done()
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert init_integration.options == {"update_interval": 120}
+        # OptionsFlowWithReload reloads the entry: setup ran again
+        assert patch_migo_api.get_homes_data.call_count > setup_calls_before
+        coordinator = init_integration.runtime_data.coordinator
+        assert coordinator.update_interval.total_seconds() == 120
