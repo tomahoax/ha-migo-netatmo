@@ -113,3 +113,26 @@ async def test_remove_stale_device(
         name="Old Gateway",
     )
     assert await async_remove_config_entry_device(hass, init_integration, stale_device)
+
+
+async def test_entities_unavailable_when_module_unreachable(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    patch_migo_api: MagicMock,
+    home_status_response: dict,
+) -> None:
+    """Test entities become unavailable when their module is unreachable."""
+    home = home_status_response["body"]["home"]
+    home["rooms"][0]["reachable"] = False
+    home["modules"][1]["reachable"] = False  # thermostat
+
+    coordinator = init_integration.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("climate.my_home_thermostat_thermostat").state == "unavailable"
+    assert hass.states.get("sensor.my_home_thermostat_battery").state == "unavailable"
+    # The connectivity diagnostic must stay available and report the outage
+    assert hass.states.get("binary_sensor.my_home_thermostat_device_reachable").state == "off"
+    # Gateway entities are unaffected
+    assert hass.states.get("sensor.my_home_gateway_wifi_signal").state == "70"
