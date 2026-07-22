@@ -64,7 +64,6 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "dhw_boost"
-    _attr_icon = "mdi:water-boiler"
 
     def __init__(
         self,
@@ -113,7 +112,6 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "anticipation"
-    _attr_icon = "mdi:clock-fast"
 
     def __init__(
         self,

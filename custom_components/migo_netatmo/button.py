@@ -79,7 +79,6 @@ class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
     """MiGO Refresh button entity for Gateway device."""
 
     _attr_translation_key = "refresh"
-    _attr_icon = "mdi:refresh"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
@@ -101,7 +100,6 @@ class MigoThermostatRefreshButton(MigoThermostatHomeEntity, ButtonEntity):
     """MiGO Refresh button entity for Thermostat device."""
 
     _attr_translation_key = "refresh"
-    _attr_icon = "mdi:refresh"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
@@ -125,7 +123,6 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
     """MiGO Reset heating curve button entity."""
 
     _attr_translation_key = "reset_heating_curve"
-    _attr_icon = "mdi:chart-bell-curve"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(

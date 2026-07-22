@@ -9,10 +9,11 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MigoApi, MigoApiError, MigoAuthError
-from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX
+from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX, DOMAIN
 from .coordinator import MigoDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -78,3 +79,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
 async def async_unload_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: MigoConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Allow removing a device that the API no longer reports."""
+    coordinator = entry.runtime_data.coordinator
+    known_ids = set(coordinator.devices) | set(coordinator.homes)
+    return not any(domain == DOMAIN and identifier in known_ids for domain, identifier in device_entry.identifiers)
