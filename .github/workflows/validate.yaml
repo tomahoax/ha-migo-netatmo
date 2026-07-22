@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - main
+      - dev
   pull_request:
     branches:
       - main
+      - dev
 
 env:
-  DEFAULT_PYTHON: "3.12"
+  DEFAULT_PYTHON: "3.14"
 
 jobs:
   validate-hacs:
@@ -59,12 +61,19 @@ jobs:
         run: ruff format --check custom_components/migo_netatmo
 
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Test (Python ${{ matrix.python-version }}, HA ${{ matrix.ha }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        include:
+          # Latest HA on the newest supported Python
+          - python-version: "3.14"
+            ha: "latest"
+          # Minimum supported HA (matches hacs.json), pinned via the
+          # pytest-homeassistant-custom-component release for HA 2025.8
+          - python-version: "3.13"
+            ha: "2025.8"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -79,6 +88,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Pin Home Assistant to minimum supported version
+        if: matrix.ha == '2025.8'
+        # pycares<5: pycares 5.0 (2025-12) drops the API used by the
+        # aiodns 3.5.0 release that HA 2025.8 pins
+        run: pip install "pytest-homeassistant-custom-component==0.13.270" "pycares<5"
+
       - name: Run tests with pytest
         run: |
           pytest tests/ \
@@ -88,7 +103,7 @@ jobs:
             --cov-report=term-missing
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
+        if: matrix.ha == 'latest'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml

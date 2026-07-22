@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, KEY_BODY
 
@@ -12,10 +12,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
-
-def safe_get(data: dict[str, Any] | None, *keys: str, default: T | None = None) -> Any | T | None:
+def safe_get[T](data: dict[str, Any] | None, *keys: str, default: T | None = None) -> Any | T | None:
     """Safely get a nested value from a dictionary.
 
     Args:
