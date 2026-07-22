@@ -90,7 +90,9 @@ jobs:
 
       - name: Pin Home Assistant to minimum supported version
         if: matrix.ha == '2025.8'
-        run: pip install "pytest-homeassistant-custom-component==0.13.270"
+        # pycares<5: pycares 5.0 (2025-12) drops the API used by the
+        # aiodns 3.5.0 release that HA 2025.8 pins
+        run: pip install "pytest-homeassistant-custom-component==0.13.270" "pycares<5"
 
       - name: Run tests with pytest
         run: |
