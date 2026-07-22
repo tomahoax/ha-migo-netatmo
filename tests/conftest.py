@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, create_autospec
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.const import DOMAIN
@@ -32,40 +33,25 @@ def load_fixture(filename: str) -> dict[str, Any]:
         return json.load(f)
 
 
-@pytest.fixture
-def hass() -> HomeAssistant:
-    """Create a Home Assistant instance for testing."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config_entries = MagicMock()
-    hass.config_entries.flow = MagicMock()
-    hass.config_entries.flow.async_init = AsyncMock()
-    hass.config_entries.flow.async_configure = AsyncMock()
-    hass.config_entries.async_reload = AsyncMock()
-    hass.config_entries.async_update_entry = MagicMock()
-    return hass
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
+    """Enable loading custom integrations in all tests."""
+    return
 
 
 @pytest.fixture
-def mock_config_entry() -> MagicMock:
+def mock_config_entry() -> MockConfigEntry:
     """Create a mock config entry."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry_id"
-    entry.domain = DOMAIN
-    entry.unique_id = None
-    entry.data = {
-        CONF_USERNAME: "test@example.com",
-        CONF_PASSWORD: "test_password",
-    }
-    entry.options = {}  # Add empty options dict for coordinator tests
-    entry.title = "MiGo (Netatmo)"
-
-    def add_to_hass(hass):
-        """Add entry to hass."""
-        entry.unique_id = "test@example.com"
-        hass.config_entries._entries = {entry.entry_id: entry}
-
-    entry.add_to_hass = add_to_hass
-    return entry
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="MiGo (Netatmo)",
+        unique_id="test@example.com",
+        data={
+            CONF_USERNAME: "test@example.com",
+            CONF_PASSWORD: "test_password",
+        },
+        options={},
+    )
 
 
 @pytest.fixture
@@ -160,6 +146,25 @@ def home_status_response() -> dict[str, Any]:
 
 
 @pytest.fixture
+def configs_response() -> dict[str, Any]:
+    """Return mock getconfigs response."""
+    return {
+        "body": {
+            "home": {
+                "id": "home_123",
+                "modules": [
+                    {
+                        "id": "gateway_001",
+                        "dhw_setpoint_temperature": 55,
+                    }
+                ],
+            }
+        },
+        "status": "ok",
+    }
+
+
+@pytest.fixture
 def consumption_response() -> dict[str, Any]:
     """Return mock consumption data response from /api/getmeasure.
 
@@ -182,6 +187,7 @@ def consumption_response() -> dict[str, Any]:
 def mock_api(
     homes_data_response: dict[str, Any],
     home_status_response: dict[str, Any],
+    configs_response: dict[str, Any],
     consumption_response: dict[str, Any],
 ) -> MagicMock:
     """Create a mock MiGO API client.
@@ -193,6 +199,7 @@ def mock_api(
     api.authenticate.return_value = True
     api.get_homes_data.return_value = homes_data_response
     api.get_home_status.return_value = home_status_response
+    api.get_configs.return_value = configs_response
     api.get_measure.return_value = consumption_response
     api.set_temperature.return_value = {"status": "ok"}
     api.set_mode.return_value = {"status": "ok"}
@@ -200,6 +207,31 @@ def mock_api(
     api.set_dhw_enabled.return_value = {"status": "ok"}
     api.switch_home_schedule.return_value = {"status": "ok"}
     return api
+
+
+@pytest.fixture
+def patch_migo_api(mock_api: MagicMock) -> Generator[MagicMock]:
+    """Patch the MigoApi class everywhere it is instantiated."""
+    with (
+        patch("custom_components.migo_netatmo.MigoApi", return_value=mock_api),
+        patch("custom_components.migo_netatmo.config_flow.MigoApi", return_value=mock_api),
+    ):
+        yield mock_api
+
+
+@pytest.fixture
+async def init_integration(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    patch_migo_api: MagicMock,
+) -> AsyncGenerator[MockConfigEntry]:
+    """Set up the integration against a real Home Assistant test instance."""
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    yield mock_config_entry
 
 
 @pytest.fixture
