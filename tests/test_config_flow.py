@@ -2,156 +2,162 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from homeassistant import config_entries
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoAuthError
-from custom_components.migo_netatmo.config_flow import MigoConfigFlow
+from custom_components.migo_netatmo.const import DOMAIN
+
+USER_INPUT = {"username": "test@example.com", "password": "test_password"}
 
 
-class TestConfigFlow:
-    """Tests for the config flow."""
+@pytest.fixture
+def mock_setup_entry():
+    """Prevent the created entry from actually setting up."""
+    with patch("custom_components.migo_netatmo.async_setup_entry", return_value=True) as mock:
+        yield mock
 
-    @pytest.mark.asyncio
-    async def test_step_user_form(self) -> None:
-        """Test we get the form."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
 
-        result = await flow.async_step_user()
+class TestUserFlow:
+    """Tests for the user step, driven through the flow manager."""
 
-        assert result["type"] == "form"
+    async def test_form_shown(self, hass: HomeAssistant) -> None:
+        """Test we get the initial form."""
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "user"
         assert result["errors"] == {}
 
-    @pytest.mark.asyncio
-    async def test_step_user_success(self, homes_data_response) -> None:
-        """Test successful user step."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
-        flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+    async def test_success_creates_entry(
+        self,
+        hass: HomeAssistant,
+        patch_migo_api: MagicMock,
+        mock_setup_entry: MagicMock,
+    ) -> None:
+        """Test a successful setup creates the entry with the right data."""
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+        await hass.async_block_till_done()
 
-        with patch("custom_components.migo_netatmo.config_flow.MigoApi") as mock_api_class:
-            mock_api = MagicMock()
-            mock_api.authenticate = AsyncMock()
-            mock_api.get_homes_data = AsyncMock(return_value=homes_data_response)
-            mock_api.close = AsyncMock()
-            mock_api_class.return_value = mock_api
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "test@example.com"
+        assert result["data"] == USER_INPUT
+        assert result["result"].unique_id == "test@example.com"
+        patch_migo_api.authenticate.assert_called_once()
+        patch_migo_api.close.assert_called_once()
+        assert len(mock_setup_entry.mock_calls) == 1
 
-            result = await flow.async_step_user({"username": "test@example.com", "password": "test_password"})
+    async def test_invalid_auth_then_recovery(
+        self,
+        hass: HomeAssistant,
+        patch_migo_api: MagicMock,
+        mock_setup_entry: MagicMock,
+    ) -> None:
+        """Test an auth error shows the form again, then the flow recovers."""
+        patch_migo_api.authenticate.side_effect = MigoAuthError("Invalid credentials")
 
-            assert result["type"] == "create_entry"
-            mock_api.authenticate.assert_called_once()
-            mock_api.close.assert_called_once()
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
 
-    @pytest.mark.asyncio
-    async def test_step_user_invalid_auth(self) -> None:
-        """Test invalid auth error."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "invalid_auth"}
 
-        with patch("custom_components.migo_netatmo.config_flow.MigoApi") as mock_api_class:
-            mock_api = MagicMock()
-            mock_api.authenticate = AsyncMock(side_effect=MigoAuthError("Invalid credentials"))
-            mock_api_class.return_value = mock_api
+        patch_migo_api.authenticate.side_effect = None
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+        await hass.async_block_till_done()
 
-            result = await flow.async_step_user({"username": "test@example.com", "password": "wrong_password"})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
 
-            assert result["type"] == "form"
-            assert result["errors"] == {"base": "invalid_auth"}
+    async def test_no_homes(
+        self,
+        hass: HomeAssistant,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test an account without homes is rejected."""
+        patch_migo_api.get_homes_data.return_value = {"body": {"homes": []}}
 
-    @pytest.mark.asyncio
-    async def test_step_user_no_homes(self) -> None:
-        """Test no homes error."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
 
-        with patch("custom_components.migo_netatmo.config_flow.MigoApi") as mock_api_class:
-            mock_api = MagicMock()
-            mock_api.authenticate = AsyncMock()
-            mock_api.get_homes_data = AsyncMock(return_value={"body": {"homes": []}})
-            mock_api.close = AsyncMock()
-            mock_api_class.return_value = mock_api
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "no_homes"}
 
-            result = await flow.async_step_user({"username": "test@example.com", "password": "test_password"})
+    async def test_unknown_error(
+        self,
+        hass: HomeAssistant,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test unexpected exceptions map to the unknown error."""
+        patch_migo_api.authenticate.side_effect = Exception("boom")
 
-            assert result["type"] == "form"
-            assert result["errors"] == {"base": "no_homes"}
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
 
-    @pytest.mark.asyncio
-    async def test_step_user_unknown_error(self) -> None:
-        """Test unknown error handling."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "unknown"}
 
-        with patch("custom_components.migo_netatmo.config_flow.MigoApi") as mock_api_class:
-            mock_api = MagicMock()
-            mock_api.authenticate = AsyncMock(side_effect=Exception("Unknown error"))
-            mock_api_class.return_value = mock_api
+    async def test_duplicate_account_aborts(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test configuring the same account twice aborts."""
+        mock_config_entry.add_to_hass(hass)
 
-            result = await flow.async_step_user({"username": "test@example.com", "password": "test_password"})
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
 
-            assert result["type"] == "form"
-            assert result["errors"] == {"base": "unknown"}
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
 
 
 class TestReauthFlow:
-    """Tests for the reauth flow."""
+    """Tests for the reauth flow, driven through the flow manager."""
 
-    @pytest.mark.asyncio
-    async def test_step_reauth(self) -> None:
-        """Test reauth step redirects to reauth_confirm."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
-        flow.async_step_reauth_confirm = AsyncMock(return_value={"type": "form", "step_id": "reauth_confirm"})
+    async def test_reauth_success(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+        mock_setup_entry: MagicMock,
+    ) -> None:
+        """Test a successful reauth updates the entry data."""
+        mock_config_entry.add_to_hass(hass)
 
-        result = await flow.async_step_reauth({"username": "test@example.com"})
-
-        assert result["type"] == "form"
+        result = await mock_config_entry.start_reauth_flow(hass)
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "reauth_confirm"
 
-    @pytest.mark.asyncio
-    async def test_step_reauth_confirm_success(self) -> None:
-        """Test successful reauth confirm."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
-        flow.hass.config_entries = MagicMock()
-        flow.hass.config_entries.async_update_entry = MagicMock()
-        flow.hass.config_entries.async_reload = AsyncMock()
+        new_input = {"username": "test@example.com", "password": "new_password"}
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], new_input)
+        await hass.async_block_till_done()
 
-        mock_entry = MagicMock()
-        mock_entry.entry_id = "test_entry_id"
-        flow._get_reauth_entry = MagicMock(return_value=mock_entry)
-        flow.async_abort = MagicMock(return_value={"type": "abort", "reason": "reauth_successful"})
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reauth_successful"
+        assert mock_config_entry.data["password"] == "new_password"
 
-        with patch("custom_components.migo_netatmo.config_flow.MigoApi") as mock_api_class:
-            mock_api = MagicMock()
-            mock_api.authenticate = AsyncMock()
-            mock_api.close = AsyncMock()
-            mock_api_class.return_value = mock_api
+    async def test_reauth_invalid_auth(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test reauth with still-invalid credentials shows the error."""
+        mock_config_entry.add_to_hass(hass)
+        patch_migo_api.authenticate.side_effect = MigoAuthError("Invalid credentials")
 
-            result = await flow.async_step_reauth_confirm({"username": "test@example.com", "password": "new_password"})
+        result = await mock_config_entry.start_reauth_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "test@example.com", "password": "wrong_password"},
+        )
 
-            assert result["type"] == "abort"
-            assert result["reason"] == "reauth_successful"
-
-    @pytest.mark.asyncio
-    async def test_step_reauth_confirm_invalid_auth(self) -> None:
-        """Test reauth with invalid credentials."""
-        flow = MigoConfigFlow()
-        flow.hass = MagicMock()
-
-        with patch("custom_components.migo_netatmo.config_flow.MigoApi") as mock_api_class:
-            mock_api = MagicMock()
-            mock_api.authenticate = AsyncMock(side_effect=MigoAuthError("Invalid credentials"))
-            mock_api_class.return_value = mock_api
-
-            result = await flow.async_step_reauth_confirm(
-                {"username": "test@example.com", "password": "wrong_password"}
-            )
-
-            assert result["type"] == "form"
-            assert result["errors"] == {"base": "invalid_auth"}
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "invalid_auth"}

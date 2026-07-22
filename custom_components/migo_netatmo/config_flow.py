@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant import config_entries
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
@@ -94,6 +94,10 @@ class MigoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except MigoAuthError as err:
                 _LOGGER.warning("Authentication failed: %s", err)
                 errors["base"] = "invalid_auth"
+            except data_entry_flow.AbortFlow:
+                # _abort_if_unique_id_configured signals through AbortFlow;
+                # it must not be swallowed by the broad handler below
+                raise
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception during configuration")
                 errors["base"] = "unknown"
