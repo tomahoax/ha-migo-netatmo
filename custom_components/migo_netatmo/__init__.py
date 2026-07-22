@@ -70,16 +70,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register update listener for options changes
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    # Options changes reload the entry automatically via OptionsFlowWithReload
 
     return True
-
-
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload entry when options change."""
-    _LOGGER.debug("Reloading MiGO integration due to options change")
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool:

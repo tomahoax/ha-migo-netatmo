@@ -22,6 +22,14 @@
         "description": "Please re-enter your MiGO app credentials",
         "data": {
           "username": "Email",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure MiGO",
+        "description": "Update your MiGO app credentials.\n\n**Note:** This does NOT work with MiGO Link.",
+        "data": {
+          "username": "Email",
           "password": "Password",
           "client_id": "Client ID (optional)",
           "client_secret": "Client Secret (optional)",
@@ -37,37 +45,28 @@
     "error": {
       "invalid_auth": "Invalid email or password",
       "no_homes": "No homes found in your MiGO account",
+      "cannot_connect": "Failed to connect to the MiGO API",
       "unknown": "An unknown error occurred"
     },
     "abort": {
       "already_configured": "This account is already configured",
-      "reauth_successful": "Re-authentication successful"
+      "reauth_successful": "Re-authentication successful",
+      "reconfigure_successful": "Reconfiguration successful",
+      "unique_id_mismatch": "This flow can only update the account it was started for"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "MiGO Options",
-        "description": "Configure credentials and polling interval",
+        "description": "Configure the polling interval. Credentials can be changed via Reconfigure on the integration entry.",
         "data": {
-          "username": "Email",
-          "password": "Password",
-          "client_id": "Client ID (optional)",
-          "client_secret": "Client Secret (optional)",
-          "user_prefix": "User prefix (optional)",
           "update_interval": "Update interval (seconds)"
         },
         "data_description": {
-          "client_id": "Leave empty to use default MiGO app credentials",
-          "client_secret": "Leave empty to use default MiGO app credentials",
-          "user_prefix": "Leave empty to use default prefix (sdbg)",
           "update_interval": "How often to poll the API for updates (60-3600 seconds)"
         }
       }
-    },
-    "error": {
-      "invalid_auth": "Invalid email or password",
-      "unknown": "An unknown error occurred"
     }
   },
   "entity": {

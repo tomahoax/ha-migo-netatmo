@@ -18,8 +18,16 @@
         }
       },
       "reauth_confirm": {
-        "title": "Reautenticación MiGO",
-        "description": "Por favor, vuelve a introducir tus credenciales MiGO",
+        "title": "Volver a autenticar MiGO",
+        "description": "Vuelva a introducir sus credenciales de la app MiGO",
+        "data": {
+          "username": "Email",
+          "password": "Contraseña"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar MiGO",
+        "description": "Actualice sus credenciales de la app MiGO.\n\n**Nota:** NO funciona con MiGO Link.",
         "data": {
           "username": "Email",
           "password": "Contraseña",
@@ -37,37 +45,28 @@
     "error": {
       "invalid_auth": "Email o contraseña incorrectos",
       "no_homes": "No se encontraron hogares en tu cuenta MiGO",
-      "unknown": "Se produjo un error desconocido"
+      "unknown": "Se produjo un error desconocido",
+      "cannot_connect": "No se pudo conectar a la API de MiGO"
     },
     "abort": {
       "already_configured": "Esta cuenta ya está configurada",
-      "reauth_successful": "Reautenticación exitosa"
+      "reauth_successful": "Reautenticación exitosa",
+      "reconfigure_successful": "Reconfiguración correcta",
+      "unique_id_mismatch": "Este flujo solo puede actualizar la cuenta para la que se inició"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opciones MiGO",
-        "description": "Configurar credenciales e intervalo de actualización",
+        "description": "Configure el intervalo de sondeo. Las credenciales se cambian mediante Reconfigurar en la integración.",
         "data": {
-          "username": "Email",
-          "password": "Contraseña",
-          "client_id": "Client ID (opcional)",
-          "client_secret": "Client Secret (opcional)",
-          "user_prefix": "Prefijo de usuario (opcional)",
           "update_interval": "Intervalo de actualización (segundos)"
         },
         "data_description": {
-          "client_id": "Dejar vacío para usar las credenciales por defecto de la app MiGO",
-          "client_secret": "Dejar vacío para usar las credenciales por defecto de la app MiGO",
-          "user_prefix": "Dejar vacío para usar el prefijo por defecto (sdbg)",
-          "update_interval": "Frecuencia de actualización de datos (60-3600 segundos)"
+          "update_interval": "Frecuencia de sondeo de la API (60-3600 segundos)"
         }
       }
-    },
-    "error": {
-      "invalid_auth": "Email o contraseña incorrectos",
-      "unknown": "Se produjo un error desconocido"
     }
   },
   "entity": {
