@@ -496,6 +496,7 @@ class MigoApi:
         room_id: str,
         mode: str | None = None,
         temp: float | None = None,
+        end_time: int | None = None,
     ) -> dict[str, Any]:
         """Set room state using the setstate API.
 
@@ -504,6 +505,8 @@ class MigoApi:
             room_id: The room ID.
             mode: Optional mode to set (manual, home, hg).
             temp: Optional target temperature.
+            end_time: Optional Unix timestamp when the setpoint expires.
+                If omitted, the backend applies therm_setpoint_default_duration.
 
         Returns:
             The API response.
@@ -516,6 +519,9 @@ class MigoApi:
         if temp is not None:
             room_data["therm_setpoint_temperature"] = temp
 
+        if end_time is not None:
+            room_data["therm_setpoint_end_time"] = end_time
+
         data = {
             "home": {
                 "id": home_id,
@@ -523,7 +529,13 @@ class MigoApi:
             }
         }
 
-        _LOGGER.debug("Setting room %s state: mode=%s, temp=%s", room_id, mode, temp)
+        _LOGGER.debug(
+            "Setting room %s state: mode=%s, temp=%s, end_time=%s",
+            room_id,
+            mode,
+            temp,
+            end_time,
+        )
         return await self._api_request(API_SETSTATE_URL, data)
 
     async def set_temperature(
@@ -531,6 +543,7 @@ class MigoApi:
         home_id: str,
         room_id: str,
         temperature: float,
+        duration: int | None = None,
     ) -> dict[str, Any]:
         """Set target temperature for a room.
 
@@ -540,15 +553,22 @@ class MigoApi:
             home_id: The home ID.
             room_id: The room ID.
             temperature: The target temperature in Celsius.
+            duration: Optional override duration in minutes. If omitted, the
+                backend applies therm_setpoint_default_duration.
 
         Returns:
             The API response.
         """
+        end_time: int | None = None
+        if duration is not None:
+            end_time = int(datetime.now(UTC).timestamp()) + duration * 60
+
         return await self.set_room_state(
             home_id=home_id,
             room_id=room_id,
             mode=MODE_MANUAL,
             temp=temperature,
+            end_time=end_time,
         )
 
     async def set_mode(
