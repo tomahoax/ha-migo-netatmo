@@ -6,9 +6,12 @@ from unittest.mock import MagicMock
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.migo_netatmo import async_remove_config_entry_device
 from custom_components.migo_netatmo.api import MigoApiError, MigoAuthError
+from custom_components.migo_netatmo.const import DOMAIN
 
 
 async def test_setup_entry(
@@ -91,3 +94,22 @@ async def test_setup_entry_api_error_retries(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_remove_stale_device(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Test that only devices unknown to the API can be removed."""
+    device_registry = dr.async_get(hass)
+
+    live_device = device_registry.async_get_device(identifiers={(DOMAIN, "gateway_001")})
+    assert live_device is not None
+    assert not await async_remove_config_entry_device(hass, init_integration, live_device)
+
+    stale_device = device_registry.async_get_or_create(
+        config_entry_id=init_integration.entry_id,
+        identifiers={(DOMAIN, "gateway_gone")},
+        name="Old Gateway",
+    )
+    assert await async_remove_config_entry_device(hass, init_integration, stale_device)

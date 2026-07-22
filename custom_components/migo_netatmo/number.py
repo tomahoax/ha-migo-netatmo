@@ -131,7 +131,6 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
     _attr_native_step = MANUAL_SETPOINT_DURATION_STEP  # 5 minutes
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:timer-cog-outline"
 
     def __init__(
         self,
@@ -193,7 +192,6 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, MigoApiControlMixin, NumberEnt
     _attr_native_step = TEMP_OFFSET_STEP  # 0.5
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:thermometer-plus"
 
     def __init__(
         self,
@@ -254,7 +252,6 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
     _attr_native_step = DHW_TEMP_STEP  # 1°C
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:water-thermometer"
 
     def __init__(
         self,
@@ -321,7 +318,6 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
     _attr_native_step = HYSTERESIS_STEP  # 0.1°C
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:thermometer-lines"
 
     def __init__(
         self,
@@ -392,7 +388,6 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
     _attr_native_max_value = HEATING_CURVE_MAX  # 5.0
     _attr_native_step = HEATING_CURVE_STEP  # 0.1
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:chart-bell-curve-cumulative"
 
     def __init__(
         self,

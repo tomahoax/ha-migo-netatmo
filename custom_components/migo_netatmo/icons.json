@@ -1,0 +1,48 @@
+{
+  "entity": {
+    "sensor": {
+      "wifi_strength": {
+        "default": "mdi:wifi"
+      },
+      "rf_strength": {
+        "default": "mdi:signal"
+      },
+      "daily_boiler_runtime": {
+        "default": "mdi:fire"
+      }
+    },
+    "number": {
+      "manual_setpoint_duration": {
+        "default": "mdi:timer-cog-outline"
+      },
+      "temperature_offset": {
+        "default": "mdi:thermometer-plus"
+      },
+      "dhw_temperature": {
+        "default": "mdi:water-thermometer"
+      },
+      "hysteresis": {
+        "default": "mdi:thermometer-lines"
+      },
+      "heating_curve": {
+        "default": "mdi:chart-bell-curve-cumulative"
+      }
+    },
+    "switch": {
+      "dhw_boost": {
+        "default": "mdi:water-boiler"
+      },
+      "anticipation": {
+        "default": "mdi:clock-fast"
+      }
+    },
+    "button": {
+      "refresh": {
+        "default": "mdi:refresh"
+      },
+      "reset_heating_curve": {
+        "default": "mdi:chart-bell-curve"
+      }
+    }
+  }
+}

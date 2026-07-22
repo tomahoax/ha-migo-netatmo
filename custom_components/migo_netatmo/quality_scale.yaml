@@ -1,0 +1,65 @@
+# Internal quality-scale tracking for this custom integration.
+# Not referenced from manifest.json (the quality_scale manifest key is
+# reserved for Home Assistant core integrations).
+rules:
+  # Bronze
+  action-setup: exempt  # no custom service actions
+  appropriate-polling: done  # configurable interval, default 300s
+  brands: exempt  # custom integration (HACS)
+  common-modules: done  # coordinator.py, entity.py, helpers.py, models.py
+  config-flow-test-coverage: done
+  config-flow: done
+  dependency-transparency: done  # aiohttp only, in-package API client
+  docs-actions: exempt
+  docs-triggers: exempt
+  docs-conditions: exempt
+  docs-high-level-description: done  # README + docs/
+  docs-installation-instructions: done  # docs/installation.md
+  docs-removal-instructions: todo
+  entity-event-setup: done  # coordinator entities only
+  entity-unique-id: done  # pinned by tests/test_unique_ids.py
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done  # authenticate + first refresh
+  unique-config-entry: done  # unique_id = account email
+
+  # Silver
+  action-exceptions: done  # HomeAssistantError/ServiceValidationError
+  config-entry-unloading: done
+  docs-configuration-parameters: done  # docs/configuration.md
+  docs-installation-parameters: done
+  entity-unavailable: done  # CoordinatorEntity availability
+  integration-owner: done  # codeowners @tomahoax
+  log-when-unavailable: done  # coordinator logs failed refreshes
+  parallel-updates: done
+  reauthentication-flow: done  # + triggered by polling auth failures
+  test-coverage: todo  # target >95%, measured in CI
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery-update-info: exempt  # cloud account API, no discovery
+  discovery: exempt
+  docs-data-update: todo
+  docs-examples: todo
+  docs-known-limitations: done  # MiGO Link / myVAILLANT exclusions
+  docs-supported-devices: done
+  docs-supported-functions: done  # docs/entities.md
+  docs-troubleshooting: done  # docs/troubleshooting.md
+  docs-use-cases: todo
+  dynamic-devices: todo  # devices appear on reload, not live
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: todo  # candidates: firmware sensors
+  entity-translations: done  # en/es/fr/it/ru
+  exception-translations: done
+  icon-translations: done  # icons.json
+  reconfiguration-flow: done
+  repair-issues: exempt  # no user-fixable server-side issues yet
+  stale-devices: done  # async_remove_config_entry_device
+
+  # Platinum
+  async-dependency: done  # aiohttp
+  inject-websession: done  # async_get_clientsession
+  strict-typing: todo  # mypy still relaxed

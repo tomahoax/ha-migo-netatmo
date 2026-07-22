@@ -88,7 +88,6 @@ GATEWAY_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:wifi",
     ),
     MigoSensorEntityDescription(
         key="gateway_firmware",
@@ -132,7 +131,6 @@ THERMOSTAT_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:signal",
     ),
     MigoSensorEntityDescription(
         key="thermostat_firmware",
@@ -304,7 +302,6 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfTime.SECONDS
     _attr_translation_key = "daily_boiler_runtime"
-    _attr_icon = "mdi:fire"
     _attr_suggested_display_precision = 0
 
     def __init__(
