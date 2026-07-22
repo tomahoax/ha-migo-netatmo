@@ -135,6 +135,15 @@ After installation, you can configure the integration options:
 > [!TIP]
 > Lower polling intervals provide more responsive updates but may increase API load. A 5-minute interval is recommended for normal use.
 
+### Changing credentials
+
+Credentials are no longer edited in the options dialog. To change your email, password or OAuth settings:
+
+1. Go to **Settings** → **Devices & services** → **MiGo (Netatmo)**
+2. Open the entry menu (three dots) and select **Reconfigure**
+
+If your password expired, Home Assistant shows a **Reauthenticate** repair instead; follow it to re-enter the password.
+
 ## Installation
 
 ### HACS (Recommended)
