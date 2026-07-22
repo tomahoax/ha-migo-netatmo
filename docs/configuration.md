@@ -13,7 +13,19 @@ The integration is configured through the UI. During setup, you'll need:
 
 ## Integration Options
 
-Currently, the integration has no additional configurable options after setup. All settings are managed through the created entities.
+Open **Settings** → **Devices & services** → **MiGo (Netatmo)** → **Configure**:
+
+| Option | Description | Range | Default |
+|--------|-------------|-------|---------|
+| Update interval | How often to poll the API | 60 - 3600 seconds | 300 seconds |
+
+Changing the interval reloads the integration automatically.
+
+## Changing credentials
+
+Use **Reconfigure** from the integration entry menu (three dots) to update the email, password or optional OAuth settings. The flow only accepts the account the entry was created for. If authentication expires, Home Assistant starts a **Reauthenticate** repair automatically.
+
+Device-level settings (DHW temperature, hysteresis, heating curve, offsets) are managed through the created entities.
 
 ## Entity Configuration
 

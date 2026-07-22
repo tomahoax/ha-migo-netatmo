@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-07-22
+
+### Added
+- **Reconfigure flow** - Change credentials from the integration entry menu; reauth and reconfigure refuse account switching
+- **Diagnostics** - Downloadable config entry diagnostics with credentials and home location redacted
+- **Icon translations** - Icons served via `icons.json` instead of hardcoded attributes
+- **Stale device removal** - Devices no longer reported by the API can be deleted from the UI
+- **Reauth on polling failures** - An expired password now triggers the reauthentication repair instead of failing silently
+- **Translated error messages** - Failed actions raise visible, translated errors (all 5 languages)
+
+### Changed
+- **Minimum Home Assistant version is now 2025.8**
+- **Options dialog** only manages the polling interval; credentials move to Reconfigure/Reauthenticate
+- **Action failures are now visible** - Service calls that previously failed silently (missing home, API error) raise errors
+- Config flow uses proper email/password selectors and aborts duplicate accounts before any network call
+
+### Internal
+- Entity layer refactored: single-source DeviceInfo builders, native `EntityDescription` pattern, `PARALLEL_UPDATES` on all platforms. No unique_id or entity_id changed (pinned by a registry contract test)
+- Test suite runs against a real Home Assistant test instance (78 tests); CI runs on dev PRs with a latest-HA and a minimum-HA (2025.8) job
+- Deprecated patterns removed: options update listener, `FlowResult`, silent `AbortFlow` swallowing
+
 ## [0.40.2] - 2026-07-22
 
 ### Fixed
