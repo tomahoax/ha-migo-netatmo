@@ -214,17 +214,31 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, MigoApiControlMixin, NumberEnt
     @property
     def native_value(self) -> float | None:
         """Return the current temperature offset."""
-        # Check optimistic cache first (API doesn't return this value)
+        # Check optimistic cache first (API doesn't always return this value)
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
+            _LOGGER.debug(
+                "Temperature offset for room %s: using cached value %s",
+                self._room_id,
+                cached,
+            )
             return cached
-        # Fallback to API data (if ever returned)
-        # Key can be "measure_offset_NAVaillant_temperature" or "therm_setpoint_offset"
-        offset = self._room_data.get("measure_offset_NAVaillant_temperature")
-        if offset is None:
-            offset = self._room_data.get("therm_setpoint_offset")
+        # Fallback to API data - only use therm_setpoint_offset (user-configured value)
+        # Note: measure_offset_NAVaillant_temperature is hardware sensor calibration,
+        # not the user-configurable offset, so we don't read it here.
+        offset = self._room_data.get("therm_setpoint_offset")
         if offset is not None:
+            _LOGGER.debug(
+                "Temperature offset for room %s: using API value %s",
+                self._room_id,
+                offset,
+            )
             return float(offset)
+        _LOGGER.debug(
+            "Temperature offset for room %s: no value found, using default %s",
+            self._room_id,
+            DEFAULT_TEMP_OFFSET,
+        )
         return DEFAULT_TEMP_OFFSET
 
     async def async_set_native_value(self, value: float) -> None:

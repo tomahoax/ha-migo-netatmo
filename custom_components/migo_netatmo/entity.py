@@ -161,6 +161,10 @@ class MigoEntity(CoordinatorEntity["MigoDataUpdateCoordinator"]):
 
     _attr_has_entity_name = True
 
+    # Connectivity diagnostics (the "reachable" binary sensor) set this to
+    # True so they stay available while reporting the device as unreachable
+    _ignore_reachable = False
+
 
 class MigoRoomEntity(MigoEntity):
     """Base class for MiGO room-based entities (climate, room sensors).
@@ -182,6 +186,15 @@ class MigoRoomEntity(MigoEntity):
     def _room_data(self) -> dict[str, Any]:
         """Get current room data."""
         return self.coordinator.rooms.get(self._room_id, {})
+
+    @property
+    def available(self) -> bool:
+        """Return False when the room's thermostat is unreachable."""
+        if not super().available:
+            return False
+        if self._ignore_reachable:
+            return True
+        return self._room_data.get("reachable") is not False
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -219,6 +232,15 @@ class MigoDeviceEntity(MigoEntity):
     def _home_id(self) -> str:
         """Get the home ID this device belongs to."""
         return self._device_data.get("home_id", "")
+
+    @property
+    def available(self) -> bool:
+        """Return False when the device reports itself unreachable."""
+        if not super().available:
+            return False
+        if self._ignore_reachable:
+            return True
+        return self._device_data.get("reachable") is not False
 
 
 class MigoGatewayEntity(MigoDeviceEntity):

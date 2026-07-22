@@ -38,6 +38,8 @@ class MigoBinarySensorEntityDescription(BinarySensorEntityDescription):
     data_key: str
     unique_id_key: str
     value_fn: Callable[[Any], bool | None] | None = None
+    # Connectivity diagnostics stay available while reporting unreachable
+    ignores_reachability: bool = False
 
 
 # Room-based binary sensor configurations
@@ -80,6 +82,7 @@ THERMOSTAT_BINARY_SENSORS: tuple[MigoBinarySensorEntityDescription, ...] = (
         translation_key="reachable",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        ignores_reachability=True,
     ),
 )
 
@@ -164,6 +167,7 @@ class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
     def _init_binary_sensor(self, device_id: str, description: MigoBinarySensorEntityDescription) -> None:
         """Initialize binary sensor attributes from the entity description."""
         self.entity_description = description
+        self._ignore_reachable = description.ignores_reachability
         self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
 
     @property
