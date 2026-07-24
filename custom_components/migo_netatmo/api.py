@@ -337,7 +337,7 @@ class MigoApi:
                         )
                         if retry_response.status >= 400:
                             error_text = await retry_response.text()
-                            _LOGGER.error(
+                            _LOGGER.debug(
                                 "API error after retry: %s %s returned %d: %s",
                                 method,
                                 url,
@@ -351,7 +351,7 @@ class MigoApi:
 
                 if response.status >= 400:
                     error_text = await response.text()
-                    _LOGGER.error(
+                    _LOGGER.debug(
                         "API error: %s %s returned %d: %s",
                         method,
                         url,
@@ -365,7 +365,7 @@ class MigoApi:
                 return result
 
         except aiohttp.ClientResponseError as err:
-            _LOGGER.error(
+            _LOGGER.debug(
                 "API request failed: %s %s - status=%d message=%s",
                 method,
                 url,
@@ -374,7 +374,7 @@ class MigoApi:
             )
             raise MigoApiError(f"API request failed: {err}") from err
         except aiohttp.ClientError as err:
-            _LOGGER.error("API connection error: %s %s - %s", method, url, err)
+            _LOGGER.debug("API connection error: %s %s - %s", method, url, err)
             raise MigoConnectionError(f"Connection error: {err}") from err
 
     # =========================================================================

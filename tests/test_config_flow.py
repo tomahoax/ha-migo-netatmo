@@ -8,6 +8,7 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoAuthError
@@ -50,8 +51,29 @@ class TestUserFlow:
         assert result["data"] == USER_INPUT
         assert result["result"].unique_id == "test@example.com"
         patch_migo_api.authenticate.assert_called_once()
-        patch_migo_api.close.assert_called_once()
         assert len(mock_setup_entry.mock_calls) == 1
+
+    async def test_shared_session_is_injected(
+        self,
+        hass: HomeAssistant,
+        mock_api: MagicMock,
+        mock_setup_entry: MagicMock,
+    ) -> None:
+        """Test the flow reuses Home Assistant's shared aiohttp session.
+
+        Pins the inject-websession quality-scale rule: the flow must not build
+        its own ClientSession, and must not close the shared one.
+        """
+        with patch(
+            "custom_components.migo_netatmo.config_flow.MigoApi",
+            return_value=mock_api,
+        ) as api_class:
+            result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+            await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+            await hass.async_block_till_done()
+
+        assert api_class.call_args.kwargs["session"] is async_get_clientsession(hass)
+        mock_api.close.assert_not_called()
 
     async def test_invalid_auth_then_recovery(
         self,

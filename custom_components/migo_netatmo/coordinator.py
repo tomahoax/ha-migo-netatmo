@@ -91,7 +91,8 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
             body = safe_get(data, KEY_BODY)
             if body is None:
-                _LOGGER.error("Invalid API response: missing 'body' key")
+                # No explicit log: DataUpdateCoordinator logs the UpdateFailed
+                # message once, then stays quiet until recovery.
                 raise UpdateFailed("Invalid response from API: missing 'body'")
 
             homes: list[dict[str, Any]] = safe_get(body, KEY_HOMES, default=[])
@@ -125,7 +126,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # Triggers the reauthentication flow
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except MigoApiError as err:
-            _LOGGER.error("Failed to refresh MiGO data: %s", err)
+            # No explicit log: DataUpdateCoordinator logs this once when the
+            # integration goes unavailable, and logs recovery on the next
+            # successful refresh. Logging here would duplicate it every cycle.
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
     async def _process_home(self, home: dict[str, Any]) -> None:

@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -100,6 +101,7 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
         api = MigoApi(
             username=user_input[CONF_USERNAME],
             password=user_input[CONF_PASSWORD],
+            session=async_get_clientsession(self.hass),
             client_id=user_input.get(CONF_CLIENT_ID),
             client_secret=user_input.get(CONF_CLIENT_SECRET),
             user_prefix=user_input.get(CONF_USER_PREFIX),
@@ -119,9 +121,9 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception while validating credentials")
             errors["base"] = "unknown"
-        finally:
-            await api.close()
 
+        # No api.close() here: the session is Home Assistant's shared one, so
+        # this flow does not own it and must not close it.
         return errors
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
