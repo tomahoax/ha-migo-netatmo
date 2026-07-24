@@ -37,7 +37,13 @@ from .const import (
     TOKEN_EXPIRY_BUFFER,
     USER_PREFIX,
 )
-from .models import HomesDataResponse, HomeStatusApiResponse
+from .models import (
+    GetConfigsResponse,
+    GetMeasureResponse,
+    HomesDataResponse,
+    HomeStatusApiResponse,
+    TokenResponse,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +58,27 @@ class MigoAuthError(MigoApiError):
 
 class MigoConnectionError(MigoApiError):
     """Connection error."""
+
+
+def _as_json_object(payload: object) -> dict[str, Any]:
+    """Return payload as a JSON object, or raise if it is not one.
+
+    aiohttp's response.json() is typed Any, so without this every caller would
+    silently treat a JSON array or scalar as if it were a mapping. This is the
+    one place the untrusted wire format becomes a typed value.
+
+    Args:
+        payload: The decoded JSON payload.
+
+    Returns:
+        The payload, as a JSON object.
+
+    Raises:
+        MigoApiError: If the payload is not a JSON object.
+    """
+    if not isinstance(payload, dict):
+        raise MigoApiError(f"Expected a JSON object from the API, got {type(payload).__name__}")
+    return payload
 
 
 class MigoApi:
@@ -175,7 +202,9 @@ class MigoApi:
                     _LOGGER.error("Authentication failed with status: %d", response.status)
                     raise MigoAuthError(f"Authentication failed: HTTP {response.status}")
 
-                result = await response.json()
+                # _as_json_object checks it really is an object; the cast then
+                # asserts the field shape, same as the other JSON boundaries.
+                result = cast(TokenResponse, _as_json_object(await response.json()))
                 self._store_tokens(result)
 
                 _LOGGER.debug(
@@ -227,7 +256,7 @@ class MigoApi:
                     )
                     return await self.authenticate()
 
-                result = await response.json()
+                result = cast(TokenResponse, _as_json_object(await response.json()))
                 self._store_tokens(result, preserve_refresh=True)
 
                 _LOGGER.debug("Token refreshed successfully")
@@ -239,7 +268,7 @@ class MigoApi:
 
     def _store_tokens(
         self,
-        token_data: dict[str, Any],
+        token_data: TokenResponse,
         preserve_refresh: bool = False,
     ) -> None:
         """Store tokens from API response.
@@ -247,8 +276,16 @@ class MigoApi:
         Args:
             token_data: The token response from the API.
             preserve_refresh: If True, preserve existing refresh token if not in response.
+
+        Raises:
+            MigoAuthError: If the response carries no access token.
         """
-        self._access_token = token_data["access_token"]
+        access_token = token_data.get("access_token")
+        if access_token is None:
+            # Previously a bare KeyError, which escaped authenticate() as-is
+            # instead of surfacing as an auth failure.
+            raise MigoAuthError("Authentication response carried no access token")
+        self._access_token = access_token
 
         if preserve_refresh:
             self._refresh_token = token_data.get("refresh_token", self._refresh_token)
@@ -345,7 +382,7 @@ class MigoApi:
                                 error_text,
                             )
                             raise MigoApiError(f"API returned {retry_response.status}: {error_text}")
-                        result = await retry_response.json()
+                        result = _as_json_object(await retry_response.json())
                         _LOGGER.debug("API response data: %s", result)
                         return result
 
@@ -360,7 +397,7 @@ class MigoApi:
                     )
                     raise MigoApiError(f"API returned {response.status}: {error_text}")
 
-                result = await response.json()
+                result = _as_json_object(await response.json())
                 _LOGGER.debug("API response data: %s", result)
                 return result
 
@@ -416,7 +453,7 @@ class MigoApi:
         _LOGGER.debug("Fetching home status for: %s", home_id)
         return cast(HomeStatusApiResponse, await self._api_request(API_HOMESTATUS_URL, data))
 
-    async def get_configs(self, home_id: str) -> dict[str, Any]:
+    async def get_configs(self, home_id: str) -> GetConfigsResponse:
         """Get module configurations from API.
 
         This returns configuration data that may not be in homesdata/homestatus,
@@ -431,7 +468,7 @@ class MigoApi:
         data = {"home_id": home_id}
 
         _LOGGER.debug("Fetching configs for: %s", home_id)
-        return await self._api_request(API_GETCONFIGS_URL, data)
+        return cast(GetConfigsResponse, await self._api_request(API_GETCONFIGS_URL, data))
 
     async def get_measure(
         self,
@@ -441,7 +478,7 @@ class MigoApi:
         measure_types: list[str] | None = None,
         date_begin: int | None = None,
         date_end: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> GetMeasureResponse:
         """Get measurements (historical data) from API using device/module IDs.
 
         This is the endpoint used by Vaillant vSmart integration for boiler runtime.
@@ -485,7 +522,7 @@ class MigoApi:
             measure_types,
         )
         # getmeasure uses form data, not JSON (legacy API)
-        return await self._api_request(API_GETMEASURE_URL, data, use_json=False)
+        return cast(GetMeasureResponse, await self._api_request(API_GETMEASURE_URL, data, use_json=False))
 
     # =========================================================================
     # Room Control Methods

@@ -283,6 +283,35 @@ class TestMigoApiRequest:
         with pytest.raises(MigoConnectionError):
             await api._api_request("https://app.netatmo.net/api/somewhere")
 
+    @pytest.mark.asyncio
+    async def test_api_request_non_object_payload_raises_api_error(self) -> None:
+        """A 200 carrying a JSON array, not an object, is rejected at the boundary.
+
+        Without this guard the array propagated as if it were a mapping, and the
+        failure surfaced much later as an AttributeError somewhere downstream.
+        """
+        mock_session = _create_mock_session(_create_mock_response(status=200, json_data=["not", "an", "object"]))
+        api = self._make_authenticated_api(mock_session)
+
+        with pytest.raises(MigoApiError, match="Expected a JSON object"):
+            await api._api_request("https://app.netatmo.net/api/somewhere")
+
+    @pytest.mark.asyncio
+    async def test_authenticate_without_access_token_raises_auth_error(self) -> None:
+        """A token response with no access_token surfaces as an auth failure.
+
+        It used to escape as a bare KeyError, which no caller handled.
+        """
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.post.return_value = _response_as_context_manager(
+            _create_mock_response(status=200, json_data={"expires_in": 10800})
+        )
+        api = MigoApi(username="test@example.com", password="test_password", session=mock_session)
+
+        with pytest.raises(MigoAuthError, match="no access token"):
+            await api.authenticate()
+
 
 class TestMigoApiErrors:
     """Tests for API error handling."""
