@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
@@ -37,6 +37,7 @@ from .const import (
     TOKEN_EXPIRY_BUFFER,
     USER_PREFIX,
 )
+from .models import HomesDataResponse, HomeStatusApiResponse
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -380,7 +381,7 @@ class MigoApi:
     # Data Retrieval Methods
     # =========================================================================
 
-    async def get_homes_data(self) -> dict[str, Any]:
+    async def get_homes_data(self) -> HomesDataResponse:
         """Get homes data (static configuration) from API.
 
         This returns the structure of all homes, rooms, modules, and schedules.
@@ -397,9 +398,9 @@ class MigoApi:
         }
 
         _LOGGER.debug("Fetching homes data")
-        return await self._api_request(API_HOMESDATA_URL, data)
+        return cast(HomesDataResponse, await self._api_request(API_HOMESDATA_URL, data))
 
-    async def get_home_status(self, home_id: str) -> dict[str, Any]:
+    async def get_home_status(self, home_id: str) -> HomeStatusApiResponse:
         """Get home status (real-time data) from API.
 
         This returns current temperatures, states, and device status.
@@ -413,7 +414,7 @@ class MigoApi:
         data = {"home_id": home_id}
 
         _LOGGER.debug("Fetching home status for: %s", home_id)
-        return await self._api_request(API_HOMESTATUS_URL, data)
+        return cast(HomeStatusApiResponse, await self._api_request(API_HOMESTATUS_URL, data))
 
     async def get_configs(self, home_id: str) -> dict[str, Any]:
         """Get module configurations from API.

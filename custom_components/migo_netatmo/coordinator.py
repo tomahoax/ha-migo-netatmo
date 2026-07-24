@@ -23,6 +23,7 @@ from .const import (
     KEY_ROOMS,
 )
 from .helpers import safe_get
+from .models import CoordinatorData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
     """Class to manage fetching MiGO data.
 
     This coordinator handles fetching data from the MiGO API and provides
@@ -72,7 +73,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Optimistic cache for config values not returned by API
         self._config_cache: dict[str, Any] = {}
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> CoordinatorData:
         """Fetch data from API.
 
         This method is called by the coordinator to fetch fresh data.
@@ -93,7 +94,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.error("Invalid API response: missing 'body' key")
                 raise UpdateFailed("Invalid response from API: missing 'body'")
 
-            homes = safe_get(body, KEY_HOMES, default=[])
+            homes: list[dict[str, Any]] = safe_get(body, KEY_HOMES, default=[])
             _LOGGER.debug("Found %d homes in API response", len(homes))
 
             # Reset data stores
@@ -188,7 +189,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             status = await self.api.get_home_status(home_id)
-            home_data = safe_get(status, KEY_BODY, KEY_HOME, default={})
+            home_data: dict[str, Any] = safe_get(status, KEY_BODY, KEY_HOME, default={})
 
             for room in home_data.get(KEY_ROOMS, []):
                 room_id = room.get("id")
@@ -230,7 +231,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             configs = await self.api.get_configs(home_id)
-            home_data = safe_get(configs, KEY_BODY, KEY_HOME, default={})
+            home_data: dict[str, Any] = safe_get(configs, KEY_BODY, KEY_HOME, default={})
 
             for module in home_data.get(KEY_MODULES, []):
                 module_id = module.get("id")
@@ -367,7 +368,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     date_begin=date_begin,
                 )
 
-                body = safe_get(response, KEY_BODY, default={})
+                body: dict[str, Any] | list[Any] = safe_get(response, KEY_BODY, default={})
                 _LOGGER.debug("Consumption API response body: %s", body)
 
                 # Handle dict format: {"timestamp": [boiler_on, boiler_off], ...}

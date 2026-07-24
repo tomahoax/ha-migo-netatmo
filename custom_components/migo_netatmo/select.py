@@ -11,7 +11,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SCHEDULE_TYPE_THERM
-from .entity import MigoHomeControlEntity
+from .entity import MigoHomeControlEntity, register_dynamic_entities
 from .helpers import generate_unique_id
 
 if TYPE_CHECKING:
@@ -34,22 +34,24 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[SelectEntity] = []
+    def _schedule_select(home_id: str) -> list[SelectEntity]:
+        # Only add the schedule select if therm-type schedules are available.
+        # This is gated on data content, not on the home_id itself: if a home
+        # gains its first therm schedule after having already been seen, this
+        # entity does not appear retroactively (dynamic-devices targets new
+        # ids, not new capabilities on an id already known).
+        schedules = coordinator.homes.get(home_id, {}).get("schedules", [])
+        if not any(s.get("type") == SCHEDULE_TYPE_THERM for s in schedules):
+            return []
+        return [MigoScheduleSelect(coordinator=coordinator, home_id=home_id, api=data.api)]
 
-    for home_id, home_data in coordinator.homes.items():
-        # Schedule select (only if schedules are available)
-        schedules = home_data.get("schedules", [])
-        therm_schedules = [s for s in schedules if s.get("type") == SCHEDULE_TYPE_THERM]
-        if therm_schedules:
-            entities.append(
-                MigoScheduleSelect(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    api=data.api,
-                )
-            )
-
-    async_add_entities(entities)
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.homes,
+        create_entities=_schedule_select,
+    )
 
 
 class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):

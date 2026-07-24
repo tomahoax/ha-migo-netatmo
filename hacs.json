@@ -3,5 +3,7 @@
   "render_readme": true,
   "homeassistant": "2025.8.0",
   "content_in_root": false,
-  "hide_default_branch": true
+  "hide_default_branch": true,
+  "zip_release": true,
+  "filename": "migo_netatmo.zip"
 }

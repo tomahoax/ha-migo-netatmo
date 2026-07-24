@@ -18,6 +18,15 @@ The reason? **The MiGo app uses a completely different API than myVAILLANT**. Mi
 
 This integration was created to fill that gap by reverse-engineering the Netatmo API used by the MiGo iOS app.
 
+## Use Cases
+
+- **Energy tracking**: feed the *Daily boiler runtime* sensor into the Home Assistant Energy Dashboard to see how much your boiler actually runs, day over day (see [Energy Dashboard Integration](#energy-dashboard-integration)).
+- **Remote control**: change the target temperature, switch modes (Auto/Heat/Off), or trigger a DHW boost from the Home Assistant app while away from home, instead of opening the MiGo app.
+- **Fixing a miscalibrated room sensor**: use the per-room *Temperature offset* number entity to correct a thermostat that reads a few degrees off, without touching the physical device.
+- **Fault alerting**: automate on the *Boiler error* or *eBus error* binary sensors to get a notification the moment something goes wrong, instead of noticing a cold house hours later (see [Automation Examples](#automation-examples)).
+- **Presence-based heating**: combine the climate entity's preset modes (Away, Boost) with a Home Assistant presence automation to heat only when someone is actually home.
+- **Battery monitoring**: get notified before a thermostat's battery runs out, rather than discovering it stopped reporting.
+
 ## Compatibility
 
 > [!IMPORTANT]
@@ -144,6 +153,18 @@ Credentials are no longer edited in the options dialog. To change your email, pa
 
 If your password expired, Home Assistant shows a **Reauthenticate** repair instead; follow it to re-enter the password.
 
+## Data Updates
+
+This integration is **cloud polling**: it periodically calls the Netatmo API used by the MiGo app, there is no push/webhook mechanism. Each refresh cycle:
+
+1. Fetches real-time status (`/api/homestatus`) - room temperatures, setpoints, connectivity, boiler status.
+2. Fetches module configuration (`/syncapi/v1/getconfigs`) - DHW setpoint temperature and similar settings not present in the status response.
+3. Fetches consumption history (`/api/getmeasure`) - boiler runtime for the Energy Dashboard sensor.
+
+The default interval is **5 minutes (300 seconds)**, configurable between 60 and 3600 seconds (see [Configuration Options](#configuration-options)). A shorter interval gives more responsive updates at the cost of more API calls; a longer interval reduces load on the (unofficial, reverse-engineered) API.
+
+Between scheduled refreshes, the **Manual refresh** button entity forces an immediate update - useful right after changing something in the MiGo app itself. If a refresh fails (network issue, expired token), affected entities go `unavailable` and the failure is logged once; they recover automatically on the next successful refresh.
+
 ## Installation
 
 ### HACS (Recommended)
@@ -207,6 +228,15 @@ You can optionally provide custom OAuth credentials:
 
 Leave these empty to use the default MiGO app credentials.
 
+> [!NOTE]
+> The default client ID/secret are the MiGO iOS app's own OAuth credentials
+> (extracted through reverse engineering, see [Technical Details](#technical-details)),
+> not per-user secrets. They are committed in `const.py` and world-readable, and are
+> required for this unofficial integration to authenticate at all. They do not grant
+> access to any account by themselves: authentication still requires your own MiGO
+> username and password. Use the advanced fields above only if you have your own
+> client credentials and prefer not to rely on the bundled ones.
+
 ### Manual Installation
 
 If you prefer not to use HACS:
@@ -216,6 +246,18 @@ If you prefer not to use HACS:
 3. Copy the `custom_components/migo_netatmo` folder to your Home Assistant `config/custom_components/` directory
 4. Restart Home Assistant
 5. Configure the integration via Settings → Devices & services → Add Integration
+
+## Removing the Integration
+
+1. Go to **Settings** → **Devices & services**
+2. Find **MiGo (Netatmo)** and open the entry menu (three dots)
+3. Select **Delete**
+
+This removes the config entry along with its devices and entities from Home Assistant. There is nothing to unpair physically: this integration connects to your MiGO account over the cloud API, it does not hold a device pairing.
+
+If you installed via HACS and want to remove the integration files too, remove it from HACS → Integrations after deleting the config entry. If you installed manually, delete the `custom_components/migo_netatmo` folder and restart Home Assistant.
+
+Deleting the Home Assistant integration does **not** revoke access on the MiGO side; your account credentials remain valid for the MiGO app itself. There is no per-integration access token to revoke separately since authentication uses your regular MiGO username and password.
 
 ## Energy Dashboard Integration
 
@@ -240,6 +282,75 @@ template:
           {% set runtime_seconds = states('sensor.migo_thermostat_daily_boiler_runtime') | float(0) %}
           {% set boiler_power_kw = 25 %}  {# Adjust to your boiler's power #}
           {{ (runtime_seconds / 3600 * boiler_power_kw) | round(2) }}
+```
+
+## Automation Examples
+
+Entity IDs below follow this integration's default naming (`<home>_<device>_<sensor>`); adjust them to match your own home and device names.
+
+### Notify on low thermostat battery
+
+```yaml
+automation:
+  - alias: "MiGo: low thermostat battery"
+    trigger:
+      - trigger: numeric_state
+        entity_id: sensor.my_home_thermostat_battery
+        below: 15
+    action:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "Thermostat battery low"
+          message: "{{ trigger.to_state.name }} is at {{ trigger.to_state.state }}%."
+```
+
+### Notify on boiler error
+
+```yaml
+automation:
+  - alias: "MiGo: boiler error"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.my_home_gateway_boiler_error
+        to: "on"
+    action:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "Boiler error"
+          message: "The MiGo gateway reported a boiler error."
+```
+
+### Notify on eBus communication error
+
+```yaml
+automation:
+  - alias: "MiGo: eBus error"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.my_home_gateway_ebus_error
+        to: "on"
+    action:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "MiGo communication error"
+          message: "The gateway lost communication with the boiler over eBus."
+```
+
+### Switch to Away mode when everyone leaves
+
+```yaml
+automation:
+  - alias: "MiGo: away mode when nobody home"
+    trigger:
+      - trigger: state
+        entity_id: zone.home
+        to: "0"
+    action:
+      - action: climate.set_preset_mode
+        target:
+          entity_id: climate.my_home_thermostat_thermostat
+        data:
+          preset_mode: away
 ```
 
 ## Troubleshooting

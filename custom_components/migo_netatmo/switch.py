@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY
-from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
+from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
 
 if TYPE_CHECKING:
@@ -34,29 +34,25 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[SwitchEntity] = []
+    # DHW switch for each gateway that supports DHW
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [MigoDHWSwitch(coordinator=coordinator, device_id=device_id, api=data.api)],
+    )
 
-    # Create DHW switch for each gateway that supports DHW
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoDHWSwitch(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
-
-    # Create anticipation switch for each home
-    for home_id in coordinator.homes:
-        entities.append(
-            MigoAnticipationSwitch(
-                coordinator=coordinator,
-                home_id=home_id,
-                api=data.api,
-            )
-        )
-
-    async_add_entities(entities)
+    # Anticipation switch for each home
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.homes,
+        create_entities=lambda home_id: [
+            MigoAnticipationSwitch(coordinator=coordinator, home_id=home_id, api=data.api)
+        ],
+    )
 
 
 class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):

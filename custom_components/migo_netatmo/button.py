@@ -11,7 +11,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoGatewayEntity, MigoThermostatHomeControlEntity, MigoThermostatHomeEntity
+from .entity import (
+    MigoGatewayEntity,
+    MigoThermostatHomeControlEntity,
+    MigoThermostatHomeEntity,
+    register_dynamic_entities,
+)
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -34,36 +39,11 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[ButtonEntity] = []
-
-    # Create refresh button for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoGatewayRefreshButton(
-                coordinator=coordinator,
-                device_id=device_id,
-            )
-        )
-
-    # Create refresh button for each thermostat
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT):
-        device_data = coordinator.devices.get(device_id, {})
-        home_id = device_data.get("home_id")
+    def _gateway_buttons(device_id: str) -> list[ButtonEntity]:
+        buttons: list[ButtonEntity] = [MigoGatewayRefreshButton(coordinator=coordinator, device_id=device_id)]
+        home_id = coordinator.devices.get(device_id, {}).get("home_id")
         if home_id:
-            entities.append(
-                MigoThermostatRefreshButton(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    device_id=device_id,
-                )
-            )
-
-    # Create reset heating curve button for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        device_data = coordinator.devices.get(device_id, {})
-        home_id = device_data.get("home_id")
-        if home_id:
-            entities.append(
+            buttons.append(
                 MigoResetHeatingCurveButton(
                     coordinator=coordinator,
                     home_id=home_id,
@@ -71,8 +51,29 @@ async def async_setup_entry(
                     api=data.api,
                 )
             )
+        return buttons
 
-    async_add_entities(entities)
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=_gateway_buttons,
+    )
+
+    def _thermostat_buttons(device_id: str) -> list[ButtonEntity]:
+        home_id = coordinator.devices.get(device_id, {}).get("home_id")
+        if not home_id:
+            return []
+        return [MigoThermostatRefreshButton(coordinator=coordinator, home_id=home_id, device_id=device_id)]
+
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT),
+        create_entities=_thermostat_buttons,
+    )
 
 
 class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):

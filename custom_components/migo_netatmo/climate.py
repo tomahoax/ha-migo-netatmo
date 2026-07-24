@@ -32,8 +32,8 @@ from .const import (
     TEMP_STEP,
 )
 from .coordinator import MigoDataUpdateCoordinator
-from .entity import MigoRoomControlEntity
-from .helpers import get_home_id_or_raise, safe_float
+from .entity import MigoRoomControlEntity, register_dynamic_entities
+from .helpers import generate_unique_id, get_home_id_or_raise, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -91,18 +91,13 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[MigoClimate] = []
-
-    for room_id in coordinator.rooms:
-        entities.append(
-            MigoClimate(
-                coordinator=coordinator,
-                room_id=room_id,
-                api=data.api,
-            )
-        )
-
-    async_add_entities(entities)
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.rooms,
+        create_entities=lambda room_id: [MigoClimate(coordinator=coordinator, room_id=room_id, api=data.api)],
+    )
 
 
 class MigoClimate(MigoRoomControlEntity, ClimateEntity):
@@ -130,7 +125,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
     ) -> None:
         """Initialize the climate entity."""
         super().__init__(coordinator, room_id, api)
-        self._attr_unique_id = f"migo_netatmo_climate_{room_id}"
+        self._attr_unique_id = generate_unique_id("climate", room_id)
         self._attr_translation_key = "thermostat"
 
     @property

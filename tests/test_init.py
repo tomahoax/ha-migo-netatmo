@@ -39,9 +39,11 @@ async def test_setup_entry_creates_entities(
     assert climate.attributes["current_temperature"] == 21.5
     assert climate.attributes["temperature"] == 20.0
 
-    wifi = hass.states.get("sensor.my_home_gateway_wifi_signal")
-    assert wifi is not None
-    assert wifi.state == "70"
+    # wifi_strength/firmware sensors are disabled by default (entity-disabled-by-default),
+    # so they exist in the entity registry but have no state; ebus_error stays enabled.
+    ebus_error = hass.states.get("binary_sensor.my_home_gateway_ebus_error")
+    assert ebus_error is not None
+    assert ebus_error.state == "off"
 
     battery = hass.states.get("sensor.my_home_thermostat_battery")
     assert battery is not None
@@ -135,4 +137,4 @@ async def test_entities_unavailable_when_module_unreachable(
     # The connectivity diagnostic must stay available and report the outage
     assert hass.states.get("binary_sensor.my_home_thermostat_device_reachable").state == "off"
     # Gateway entities are unaffected
-    assert hass.states.get("sensor.my_home_gateway_wifi_signal").state == "70"
+    assert hass.states.get("binary_sensor.my_home_gateway_ebus_error").state == "off"

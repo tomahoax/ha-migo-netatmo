@@ -28,6 +28,11 @@ Thank you for your interest in contributing to this Home Assistant integration!
    ```bash
    pip install -e ".[dev]"
    ```
+   `pyproject.toml` is the source of truth for dependency constraints; CI and
+   Dependabot both read it. If you use [uv](https://docs.astral.sh/uv/) locally
+   (`uv run pytest`, etc.), refresh `uv.lock` after changing a dependency with
+   `uv lock`. The lockfile pins exact versions for local reproducibility only,
+   it is not read by CI or Dependabot.
 
 4. **Install pre-commit hooks**
    ```bash
@@ -47,6 +52,28 @@ This project follows Home Assistant coding standards:
 - **Python Style**: We use [Ruff](https://github.com/astral-sh/ruff) for linting and formatting
 - **Type Hints**: All functions must have type annotations
 - **Docstrings**: Use Google-style docstrings for all public functions and classes
+
+### File Organization
+
+```
+custom_components/migo_netatmo/
+├── __init__.py          # Integration setup
+├── api.py               # API client
+├── climate.py           # Climate entity
+├── config_flow.py       # Configuration flow
+├── const.py             # Constants
+├── coordinator.py       # Data coordinator
+├── entity.py            # Base entities
+├── helpers.py           # Utility functions
+├── models.py            # TypedDicts for API/coordinator data
+├── sensor.py            # Sensor entities
+├── switch.py            # Switch entities
+├── select.py            # Select entities
+├── number.py            # Number entities
+├── binary_sensor.py     # Binary sensor entities
+├── button.py            # Button entities
+└── translations/        # Translation files
+```
 
 ### Pre-commit Hooks
 

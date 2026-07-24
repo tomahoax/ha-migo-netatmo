@@ -15,7 +15,12 @@ rules:
   docs-conditions: exempt
   docs-high-level-description: done  # README + docs/
   docs-installation-instructions: done  # docs/installation.md
-  docs-removal-instructions: todo
+  docs-removal-instructions:
+    status: done
+    comment: >
+      2026-07-24: "Removing the Integration" section added to README.md
+      (Settings > Devices & services > Delete; no physical pairing to undo;
+      MiGO account credentials are unaffected).
   entity-event-setup: done  # coordinator entities only
   entity-unique-id: done  # pinned by tests/test_unique_ids.py
   has-entity-name: done
@@ -34,24 +39,66 @@ rules:
   log-when-unavailable: done  # coordinator logs failed refreshes
   parallel-updates: done
   reauthentication-flow: done  # + triggered by polling auth failures
-  test-coverage: todo  # target >95%, measured in CI
+  test-coverage:
+    status: done
+    comment: >
+      94.99% measured on 2026-07-24, up from 71% the same day (new test_helpers.py,
+      test_binary_sensor.py, test_button.py, test_select.py, test_switch.py,
+      test_number.py, test_dynamic_devices.py, plus expanded test_api.py
+      covering token refresh, the 401-retry path in _api_request, and every
+      setXxx wrapper). CI gates on fail_under=90 (pyproject.toml). Remaining
+      gaps are scattered edge branches in api.py/coordinator.py (get_configs/
+      get_measure error paths, consumption-fetching branches) and entity.py
+      mixins; not worth chasing further for now.
 
   # Gold
   devices: done
   diagnostics: done
   discovery-update-info: exempt  # cloud account API, no discovery
   discovery: exempt
-  docs-data-update: todo
-  docs-examples: todo
+  docs-data-update:
+    status: done
+    comment: >
+      2026-07-24: "Data Updates" section added to README.md, consolidating the
+      previously scattered mentions (cloud polling, 300s default/60-3600s
+      configurable, what's fetched each cycle, manual refresh button, no push).
+  docs-examples:
+    status: done
+    comment: >
+      2026-07-24: "Automation Examples" section added to README.md with 4 YAML
+      examples (low battery, boiler error, eBus error, away-mode on departure).
+      Deviation from the HA guideline of linking to the community blueprint
+      exchange: this HACS integration has no blueprint-exchange presence yet,
+      so examples are inline in the docs instead.
   docs-known-limitations: done  # MiGO Link / myVAILLANT exclusions
   docs-supported-devices: done
   docs-supported-functions: done  # docs/entities.md
   docs-troubleshooting: done  # docs/troubleshooting.md
-  docs-use-cases: todo
-  dynamic-devices: todo  # devices appear on reload, not live
+  docs-use-cases:
+    status: done
+    comment: >
+      2026-07-24: "Use Cases" section added to README.md (energy tracking,
+      remote control, sensor recalibration, fault alerting, presence-based
+      heating, battery monitoring).
+  dynamic-devices:
+    status: done
+    comment: >
+      2026-07-24: register_dynamic_entities() helper added to entity.py
+      (coordinator.async_add_listener + known-ids diffing, per the official
+      HA pattern). All 7 platforms refactored to use it instead of a one-shot
+      loop; new rooms/devices now get live entities without a config entry
+      reload. Verified end-to-end in tests/test_dynamic_devices.py. Data-content
+      gated sub-entities (room humidity sensor, schedule select) are not added
+      retroactively on an already-known id, by design.
   entity-category: done
   entity-device-class: done
-  entity-disabled-by-default: todo  # candidates: firmware sensors
+  entity-disabled-by-default:
+    status: done
+    comment: >
+      2026-07-24: entity_registry_enabled_default=False set on the 4 verbose
+      diagnostic sensor.py descriptions (gateway_firmware, thermostat_firmware,
+      wifi, rf). No effect on existing installs (registry keeps the user's
+      prior choice), only new installs get these disabled by default.
   entity-translations: done  # en/es/fr/it/ru
   exception-translations: done
   icon-translations: done  # icons.json
@@ -62,4 +109,15 @@ rules:
   # Platinum
   async-dependency: done  # aiohttp
   inject-websession: done  # async_get_clientsession
-  strict-typing: todo  # mypy still relaxed
+  strict-typing:
+    status: todo
+    comment: >
+      Progressed 2026-07-24: mypy now runs in CI, disallow_untyped_defs/
+      disallow_incomplete_defs/disallow_untyped_decorators are on (0 findings),
+      models.py's TypedDicts are wired into api.py (get_homes_data,
+      get_home_status) and coordinator.py (CoordinatorData). Remaining:
+      warn_return_any is off (~25 no-any-return sites, inherent to parsing
+      loosely typed JSON); coordinator.rooms/devices/homes and entity._room_data/
+      _device_data stay dict[str, Any] by design, since platforms look up
+      fields dynamically via EntityDescription.data_key (incompatible with
+      TypedDict's literal-key access).

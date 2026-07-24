@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -14,6 +15,12 @@ from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, MANUFACT
 from .helpers import get_gateway_mac_for_home, get_thermostat_for_room
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
+    from homeassistant.helpers.entity import Entity
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from . import MigoConfigEntry
     from .api import MigoApi
     from .coordinator import MigoDataUpdateCoordinator
 
@@ -72,10 +79,9 @@ def build_thermostat_device_info(
     if ":" in thermostat_id and len(thermostat_id) == 17:
         info["connections"] = {(CONNECTION_NETWORK_MAC, thermostat_id)}
 
-    # Link to the parent gateway device.
-    # via_device is deprecated for HA 2026.8 (via_device_id, compat until
-    # 2027.8); migrating requires a device registry lookup and is planned
-    # for a later release.
+    # Link to the parent gateway device. `via_device` is the current,
+    # documented way to do this (DeviceInfo.via_device); the registry
+    # resolves it to the internal via_device_id itself.
     if gateway_id := device_data.get("bridge"):
         info["via_device"] = (DOMAIN, gateway_id)
 
@@ -94,6 +100,46 @@ def build_home_fallback_device_info(
         name=_home_name(coordinator, home_id),
         manufacturer=MANUFACTURER,
     )
+
+
+def register_dynamic_entities(
+    entry: MigoConfigEntry,
+    coordinator: MigoDataUpdateCoordinator,
+    async_add_entities: AddEntitiesCallback,
+    get_current_ids: Callable[[], Iterable[str]],
+    create_entities: Callable[[str], Sequence[Entity]],
+) -> None:
+    """Create entities now, and again whenever new ids appear in coordinator data.
+
+    Satisfies the "dynamic-devices" quality-scale rule: a room or device that
+    appears in a later coordinator refresh gets its entities created live,
+    without requiring a config entry reload.
+
+    Args:
+        entry: The config entry, used to unregister the listener on unload.
+        coordinator: The data update coordinator to watch for new ids.
+        async_add_entities: The platform's entity-registration callback.
+        get_current_ids: Returns the current set of known ids (e.g.
+            `coordinator.rooms` or `get_devices_by_type(coordinator, ...)`).
+        create_entities: Builds the entities for one newly-seen id. Called
+            exactly once per id the first time it is seen, not on every
+            refresh for ids already known. May return an empty sequence
+            (e.g. a sub-entity gated on data not yet present for that id).
+    """
+    known_ids: set[str] = set()
+
+    @callback
+    def _check_new() -> None:
+        new_ids = set(get_current_ids()) - known_ids
+        if not new_ids:
+            return
+        known_ids.update(new_ids)
+        new_entities = [entity for id_ in new_ids for entity in create_entities(id_)]
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _check_new()
+    entry.async_on_unload(coordinator.async_add_listener(_check_new))
 
 
 class MigoApiControlMixin:

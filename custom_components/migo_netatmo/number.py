@@ -38,6 +38,7 @@ from .entity import (
     MigoGatewayControlEntity,
     MigoRoomEntity,
     MigoThermostatHomeControlEntity,
+    register_dynamic_entities,
 )
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
 
@@ -61,64 +62,54 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[NumberEntity] = []
+    # Manual setpoint duration entity for each home
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.homes,
+        create_entities=lambda home_id: [
+            MigoManualSetpointDurationNumber(coordinator=coordinator, home_id=home_id, api=data.api)
+        ],
+    )
 
-    # Create manual setpoint duration entity for each home
-    for home_id in coordinator.homes:
-        entities.append(
-            MigoManualSetpointDurationNumber(
-                coordinator=coordinator,
-                home_id=home_id,
-                api=data.api,
-            )
-        )
-
-    # Create DHW temperature entities for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoDHWTemperatureNumber(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
-        # Create hysteresis entity (assigned to Thermostat device)
-        device_data = coordinator.devices.get(device_id, {})
-        home_id = device_data.get("home_id")
+    def _gateway_numbers(device_id: str) -> list[NumberEntity]:
+        numbers: list[NumberEntity] = [
+            MigoDHWTemperatureNumber(coordinator=coordinator, device_id=device_id, api=data.api)
+        ]
+        # Hysteresis and heating curve are gateway parameters, assigned to the
+        # Thermostat device, hence the extra home_id lookup.
+        home_id = coordinator.devices.get(device_id, {}).get("home_id")
         if home_id:
-            entities.append(
-                MigoHysteresisNumber(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    device_id=device_id,
-                    api=data.api,
-                )
+            numbers.append(
+                MigoHysteresisNumber(coordinator=coordinator, home_id=home_id, device_id=device_id, api=data.api)
             )
-            # Create heating curve entity
-            entities.append(
-                MigoHeatingCurveNumber(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    device_id=device_id,
-                    api=data.api,
-                )
+            numbers.append(
+                MigoHeatingCurveNumber(coordinator=coordinator, home_id=home_id, device_id=device_id, api=data.api)
             )
+        return numbers
 
-    # Create temperature offset entities for each room
-    for room_id in coordinator.rooms:
-        room_data = coordinator.rooms[room_id]
-        home_id = room_data.get("home_id")
-        if home_id:
-            entities.append(
-                MigoTemperatureOffsetNumber(
-                    coordinator=coordinator,
-                    room_id=room_id,
-                    home_id=home_id,
-                    api=data.api,
-                )
-            )
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=_gateway_numbers,
+    )
 
-    async_add_entities(entities)
+    def _room_numbers(room_id: str) -> list[NumberEntity]:
+        home_id = coordinator.rooms.get(room_id, {}).get("home_id")
+        if not home_id:
+            return []
+        return [MigoTemperatureOffsetNumber(coordinator=coordinator, room_id=room_id, home_id=home_id, api=data.api)]
+
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.rooms,
+        create_entities=_room_numbers,
+    )
 
 
 class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEntity):

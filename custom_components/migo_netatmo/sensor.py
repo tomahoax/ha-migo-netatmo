@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
+from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, safe_float
 
 if TYPE_CHECKING:
@@ -88,6 +88,7 @@ GATEWAY_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     MigoSensorEntityDescription(
         key="gateway_firmware",
@@ -96,6 +97,7 @@ GATEWAY_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
         translation_key="gateway_firmware",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda v: str(v) if v is not None else None,
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -151,56 +153,54 @@ async def async_setup_entry(
     """Set up MiGO sensor entities."""
     coordinator = entry.runtime_data.coordinator
 
-    entities: list[SensorEntity] = []
-
-    # Room-based sensors
-    for room_id, room_data in coordinator.rooms.items():
+    def _room_sensors(room_id: str) -> list[SensorEntity]:
+        room_data = coordinator.rooms.get(room_id, {})
+        sensors: list[SensorEntity] = []
         for description in ROOM_SENSORS:
-            # Only add humidity sensor if humidity data is available
+            # Only add humidity sensor if humidity data is available. Gated
+            # on data content, not on the room id: a room that gains
+            # humidity reporting later does not get this sensor added
+            # retroactively (dynamic-devices targets new ids, not new
+            # capabilities on an id already known).
             if description.data_key == "humidity" and "humidity" not in room_data:
                 continue
-            entities.append(
-                MigoRoomSensor(
-                    coordinator=coordinator,
-                    room_id=room_id,
-                    description=description,
-                )
-            )
+            sensors.append(MigoRoomSensor(coordinator=coordinator, room_id=room_id, description=description))
+        return sensors
 
-    # Gateway sensors
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        for description in GATEWAY_SENSORS:
-            entities.append(
-                MigoGatewaySensor(
-                    coordinator=coordinator,
-                    device_id=device_id,
-                    description=description,
-                )
-            )
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.rooms,
+        create_entities=_room_sensors,
+    )
 
-    # Thermostat sensors
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT):
-        for description in THERMOSTAT_SENSORS:
-            entities.append(
-                MigoThermostatSensor(
-                    coordinator=coordinator,
-                    device_id=device_id,
-                    description=description,
-                )
-            )
+    # Gateway sensors + consumption (daily boiler runtime): same id-space
+    # (device_id via get_devices_by_type(GATEWAY)), created together.
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [
+            *(
+                MigoGatewaySensor(coordinator=coordinator, device_id=device_id, description=description)
+                for description in GATEWAY_SENSORS
+            ),
+            MigoBoilerRuntimeSensor(coordinator=coordinator, device_id=device_id),
+        ],
+    )
 
-    # Consumption sensors - one per gateway (daily boiler runtime)
-    # The boiler is connected to the gateway, so consumption data belongs there
-    # Data is now indexed by device_id (gateway) instead of room_id
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoBoilerRuntimeSensor(
-                coordinator=coordinator,
-                device_id=device_id,
-            )
-        )
-
-    async_add_entities(entities)
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT),
+        create_entities=lambda device_id: [
+            MigoThermostatSensor(coordinator=coordinator, device_id=device_id, description=description)
+            for description in THERMOSTAT_SENSORS
+        ],
+    )
 
 
 class MigoRoomSensor(MigoRoomEntity, SensorEntity):
@@ -218,12 +218,8 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         super().__init__(coordinator, room_id)
         self.entity_description = description
         self._attr_unique_id = generate_unique_id(description.unique_id_key, room_id)
-
-    @property
-    def translation_placeholders(self) -> dict[str, str]:
-        """Return translation placeholders."""
         room_name = self._room_data.get("name", f"Room {self._room_id}")
-        return {"room_name": room_name}
+        self._attr_translation_placeholders = {"room_name": room_name}
 
     @property
     def native_value(self) -> Any:
@@ -238,7 +234,17 @@ class _MigoDeviceSensorMixin(SensorEntity):
     """Mixin for device-based sensors with common functionality."""
 
     entity_description: MigoSensorEntityDescription
-    _device_data: dict[str, Any]
+
+    @property
+    def _device_data(self) -> dict[str, Any]:
+        """Get current device data.
+
+        Read-only stub: the concrete entity's MRO always resolves this to
+        MigoDeviceEntity._device_data (see MigoGatewaySensor/MigoThermostatSensor
+        below). Declared here, matching that base's read-only property, so
+        static type checkers accept the multiple inheritance.
+        """
+        raise NotImplementedError
 
     def _init_sensor(self, device_id: str, description: MigoSensorEntityDescription) -> None:
         """Initialize sensor attributes from the entity description."""

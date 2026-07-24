@@ -1,4 +1,4 @@
-"""The MiGO (Saunier Duval) integration."""
+"""The MiGo (Netatmo) integration."""
 
 from __future__ import annotations
 

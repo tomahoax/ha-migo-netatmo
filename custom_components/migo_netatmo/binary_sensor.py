@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
+from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -95,42 +95,32 @@ async def async_setup_entry(
     """Set up MiGO binary sensor entities."""
     coordinator = entry.runtime_data.coordinator
 
-    entities: list[BinarySensorEntity] = []
+    # No register_dynamic_entities() call for ROOM_BINARY_SENSORS: it is
+    # currently an empty tuple, so a listener here would only ever do a
+    # no-op set-diff on every coordinator refresh. Add one the same day a
+    # description is added to that tuple.
 
-    # Room-based binary sensors
-    for room_id in coordinator.rooms:
-        for description in ROOM_BINARY_SENSORS:
-            entities.append(
-                MigoRoomBinarySensor(
-                    coordinator=coordinator,
-                    room_id=room_id,
-                    description=description,
-                )
-            )
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [
+            MigoGatewayBinarySensor(coordinator=coordinator, device_id=device_id, description=description)
+            for description in GATEWAY_BINARY_SENSORS
+        ],
+    )
 
-    # Gateway binary sensors
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        for description in GATEWAY_BINARY_SENSORS:
-            entities.append(
-                MigoGatewayBinarySensor(
-                    coordinator=coordinator,
-                    device_id=device_id,
-                    description=description,
-                )
-            )
-
-    # Thermostat binary sensors
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT):
-        for description in THERMOSTAT_BINARY_SENSORS:
-            entities.append(
-                MigoThermostatBinarySensor(
-                    coordinator=coordinator,
-                    device_id=device_id,
-                    description=description,
-                )
-            )
-
-    async_add_entities(entities)
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT),
+        create_entities=lambda device_id: [
+            MigoThermostatBinarySensor(coordinator=coordinator, device_id=device_id, description=description)
+            for description in THERMOSTAT_BINARY_SENSORS
+        ],
+    )
 
 
 class MigoRoomBinarySensor(MigoRoomEntity, BinarySensorEntity):
@@ -147,6 +137,7 @@ class MigoRoomBinarySensor(MigoRoomEntity, BinarySensorEntity):
         """Initialize the room binary sensor."""
         super().__init__(coordinator, room_id)
         self.entity_description = description
+        self._ignore_reachable = description.ignores_reachability
         self._attr_unique_id = generate_unique_id(description.unique_id_key, room_id)
 
     @property
@@ -162,7 +153,18 @@ class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
     """Mixin for device-based binary sensors with common functionality."""
 
     entity_description: MigoBinarySensorEntityDescription
-    _device_data: dict[str, Any]
+
+    @property
+    def _device_data(self) -> dict[str, Any]:
+        """Get current device data.
+
+        Read-only stub: the concrete entity's MRO always resolves this to
+        MigoDeviceEntity._device_data (see MigoGatewayBinarySensor/
+        MigoThermostatBinarySensor below). Declared here, matching that
+        base's read-only property, so static type checkers accept the
+        multiple inheritance.
+        """
+        raise NotImplementedError
 
     def _init_binary_sensor(self, device_id: str, description: MigoBinarySensorEntityDescription) -> None:
         """Initialize binary sensor attributes from the entity description."""

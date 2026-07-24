@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, overload
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -15,16 +16,22 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def safe_get[T](data: dict[str, Any] | None, *keys: str, default: T | None = None) -> Any | T | None:
-    """Safely get a nested value from a dictionary.
+@overload
+def safe_get(data: Mapping[str, Any] | None, *keys: str) -> Any | None: ...
+@overload
+def safe_get[T](data: Mapping[str, Any] | None, *keys: str, default: T) -> Any | T: ...
+def safe_get(data: Mapping[str, Any] | None, *keys: str, default: Any = None) -> Any:
+    """Safely get a nested value from a dictionary or mapping (e.g. a TypedDict).
 
     Args:
-        data: The dictionary to get the value from.
+        data: The mapping to get the value from.
         *keys: The keys to traverse.
         default: The default value if any key is missing.
 
     Returns:
-        The value at the nested key path, or the default.
+        The value at the nested key path, or the default. When a non-None
+        default is passed, the return type is narrowed accordingly (see
+        overloads above) so callers don't need to re-check for None.
 
     Example:
         >>> data = {"body": {"home": {"id": "123"}}}

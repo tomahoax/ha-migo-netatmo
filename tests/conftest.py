@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator, Generator
-from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -15,22 +13,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.const import DOMAIN
-
-# Path to test fixtures
-FIXTURES_PATH = Path(__file__).parent / "fixtures"
-
-
-def load_fixture(filename: str) -> dict[str, Any]:
-    """Load a fixture file.
-
-    Args:
-        filename: Name of the fixture file.
-
-    Returns:
-        The parsed JSON data.
-    """
-    with (FIXTURES_PATH / filename).open(encoding="utf-8") as f:
-        return json.load(f)
 
 
 @pytest.fixture(autouse=True)
@@ -243,3 +225,54 @@ def token_response() -> dict[str, Any]:
         "expires_in": 10800,
         "scope": ["all_scopes"],
     }
+
+
+@pytest.fixture
+def mock_coordinator() -> MagicMock:
+    """Create a mock coordinator with data, shared across entity-level unit tests."""
+    coordinator = MagicMock()
+    coordinator.rooms = {
+        "room_456": {
+            "id": "room_456",
+            "name": "Living Room",
+            "home_id": "home_123",
+            "home_name": "My Home",
+            "therm_measured_temperature": 21.5,
+            "therm_setpoint_temperature": 20.0,
+            "therm_setpoint_mode": "schedule",
+            "reachable": True,
+            "anticipating": False,
+        }
+    }
+    coordinator.devices = {
+        "gateway_001": {
+            "id": "gateway_001",
+            "type": "NAVaillant",
+            "home_id": "home_123",
+            "wifi_strength": 70,
+            "dhw_enabled": True,
+        },
+        "module_789": {
+            "id": "module_789",
+            "type": "NAThermVaillant",
+            "home_id": "home_123",
+            "battery_percent": 85,
+            "boiler_status": True,
+        },
+    }
+    coordinator.homes = {
+        "home_123": {
+            "id": "home_123",
+            "name": "My Home",
+            "therm_mode": "schedule",
+            "schedules": [
+                {"id": "schedule_001", "name": "Comfort", "type": "therm", "selected": True},
+                {"id": "schedule_002", "name": "Eco", "type": "therm", "selected": False},
+                {"id": "schedule_003", "name": "DHW only", "type": "event", "selected": False},
+            ],
+        }
+    }
+    coordinator.get_cached_value = MagicMock(return_value=None)
+    coordinator.set_cached_value = MagicMock()
+    coordinator.async_request_refresh = AsyncMock()
+    return coordinator

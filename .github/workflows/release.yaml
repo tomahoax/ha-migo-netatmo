@@ -16,10 +16,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Update version in manifest.json
+      - name: Update version in manifest.json and pyproject.toml
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/migo_netatmo/manifest.json
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
 
       - name: Create release archive
         run: |
@@ -27,11 +28,6 @@ jobs:
           zip -r ../migo_netatmo.zip migo_netatmo
 
       - name: Upload release asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./migo_netatmo.zip
-          asset_name: migo_netatmo.zip
-          asset_content_type: application/zip
+        run: gh release upload "${{ github.event.release.tag_name }}" ./migo_netatmo.zip

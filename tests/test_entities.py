@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, create_autospec
+from unittest.mock import create_autospec
 
 import pytest
 from homeassistant.components.climate import PRESET_AWAY, PRESET_BOOST, HVACAction, HVACMode
@@ -26,51 +26,7 @@ from custom_components.migo_netatmo.const import (
     TEMP_MAX,
 )
 
-
-@pytest.fixture
-def mock_coordinator(homes_data_response, home_status_response):
-    """Create a mock coordinator with data."""
-    coordinator = MagicMock()
-    coordinator.rooms = {
-        "room_456": {
-            "id": "room_456",
-            "name": "Living Room",
-            "home_id": "home_123",
-            "home_name": "My Home",
-            "therm_measured_temperature": 21.5,
-            "therm_setpoint_temperature": 20.0,
-            "therm_setpoint_mode": "schedule",
-            "reachable": True,
-            "anticipating": False,
-        }
-    }
-    coordinator.devices = {
-        "gateway_001": {
-            "id": "gateway_001",
-            "type": "NAVaillant",
-            "home_id": "home_123",
-            "wifi_strength": 70,
-            "dhw_enabled": True,
-        },
-        "module_789": {
-            "id": "module_789",
-            "type": "NAThermVaillant",
-            "home_id": "home_123",
-            "battery_percent": 85,
-            "boiler_status": True,
-        },
-    }
-    coordinator.homes = {
-        "home_123": {
-            "id": "home_123",
-            "name": "My Home",
-            "therm_mode": "schedule",
-        }
-    }
-    coordinator.get_cached_value = MagicMock(return_value=None)
-    coordinator.set_cached_value = MagicMock()
-    coordinator.async_request_refresh = AsyncMock()
-    return coordinator
+# mock_coordinator fixture lives in conftest.py, shared across test modules.
 
 
 class TestMigoClimate:
