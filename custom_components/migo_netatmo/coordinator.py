@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -73,6 +73,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # Optimistic cache for config values not returned by API
         self._config_cache: dict[str, Any] = {}
 
+    @override
     async def _async_update_data(self) -> CoordinatorData:
         """Fetch data from API.
 

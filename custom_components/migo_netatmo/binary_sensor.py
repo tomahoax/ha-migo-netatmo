@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -144,6 +144,7 @@ class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
         self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if the sensor is on."""
         value = self._device_data.get(self.entity_description.data_key)

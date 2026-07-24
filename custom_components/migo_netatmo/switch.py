@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
@@ -72,10 +72,12 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
         self._attr_unique_id = generate_unique_id("dhw", device_id)
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if DHW is enabled."""
         return self._device_data.get("dhw_enabled")
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on DHW."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
@@ -89,6 +91,7 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
         )
         _LOGGER.debug("DHW enabled for device %s", self._device_id)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off DHW."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
@@ -125,6 +128,7 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
         return f"anticipation_{self._home_id}"
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if anticipation is enabled."""
         # Check optimistic cache first for immediate feedback
@@ -134,6 +138,7 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
         # Fallback to API data
         return self._home_data.get("anticipation", False)
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable anticipation."""
         _LOGGER.debug("Enabling anticipation for home %s", self._home_id)
@@ -146,6 +151,7 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
         self.coordinator.set_cached_value(self._cache_key, True)
         _LOGGER.debug("Anticipation enabled for home %s", self._home_id)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable anticipation."""
         _LOGGER.debug("Disabling anticipation for home %s", self._home_id)

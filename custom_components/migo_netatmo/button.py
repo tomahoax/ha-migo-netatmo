@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
@@ -91,6 +91,7 @@ class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
         super().__init__(coordinator, device_id)
         self._attr_unique_id = generate_unique_id("refresh_gateway", device_id)
 
+    @override
     async def async_press(self) -> None:
         """Handle the button press."""
         _LOGGER.debug("Manual refresh requested from gateway %s", self._device_id)
@@ -114,6 +115,7 @@ class MigoThermostatRefreshButton(MigoThermostatHomeEntity, ButtonEntity):
         self._device_id = device_id
         self._attr_unique_id = generate_unique_id("refresh_thermostat", device_id)
 
+    @override
     async def async_press(self) -> None:
         """Handle the button press."""
         _LOGGER.debug("Manual refresh requested from thermostat %s", self._device_id)
@@ -138,6 +140,7 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
         self._device_id = device_id
         self._attr_unique_id = generate_unique_id("reset_heating_curve", device_id)
 
+    @override
     async def async_press(self) -> None:
         """Handle the button press - reset heating curve to default."""
         _LOGGER.debug(

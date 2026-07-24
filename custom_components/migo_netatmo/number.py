@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
@@ -139,6 +139,7 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         return f"manual_setpoint_duration_{self._home_id}"
 
     @property
+    @override
     def native_value(self) -> int | None:
         """Return the current manual setpoint duration in minutes."""
         # Check optimistic cache first
@@ -153,6 +154,7 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         # Default to 3 hours (180 minutes) as shown in the app
         return DEFAULT_MANUAL_SETPOINT_DURATION
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the manual setpoint duration."""
         minutes = int(value)
@@ -203,6 +205,7 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, MigoApiControlMixin, NumberEnt
         return f"temp_offset_{self._room_id}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current temperature offset."""
         # Check optimistic cache first (API doesn't always return this value)
@@ -232,6 +235,7 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, MigoApiControlMixin, NumberEnt
         )
         return DEFAULT_TEMP_OFFSET
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the temperature offset."""
         _LOGGER.debug("Setting temperature offset to %s°C for room %s", value, self._room_id)
@@ -274,6 +278,7 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         return f"dhw_temperature_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> int | None:
         """Return the current DHW temperature."""
         # Check optimistic cache first
@@ -287,6 +292,7 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         # Default to 60°C as shown in the screenshot
         return DEFAULT_DHW_TEMPERATURE
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHW temperature."""
         temperature = int(value)
@@ -347,6 +353,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         return f"hysteresis_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current hysteresis threshold."""
         # Check optimistic cache first
@@ -360,6 +367,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         # Default to 1.6°C (deadband=15) as seen in typical configuration
         return DEFAULT_HYSTERESIS
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the hysteresis threshold."""
         hysteresis = round(value, 1)
@@ -417,6 +425,7 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         return f"heating_curve_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current heating curve slope."""
         # Check optimistic cache first
@@ -430,6 +439,7 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         # Default to 1.5 as typical value
         return DEFAULT_HEATING_CURVE
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the heating curve slope."""
         slope = round(value, 1)

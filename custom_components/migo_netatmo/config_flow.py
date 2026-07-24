@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, override
 
 import voluptuous as vol
 from homeassistant.config_entries import (
@@ -88,6 +88,7 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
+    @override
     def async_get_options_flow(config_entry: ConfigEntry) -> MigoOptionsFlow:
         """Get the options flow for this handler."""
         return MigoOptionsFlow()
@@ -126,6 +127,7 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
         # this flow does not own it and must not close it.
         return errors
 
+    @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}

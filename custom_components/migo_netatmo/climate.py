@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components.climate import (
     PRESET_AWAY,
@@ -129,22 +129,26 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         self._attr_translation_key = "thermostat"
 
     @property
+    @override
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
         return safe_float(self._room_data.get("therm_measured_temperature"))
 
     @property
+    @override
     def target_temperature(self) -> float | None:
         """Return the target temperature."""
         return safe_float(self._room_data.get("therm_setpoint_temperature"))
 
     @property
+    @override
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
         mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
         return MIGO_TO_HVAC_MODE.get(mode, HVACMode.AUTO)
 
     @property
+    @override
     def hvac_action(self) -> HVACAction | None:
         """Return the current HVAC action."""
         if self.hvac_mode == HVACMode.OFF:
@@ -160,6 +164,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         return None
 
+    @override
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
@@ -177,6 +182,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         )
         _LOGGER.debug("Room %s temperature set successfully", self._room_id)
 
+    @override
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
         home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
@@ -221,15 +227,18 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         _LOGGER.debug("Room %s HVAC mode set successfully", self._room_id)
 
+    @override
     async def async_turn_on(self) -> None:
         """Turn on the thermostat."""
         await self.async_set_hvac_mode(HVACMode.HEAT)
 
+    @override
     async def async_turn_off(self) -> None:
         """Turn off the thermostat."""
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     @property
+    @override
     def preset_mode(self) -> str | None:
         """Return the current preset mode."""
         mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
@@ -242,6 +251,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         return MIGO_MODE_TO_PRESET.get(mode)
 
+    @override
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
         home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
@@ -70,6 +70,7 @@ class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):
         self._attr_unique_id = generate_unique_id("schedule", home_id)
 
     @property
+    @override
     def options(self) -> list[str]:
         """Return the list of available schedules."""
         schedules = self._home_data.get("schedules", [])
@@ -77,6 +78,7 @@ class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):
         return [s.get("name", f"Schedule {s.get('id')}") for s in schedules if s.get("type") == SCHEDULE_TYPE_THERM]
 
     @property
+    @override
     def current_option(self) -> str | None:
         """Return the currently active schedule."""
         schedules = self._home_data.get("schedules", [])
@@ -95,6 +97,7 @@ class MigoScheduleSelect(MigoHomeControlEntity, SelectEntity):
                     return schedule.get("id")
         return None
 
+    @override
     async def async_select_option(self, option: str) -> None:
         """Change the active schedule."""
         schedule_id = self._get_schedule_id_by_name(option)

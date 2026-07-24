@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -222,6 +222,7 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         self._attr_translation_placeholders = {"room_name": room_name}
 
     @property
+    @override
     def native_value(self) -> Any:
         """Return the sensor value."""
         value = self._room_data.get(self.entity_description.data_key)
@@ -252,6 +253,7 @@ class _MigoDeviceSensorMixin(SensorEntity):
         self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
 
     @property
+    @override
     def native_value(self) -> Any:
         """Return the sensor value."""
         value = self._device_data.get(self.entity_description.data_key)
@@ -260,6 +262,7 @@ class _MigoDeviceSensorMixin(SensorEntity):
         return value
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         if self.entity_description.extra_attrs_fn:
@@ -320,6 +323,7 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
         self._attr_unique_id = generate_unique_id("boiler_runtime", device_id)
 
     @property
+    @override
     def native_value(self) -> int | None:
         """Return the daily boiler runtime in seconds."""
         # Consumption data is now indexed by device_id (gateway)
@@ -329,6 +333,7 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
         return None
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         consumption = self.coordinator.get_consumption(self._device_id)

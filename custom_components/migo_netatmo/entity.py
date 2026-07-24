@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -234,6 +234,7 @@ class MigoRoomEntity(MigoEntity):
         return self.coordinator.rooms.get(self._room_id, {})
 
     @property
+    @override
     def available(self) -> bool:
         """Return False when the room's thermostat is unreachable."""
         if not super().available:
@@ -243,6 +244,7 @@ class MigoRoomEntity(MigoEntity):
         return self._room_data.get("reachable") is not False
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the Thermostat device."""
         home_id = self._room_data.get("home_id", "")
@@ -280,6 +282,7 @@ class MigoDeviceEntity(MigoEntity):
         return self._device_data.get("home_id", "")
 
     @property
+    @override
     def available(self) -> bool:
         """Return False when the device reports itself unreachable."""
         if not super().available:
@@ -297,6 +300,7 @@ class MigoGatewayEntity(MigoDeviceEntity):
     """
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the gateway."""
         return build_gateway_device_info(self.coordinator, self._device_id, self._home_id)
@@ -311,6 +315,7 @@ class MigoThermostatEntity(MigoDeviceEntity):
     """
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the thermostat."""
         return build_thermostat_device_info(self.coordinator, self._device_id, self._home_id)
@@ -355,6 +360,7 @@ class MigoHomeEntity(MigoEntity):
         return self.coordinator.homes.get(self._home_id, {})
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the Gateway device."""
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, self._home_id):
@@ -406,6 +412,7 @@ class MigoThermostatHomeEntity(MigoEntity):
         return self.coordinator.homes.get(self._home_id, {})
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the Thermostat device."""
         # Find the thermostat for this home
