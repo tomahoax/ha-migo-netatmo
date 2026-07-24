@@ -128,16 +128,20 @@ disable_error_code = [
 
 # STRICT_SETTINGS: core applies these per-module to integrations listed in
 # .strict-typing. This repository holds a single integration, so they are
-# global. warn_return_any is the last one to be switched on, once the
-# remaining no-any-return sites are narrowed (see quality_scale.yaml).
+# global. All eight are on.
 check_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_subclassing_any = true
 disallow_untyped_calls = true
 disallow_untyped_decorators = true
 disallow_untyped_defs = true
+warn_return_any = true
 warn_unreachable = true
-warn_return_any = false
+
+# Exceeds core's integration profile: disallow_any_generics is in core's
+# STRICT_SETTINGS_CORE, applied to homeassistant.* rather than to integrations.
+# Enabled here because it costs nothing once the read path is narrowed.
+disallow_any_generics = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

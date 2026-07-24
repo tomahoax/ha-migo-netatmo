@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Shared HTTP session in the config flow** - Setting up, reauthenticating or reconfiguring the integration no longer opens a private HTTP session outside Home Assistant's pool
+- **Quieter logs during an outage** - A sustained MiGO outage now logs one error when the integration goes unavailable and one message when it recovers, instead of several errors every polling cycle
+- **Boiler runtime crash** - A measurement series without a start time no longer raises an unhandled error mid-refresh
+- **Authentication errors** - An authentication response with no token now surfaces as an authentication failure instead of an internal error
+
+### Changed
+- **Strict typing** - The integration reaches the Platinum `strict-typing` rule: mypy now runs with Home Assistant core's full strict profile, with no suppressions
+- **Daily boiler runtime** - The sensor now reports fractional seconds rather than truncating to whole seconds
+
+### Removed
+- Unused internal helpers and one unreachable entity class, which inflated the test coverage figure without protecting anything reachable
+
 ## [0.41.0] - 2026-07-22
 
 ### Added
