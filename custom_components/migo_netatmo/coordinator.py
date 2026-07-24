@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -22,8 +22,18 @@ from .const import (
     KEY_MODULES,
     KEY_ROOMS,
 )
-from .helpers import safe_get
-from .models import CoordinatorData
+from .models import (
+    ConsumptionData,
+    CoordinatorData,
+    HomeConfig,
+    ModuleConfig,
+    ModuleConfigData,
+    ModuleData,
+    ModuleStatus,
+    RoomConfig,
+    RoomData,
+    RoomStatus,
+)
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -65,13 +75,14 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             update_interval=timedelta(seconds=update_interval_seconds),
         )
         self.api = api
-        self.homes: dict[str, Any] = {}
-        self.rooms: dict[str, Any] = {}
-        self.devices: dict[str, Any] = {}
-        # Consumption data: device_id (gateway) -> {sum_boiler_on, sum_boiler_off, timestamp}
-        self.consumption: dict[str, dict[str, Any]] = {}
-        # Optimistic cache for config values not returned by API
-        self._config_cache: dict[str, Any] = {}
+        self.homes: dict[str, HomeConfig] = {}
+        self.rooms: dict[str, RoomData] = {}
+        self.devices: dict[str, ModuleData] = {}
+        self.consumption: dict[str, ConsumptionData] = {}
+        # Optimistic cache for config values the API does not echo back after a
+        # write. Keys are interpolated (f"heating_curve_{device_id}"), so they
+        # cannot be a Literal union; the value union below is exhaustive.
+        self._config_cache: dict[str, bool | int | float] = {}
 
     @override
     async def _async_update_data(self) -> CoordinatorData:
@@ -90,13 +101,13 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         try:
             data = await self.api.get_homes_data()
 
-            body = safe_get(data, KEY_BODY)
+            body = data.get(KEY_BODY)
             if body is None:
                 # No explicit log: DataUpdateCoordinator logs the UpdateFailed
                 # message once, then stays quiet until recovery.
                 raise UpdateFailed("Invalid response from API: missing 'body'")
 
-            homes: list[dict[str, Any]] = safe_get(body, KEY_HOMES, default=[])
+            homes = body.get(KEY_HOMES, [])
             _LOGGER.debug("Found %d homes in API response", len(homes))
 
             # Reset data stores
@@ -132,7 +143,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # successful refresh. Logging here would duplicate it every cycle.
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
-    async def _process_home(self, home: dict[str, Any]) -> None:
+    async def _process_home(self, home: HomeConfig) -> None:
         """Process a single home and its rooms/modules.
 
         Args:
@@ -179,7 +190,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
     async def _fetch_home_status(
         self,
         home_id: str,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    ) -> tuple[dict[str, RoomStatus], dict[str, ModuleStatus]]:
         """Fetch real-time status for a home.
 
         Args:
@@ -188,12 +199,13 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         Returns:
             Tuple of (room_status_dict, module_status_dict).
         """
-        room_status: dict[str, Any] = {}
-        module_status: dict[str, Any] = {}
+        room_status: dict[str, RoomStatus] = {}
+        module_status: dict[str, ModuleStatus] = {}
 
         try:
             status = await self.api.get_home_status(home_id)
-            home_data: dict[str, Any] = safe_get(status, KEY_BODY, KEY_HOME, default={})
+            status_body = status.get(KEY_BODY)
+            home_data = status_body.get(KEY_HOME, {}) if status_body else {}
 
             for room in home_data.get(KEY_ROOMS, []):
                 room_id = room.get("id")
@@ -219,7 +231,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         )
         return room_status, module_status
 
-    async def _fetch_home_configs(self, home_id: str) -> dict[str, Any]:
+    async def _fetch_home_configs(self, home_id: str) -> dict[str, ModuleConfigData]:
         """Fetch module configurations for a home.
 
         This retrieves configuration data not available in homesdata/homestatus,
@@ -231,11 +243,12 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         Returns:
             Dictionary of module_id -> config data.
         """
-        module_configs: dict[str, Any] = {}
+        module_configs: dict[str, ModuleConfigData] = {}
 
         try:
             configs = await self.api.get_configs(home_id)
-            home_data: dict[str, Any] = safe_get(configs, KEY_BODY, KEY_HOME, default={})
+            configs_body = configs.get(KEY_BODY)
+            home_data = configs_body.get(KEY_HOME, {}) if configs_body else {}
 
             for module in home_data.get(KEY_MODULES, []):
                 module_id = module.get("id")
@@ -257,10 +270,10 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
     def _process_room(
         self,
-        room: dict[str, Any],
+        room: RoomConfig,
         home_id: str,
         home_name: str,
-        room_status: dict[str, Any],
+        room_status: dict[str, RoomStatus],
     ) -> None:
         """Process a room and merge with status data.
 
@@ -285,10 +298,10 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
     def _process_module(
         self,
-        module: dict[str, Any],
+        module: ModuleConfig,
         home_id: str,
-        module_status: dict[str, Any],
-        module_configs: dict[str, Any] | None = None,
+        module_status: dict[str, ModuleStatus],
+        module_configs: dict[str, ModuleConfigData] | None = None,
     ) -> None:
         """Process a module and merge with status and config data.
 
@@ -372,7 +385,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     date_begin=date_begin,
                 )
 
-                body: dict[str, Any] | list[Any] = safe_get(response, KEY_BODY, default={})
+                body = response.get(KEY_BODY, {})
                 _LOGGER.debug("Consumption API response body: %s", body)
 
                 # Handle dict format: {"timestamp": [boiler_on, boiler_off], ...}
@@ -403,16 +416,27 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 elif isinstance(body, list) and body:
                     first_entry = body[0]
                     if isinstance(first_entry, dict):
-                        values = first_entry.get("value", [])
+                        series = first_entry.get("value", [])
                         beg_time = first_entry.get("beg_time")
                         step_time = first_entry.get("step_time", 86400)
 
+                        if beg_time is None:
+                            # Timestamps below are derived from beg_time. This
+                            # used to raise TypeError on `beg_time + ...`, inside
+                            # a try that only catches MigoApiError/MigoAuthError,
+                            # so it escaped unhandled into _async_update_data.
+                            _LOGGER.debug(
+                                "Consumption series for device %s carries no beg_time, skipping",
+                                device_id,
+                            )
+                            continue
+
                         # Find the last non-null value (most recent with data)
-                        for i, value in enumerate(reversed(values)):
-                            if isinstance(value, list) and len(value) >= 2:
-                                boiler_on, boiler_off = value
+                        for i, entry in enumerate(reversed(series)):
+                            if len(entry) >= 2:
+                                boiler_on, boiler_off = entry[0], entry[1]
                                 if boiler_on is not None:
-                                    timestamp = beg_time + (len(values) - 1 - i) * step_time
+                                    timestamp = beg_time + (len(series) - 1 - i) * step_time
                                     self.consumption[device_id] = {
                                         "timestamp": timestamp,
                                         "sum_boiler_on": boiler_on,
@@ -432,7 +456,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             except MigoApiError as err:
                 _LOGGER.debug("Failed to get consumption for device %s: %s", device_id, err)
 
-    def get_home(self, home_id: str) -> dict[str, Any] | None:
+    def get_home(self, home_id: str) -> HomeConfig | None:
         """Get home data by ID.
 
         Args:
@@ -443,7 +467,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """
         return self.homes.get(home_id)
 
-    def get_device(self, device_id: str) -> dict[str, Any] | None:
+    def get_device(self, device_id: str) -> ModuleData | None:
         """Get device/module data by ID.
 
         Args:
@@ -454,7 +478,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """
         return self.devices.get(device_id)
 
-    def get_consumption(self, device_id: str) -> dict[str, Any] | None:
+    def get_consumption(self, device_id: str) -> ConsumptionData | None:
         """Get consumption data for a device (gateway).
 
         Args:
@@ -466,7 +490,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """
         return self.consumption.get(device_id)
 
-    def set_cached_value(self, key: str, value: Any) -> None:
+    def set_cached_value(self, key: str, value: bool | int | float) -> None:
         """Store a value in the optimistic cache.
 
         Used for config values that the API doesn't return after modification.
@@ -477,7 +501,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """
         self._config_cache[key] = value
 
-    def get_cached_value(self, key: str, default: Any = None) -> Any:
+    def get_cached_value(self, key: str, default: bool | int | float | None = None) -> bool | int | float | None:
         """Get a value from the optimistic cache.
 
         Args:

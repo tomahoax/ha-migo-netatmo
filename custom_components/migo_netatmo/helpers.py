@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, overload
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN
+from .models import ModuleData, RoomData
 
 if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
@@ -89,7 +90,7 @@ def generate_unique_id(entity_type: str, entity_id: str) -> str:
 def get_devices_by_type(
     coordinator: MigoDataUpdateCoordinator,
     device_type: str,
-) -> dict[str, Any]:
+) -> dict[str, ModuleData]:
     """Filter coordinator devices by type.
 
     Args:
@@ -103,7 +104,7 @@ def get_devices_by_type(
 
 
 def get_home_id_or_raise(
-    data: dict[str, Any],
+    data: RoomData | ModuleData,
     entity_type: str,
     entity_id: str,
 ) -> str:

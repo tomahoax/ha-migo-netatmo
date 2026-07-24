@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api import MigoApiError, MigoAuthError, MigoConnectionError
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, MANUFACTURER
 from .helpers import get_gateway_mac_for_home, get_thermostat_for_room
+from .models import HomeConfig, ModuleData, RoomData
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -229,7 +230,7 @@ class MigoRoomEntity(MigoEntity):
         self._room_id = room_id
 
     @property
-    def _room_data(self) -> dict[str, Any]:
+    def _room_data(self) -> RoomData:
         """Get current room data."""
         return self.coordinator.rooms.get(self._room_id, {})
 
@@ -272,7 +273,7 @@ class MigoDeviceEntity(MigoEntity):
         self._device_id = device_id
 
     @property
-    def _device_data(self) -> dict[str, Any]:
+    def _device_data(self) -> ModuleData:
         """Get current device data."""
         return self.coordinator.devices.get(self._device_id, {})
 
@@ -355,7 +356,7 @@ class MigoHomeEntity(MigoEntity):
         self._home_id = home_id
 
     @property
-    def _home_data(self) -> dict[str, Any]:
+    def _home_data(self) -> HomeConfig:
         """Get current home data."""
         return self.coordinator.homes.get(self._home_id, {})
 
@@ -407,7 +408,7 @@ class MigoThermostatHomeEntity(MigoEntity):
         self._home_id = home_id
 
     @property
-    def _home_data(self) -> dict[str, Any]:
+    def _home_data(self) -> HomeConfig:
         """Get current home data."""
         return self.coordinator.homes.get(self._home_id, {})
 

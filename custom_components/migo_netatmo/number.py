@@ -41,6 +41,7 @@ from .entity import (
     register_dynamic_entities,
 )
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
+from .models import ModuleData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -145,7 +146,7 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         # Check optimistic cache first
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            return int(cached)
         # Fallback to API data (therm_setpoint_default_duration is in minutes)
         home_data = self.coordinator.homes.get(self._home_id, {})
         duration_minutes = home_data.get("therm_setpoint_default_duration")
@@ -284,7 +285,7 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         # Check optimistic cache first
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            return int(cached)
         # Fallback to API data
         temp = self._device_data.get("dhw_setpoint_temperature")
         if temp is not None:
@@ -343,7 +344,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         self._attr_unique_id = generate_unique_id("hysteresis", device_id)
 
     @property
-    def _device_data(self) -> dict:
+    def _device_data(self) -> ModuleData:
         """Get current gateway device data."""
         return self.coordinator.devices.get(self._device_id, {})
 
@@ -415,7 +416,7 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         self._attr_unique_id = generate_unique_id("heating_curve", device_id)
 
     @property
-    def _device_data(self) -> dict:
+    def _device_data(self) -> ModuleData:
         """Get current gateway device data."""
         return self.coordinator.devices.get(self._device_id, {})
 

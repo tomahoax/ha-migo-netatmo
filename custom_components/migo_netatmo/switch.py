@@ -134,7 +134,7 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
         # Check optimistic cache first for immediate feedback
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            return bool(cached)
         # Fallback to API data
         return self._home_data.get("anticipation", False)
 

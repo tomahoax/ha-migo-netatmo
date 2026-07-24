@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
 from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, safe_float
+from .models import ModuleData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -39,7 +40,7 @@ class MigoSensorEntityDescription(SensorEntityDescription):
     data_key: str
     unique_id_key: str
     value_fn: Callable[[Any], Any] | None = None
-    extra_attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    extra_attrs_fn: Callable[[ModuleData], dict[str, Any]] | None = None
 
 
 # Room-based sensor configurations
@@ -102,9 +103,9 @@ GATEWAY_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
 )
 
 
-def _battery_extra_attrs(data: dict[str, Any]) -> dict[str, Any]:
+def _battery_extra_attrs(data: ModuleData) -> dict[str, Any]:
     """Extract battery extra state attributes."""
-    attrs = {}
+    attrs: dict[str, Any] = {}
     if (level := data.get("battery_level")) is not None:
         attrs["battery_level_mv"] = level
     if (state := data.get("battery_state")) is not None:
@@ -237,7 +238,7 @@ class _MigoDeviceSensorMixin(SensorEntity):
     entity_description: MigoSensorEntityDescription
 
     @property
-    def _device_data(self) -> dict[str, Any]:
+    def _device_data(self) -> ModuleData:
         """Get current device data.
 
         Read-only stub: the concrete entity's MRO always resolves this to
@@ -324,8 +325,12 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
 
     @property
     @override
-    def native_value(self) -> int | None:
-        """Return the daily boiler runtime in seconds."""
+    def native_value(self) -> float | None:
+        """Return the daily boiler runtime in seconds.
+
+        Typed float, not int: the value is unpacked straight out of a JSON array
+        whose element type the API does not pin down.
+        """
         # Consumption data is now indexed by device_id (gateway)
         consumption = self.coordinator.get_consumption(self._device_id)
         if consumption:

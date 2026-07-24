@@ -18,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
 from .entity import MigoGatewayEntity, MigoThermostatEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type
+from .models import ModuleData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -126,7 +127,7 @@ class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
     entity_description: MigoBinarySensorEntityDescription
 
     @property
-    def _device_data(self) -> dict[str, Any]:
+    def _device_data(self) -> ModuleData:
         """Get current device data.
 
         Read-only stub: the concrete entity's MRO always resolves this to
@@ -150,7 +151,7 @@ class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
         value = self._device_data.get(self.entity_description.data_key)
         if self.entity_description.value_fn:
             return self.entity_description.value_fn(value)
-        return value
+        return None if value is None else bool(value)
 
 
 class MigoGatewayBinarySensor(MigoGatewayEntity, _MigoDeviceBinarySensorMixin):
