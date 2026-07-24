@@ -5,43 +5,9 @@ from __future__ import annotations
 from custom_components.migo_netatmo.binary_sensor import (
     GATEWAY_BINARY_SENSORS,
     THERMOSTAT_BINARY_SENSORS,
-    MigoBinarySensorEntityDescription,
     MigoGatewayBinarySensor,
-    MigoRoomBinarySensor,
     MigoThermostatBinarySensor,
 )
-
-# No entities ship in ROOM_BINARY_SENSORS today, but the class itself must
-# still behave correctly for the day a room-based binary sensor is added.
-_ROOM_TEST_DESCRIPTION = MigoBinarySensorEntityDescription(
-    key="test_flag",
-    data_key="test_flag",
-    unique_id_key="test_flag",
-)
-
-
-class TestMigoRoomBinarySensor:
-    """Tests for the (currently unused, but supported) room binary sensor class."""
-
-    def test_is_on_reads_room_data(self, mock_coordinator) -> None:
-        """is_on reads the description's data_key straight from room data."""
-        mock_coordinator.rooms["room_456"]["test_flag"] = True
-        sensor = MigoRoomBinarySensor(mock_coordinator, "room_456", _ROOM_TEST_DESCRIPTION)
-
-        assert sensor.is_on is True
-        assert sensor.unique_id == "migo_netatmo_test_flag_room_456"
-
-    def test_ignores_reachability_is_copied_from_description(self, mock_coordinator) -> None:
-        """_ignore_reachable mirrors the description's ignores_reachability flag."""
-        description = MigoBinarySensorEntityDescription(
-            key="reachable",
-            data_key="reachable",
-            unique_id_key="reachable",
-            ignores_reachability=True,
-        )
-        sensor = MigoRoomBinarySensor(mock_coordinator, "room_456", description)
-
-        assert sensor._ignore_reachable is True
 
 
 class TestMigoGatewayBinarySensor:

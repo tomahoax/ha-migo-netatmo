@@ -147,30 +147,6 @@ class TestCoordinatorDataAccess:
     """Tests for data access methods."""
 
     @pytest.mark.asyncio
-    async def test_get_room(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-    ) -> None:
-        """Test getting room by ID."""
-        await coordinator._async_update_data()
-
-        room = coordinator.get_room("room_456")
-        assert room is not None
-        assert room["name"] == "Living Room"
-        assert room["home_id"] == "home_123"
-
-    @pytest.mark.asyncio
-    async def test_get_room_not_found(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-    ) -> None:
-        """Test getting non-existent room."""
-        await coordinator._async_update_data()
-
-        room = coordinator.get_room("nonexistent")
-        assert room is None
-
-    @pytest.mark.asyncio
     async def test_get_home(
         self,
         coordinator: MigoDataUpdateCoordinator,
@@ -194,46 +170,6 @@ class TestCoordinatorDataAccess:
         assert device is not None
         assert device["type"] == "NAVaillant"
 
-    @pytest.mark.asyncio
-    async def test_get_schedules(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-    ) -> None:
-        """Test getting schedules for a home."""
-        await coordinator._async_update_data()
-
-        schedules = coordinator.get_schedules("home_123")
-        assert len(schedules) == 1
-        assert schedules[0]["name"] == "Default"
-
-    @pytest.mark.asyncio
-    async def test_get_active_schedule(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-    ) -> None:
-        """Test getting active schedule for a home."""
-        await coordinator._async_update_data()
-
-        schedule = coordinator.get_active_schedule("home_123")
-        assert schedule is not None
-        assert schedule["selected"] is True
-
-    @pytest.mark.asyncio
-    async def test_get_active_schedule_none_selected(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        mock_api: MagicMock,
-    ) -> None:
-        """Test getting active schedule when none is selected."""
-        # Modify fixture to have no selected schedule
-        homes_data = mock_api.get_homes_data.return_value
-        homes_data["body"]["homes"][0]["schedules"][0]["selected"] = False
-
-        await coordinator._async_update_data()
-
-        schedule = coordinator.get_active_schedule("home_123")
-        assert schedule is None
-
 
 class TestCoordinatorDataMerging:
     """Tests for data merging from config and status."""
@@ -246,7 +182,7 @@ class TestCoordinatorDataMerging:
         """Test that room config and status data are merged."""
         await coordinator._async_update_data()
 
-        room = coordinator.get_room("room_456")
+        room = coordinator.rooms["room_456"]
 
         # From config
         assert room["name"] == "Living Room"

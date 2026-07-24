@@ -9,18 +9,13 @@ import pytest
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.migo_netatmo.helpers import (
-    calculate_signal_quality,
-    format_mac_address,
     generate_unique_id,
-    get_device_name,
     get_devices_by_type,
     get_gateway_mac_for_home,
     get_home_id_or_raise,
     get_thermostat_for_room,
-    parse_api_response,
     safe_float,
     safe_get,
-    safe_int,
 )
 
 
@@ -53,35 +48,6 @@ class TestSafeGet:
         assert safe_get(data) == data
 
 
-class TestParseApiResponse:
-    """Tests for parse_api_response."""
-
-    def test_valid_response_returns_body(self) -> None:
-        """A well-formed response returns its body dict."""
-        response = {"body": {"home": {"id": "123"}}, "status": "ok"}
-        assert parse_api_response(response) == {"home": {"id": "123"}}
-
-    def test_non_dict_response_raises(self) -> None:
-        """A non-dict response raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid response type"):
-            parse_api_response("not a dict")  # type: ignore[arg-type]
-
-    def test_missing_body_raises(self) -> None:
-        """A response without a 'body' key raises ValueError."""
-        with pytest.raises(ValueError, match="missing 'body'"):
-            parse_api_response({"status": "ok"})
-
-    def test_missing_required_key_raises(self) -> None:
-        """A body missing the caller-required key raises ValueError."""
-        with pytest.raises(ValueError, match="missing required key"):
-            parse_api_response({"body": {"home": {}}}, required_key="rooms")
-
-    def test_required_key_present_passes(self) -> None:
-        """The required-key check passes when the key exists in the body."""
-        body = parse_api_response({"body": {"rooms": []}}, required_key="rooms")
-        assert body == {"rooms": []}
-
-
 class TestSafeFloat:
     """Tests for safe_float."""
 
@@ -103,87 +69,6 @@ class TestSafeFloat:
     def test_invalid_type_returns_default(self) -> None:
         """A value that can't be coerced to float falls back to the default."""
         assert safe_float(object(), default=-1.0) == -1.0
-
-
-class TestSafeInt:
-    """Tests for safe_int."""
-
-    def test_none_returns_default(self) -> None:
-        """None input returns the default unchanged."""
-        assert safe_int(None) is None
-        assert safe_int(None, default=5) == 5
-
-    def test_valid_values_convert(self) -> None:
-        """Numeric strings and floats convert to int."""
-        assert safe_int("42") == 42
-        assert safe_int(3.9) == 3
-
-    def test_invalid_value_returns_default(self) -> None:
-        """A non-numeric value falls back to the default."""
-        assert safe_int("not_a_number") is None
-        assert safe_int("not_a_number", default=0) == 0
-
-
-class TestFormatMacAddress:
-    """Tests for format_mac_address."""
-
-    def test_colon_separated_input(self) -> None:
-        """An already colon-separated MAC is normalized to uppercase."""
-        assert format_mac_address("70:ee:50:6b:e3:6a") == "70:EE:50:6B:E3:6A"
-
-    def test_dash_separated_input(self) -> None:
-        """A dash-separated MAC is reformatted with colons."""
-        assert format_mac_address("70-ee-50-6b-e3-6a") == "70:EE:50:6B:E3:6A"
-
-    def test_bare_input(self) -> None:
-        """A MAC with no separators gets colons inserted every 2 characters."""
-        assert format_mac_address("70ee506be36a") == "70:EE:50:6B:E3:6A"
-
-
-class TestGetDeviceName:
-    """Tests for get_device_name."""
-
-    def test_long_id_uses_last_four_characters(self) -> None:
-        """A long device ID is shortened to its last 4 characters."""
-        assert get_device_name({"id": "70:ee:50:6b:e3:6a"}, "Gateway") == "Gateway 3:6a"
-
-    def test_short_id_used_as_is(self) -> None:
-        """An ID shorter than 4 characters is used unchanged."""
-        assert get_device_name({"id": "a1"}, "Gateway") == "Gateway a1"
-
-    def test_missing_id_truncates_the_unknown_fallback(self) -> None:
-        """A device without an 'id' falls back to 'Unknown', truncated to 4 chars.
-
-        The truncation is applied to the fallback sentinel as well as to a real
-        ID, which is why the result reads oddly.
-        """
-        assert get_device_name({}, "Gateway") == f"Gateway {'Unknown'[-4:]}"
-
-
-class TestCalculateSignalQuality:
-    """Tests for calculate_signal_quality."""
-
-    THRESHOLDS = (80, 60, 40)
-
-    def test_none_strength_returns_none(self) -> None:
-        """No signal reading returns None."""
-        assert calculate_signal_quality(None, self.THRESHOLDS) is None
-
-    @pytest.mark.parametrize(
-        ("strength", "expected"),
-        [
-            (90, "excellent"),
-            (80, "excellent"),
-            (70, "good"),
-            (60, "good"),
-            (50, "fair"),
-            (40, "fair"),
-            (10, "poor"),
-        ],
-    )
-    def test_thresholds(self, strength: int, expected: str) -> None:
-        """Each boundary maps to the expected quality label."""
-        assert calculate_signal_quality(strength, self.THRESHOLDS) == expected
 
 
 class TestGenerateUniqueId:

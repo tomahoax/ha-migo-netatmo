@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
+from .entity import MigoGatewayEntity, MigoThermostatEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -42,8 +42,10 @@ class MigoBinarySensorEntityDescription(BinarySensorEntityDescription):
     ignores_reachability: bool = False
 
 
-# Room-based binary sensor configurations
-ROOM_BINARY_SENSORS: tuple[MigoBinarySensorEntityDescription, ...] = ()
+# This integration exposes no room-level binary sensors: every boolean the API
+# reports (boiler status, eBus/boiler errors, reachability) belongs to a gateway
+# or a thermostat module, not to a room. Add a ROOM_BINARY_SENSORS tuple, a room
+# entity class and a register_dynamic_entities() call together if that changes.
 
 # Gateway binary sensor configurations
 GATEWAY_BINARY_SENSORS: tuple[MigoBinarySensorEntityDescription, ...] = (
@@ -95,11 +97,6 @@ async def async_setup_entry(
     """Set up MiGO binary sensor entities."""
     coordinator = entry.runtime_data.coordinator
 
-    # No register_dynamic_entities() call for ROOM_BINARY_SENSORS: it is
-    # currently an empty tuple, so a listener here would only ever do a
-    # no-op set-diff on every coordinator refresh. Add one the same day a
-    # description is added to that tuple.
-
     register_dynamic_entities(
         entry,
         coordinator,
@@ -121,32 +118,6 @@ async def async_setup_entry(
             for description in THERMOSTAT_BINARY_SENSORS
         ],
     )
-
-
-class MigoRoomBinarySensor(MigoRoomEntity, BinarySensorEntity):
-    """MiGO room-based binary sensor described by an entity description."""
-
-    entity_description: MigoBinarySensorEntityDescription
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        room_id: str,
-        description: MigoBinarySensorEntityDescription,
-    ) -> None:
-        """Initialize the room binary sensor."""
-        super().__init__(coordinator, room_id)
-        self.entity_description = description
-        self._ignore_reachable = description.ignores_reachability
-        self._attr_unique_id = generate_unique_id(description.unique_id_key, room_id)
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return True if the sensor is on."""
-        value = self._room_data.get(self.entity_description.data_key)
-        if self.entity_description.value_fn:
-            return self.entity_description.value_fn(value)
-        return value
 
 
 class _MigoDeviceBinarySensorMixin(BinarySensorEntity):

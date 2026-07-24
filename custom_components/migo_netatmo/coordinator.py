@@ -431,17 +431,6 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             except MigoApiError as err:
                 _LOGGER.debug("Failed to get consumption for device %s: %s", device_id, err)
 
-    def get_room(self, room_id: str) -> dict[str, Any] | None:
-        """Get room data by ID.
-
-        Args:
-            room_id: The room ID to look up.
-
-        Returns:
-            The room data dictionary, or None if not found.
-        """
-        return self.rooms.get(room_id)
-
     def get_home(self, home_id: str) -> dict[str, Any] | None:
         """Get home data by ID.
 
@@ -463,35 +452,6 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             The device data dictionary, or None if not found.
         """
         return self.devices.get(device_id)
-
-    def get_schedules(self, home_id: str) -> list[dict[str, Any]]:
-        """Get schedules for a home.
-
-        Args:
-            home_id: The home ID to get schedules for.
-
-        Returns:
-            List of schedule dictionaries.
-        """
-        home = self.get_home(home_id)
-        if home is None:
-            return []
-        return home.get("schedules", [])
-
-    def get_active_schedule(self, home_id: str) -> dict[str, Any] | None:
-        """Get the active schedule for a home.
-
-        Args:
-            home_id: The home ID to get the active schedule for.
-
-        Returns:
-            The active schedule dictionary, or None if not found.
-        """
-        schedules = self.get_schedules(home_id)
-        for schedule in schedules:
-            if schedule.get("selected"):
-                return schedule
-        return None
 
     def get_consumption(self, device_id: str) -> dict[str, Any] | None:
         """Get consumption data for a device (gateway).

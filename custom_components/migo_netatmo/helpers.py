@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, overload
 
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, KEY_BODY
+from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN
 
 if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
@@ -54,32 +54,6 @@ def safe_get(data: Mapping[str, Any] | None, *keys: str, default: Any = None) ->
     return result
 
 
-def parse_api_response(response: dict[str, Any], required_key: str | None = None) -> dict[str, Any]:
-    """Parse and validate an API response.
-
-    Args:
-        response: The raw API response.
-        required_key: An optional key that must exist in the body.
-
-    Returns:
-        The body of the response.
-
-    Raises:
-        ValueError: If the response is invalid or missing required data.
-    """
-    if not isinstance(response, dict):
-        raise ValueError(f"Invalid response type: {type(response)}")
-
-    body = response.get(KEY_BODY)
-    if body is None:
-        raise ValueError("Response missing 'body' key")
-
-    if required_key is not None and required_key not in body:
-        raise ValueError(f"Response body missing required key: {required_key}")
-
-    return body
-
-
 def safe_float(value: Any, default: float | None = None) -> float | None:
     """Safely convert a value to float.
 
@@ -97,80 +71,6 @@ def safe_float(value: Any, default: float | None = None) -> float | None:
     except (ValueError, TypeError):
         _LOGGER.debug("Failed to convert %r to float", value)
         return default
-
-
-def safe_int(value: Any, default: int | None = None) -> int | None:
-    """Safely convert a value to int.
-
-    Args:
-        value: The value to convert.
-        default: The default value if conversion fails.
-
-    Returns:
-        The int value or the default.
-    """
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        _LOGGER.debug("Failed to convert %r to int", value)
-        return default
-
-
-def format_mac_address(mac: str) -> str:
-    """Format a MAC address for display.
-
-    Args:
-        mac: The MAC address string.
-
-    Returns:
-        The formatted MAC address (uppercase with colons).
-    """
-    # Remove any existing separators and convert to uppercase
-    clean = mac.replace(":", "").replace("-", "").upper()
-    # Add colons every 2 characters
-    return ":".join(clean[i : i + 2] for i in range(0, len(clean), 2))
-
-
-def get_device_name(device_data: dict[str, Any], device_type: str) -> str:
-    """Generate a human-readable device name.
-
-    Args:
-        device_data: The device data dictionary.
-        device_type: The type of device (for display).
-
-    Returns:
-        A formatted device name.
-    """
-    device_id = device_data.get("id", "Unknown")
-    # Use last 4 characters of ID for uniqueness
-    short_id = device_id[-4:] if len(device_id) >= 4 else device_id
-    return f"{device_type} {short_id}"
-
-
-def calculate_signal_quality(strength: int | None, thresholds: tuple[int, int, int]) -> str | None:
-    """Calculate signal quality from strength value.
-
-    Args:
-        strength: The signal strength value.
-        thresholds: Tuple of (excellent, good, fair) thresholds.
-
-    Returns:
-        Signal quality string: "excellent", "good", "fair", or "poor".
-    """
-    if strength is None:
-        return None
-
-    excellent, good, fair = thresholds
-
-    if strength >= excellent:
-        return "excellent"
-    if strength >= good:
-        return "good"
-    if strength >= fair:
-        return "fair"
-    return "poor"
 
 
 def generate_unique_id(entity_type: str, entity_id: str) -> str:

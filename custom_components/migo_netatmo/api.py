@@ -745,6 +745,10 @@ class MigoApi:
     ) -> dict[str, Any]:
         """Set heating system type.
 
+        No entity exposes this yet: it is kept as a wrapper over a real
+        endpoint, ready for a "heating type" select. Do not delete it as
+        unused without also dropping that plan.
+
         Args:
             device_id: The gateway device ID.
             heating_type: The heating type (radiators, convector, floor_heating, unknown).
@@ -767,6 +771,10 @@ class MigoApi:
         use_water_tank: bool,
     ) -> dict[str, Any]:
         """Set DHW storage mode (water tank vs instantaneous).
+
+        No entity exposes this yet: it is kept as a wrapper over a real
+        endpoint, ready for a DHW storage switch. Do not delete it as
+        unused without also dropping that plan.
 
         Args:
             home_id: The home ID.
