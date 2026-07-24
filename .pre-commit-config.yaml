@@ -19,17 +19,26 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.0
+  # Local hook rather than mirrors-mypy: that one builds an isolated venv
+  # without homeassistant installed, so every HA symbol resolves to Any and
+  # disallow_subclassing_any, warn_return_any and friends check nothing.
+  # Running from the project venv is what core does too. pass_filenames is
+  # false because with follow_imports = normal a partial file list gives mypy
+  # an incomplete view of the package and results vary per commit.
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies:
-          - aiohttp
-        args: [--ignore-missing-imports]
+        name: mypy
+        entry: uv run --frozen mypy custom_components/migo_netatmo
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
         files: ^custom_components/
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:
       - id: codespell
-        args: [--skip, "*.json,*.lock"]
+        # "hass" is the Home Assistant core object name, not a typo of "hash".
+        args: [--skip, "*.json,*.lock", --ignore-words-list, "hass"]

@@ -88,6 +88,14 @@ To run hooks manually:
 pre-commit run --all-files
 ```
 
+The mypy hook is a local hook that runs `uv run --frozen mypy` from the project
+environment, so it needs `uv sync --extra dev` to have been run first. This is
+deliberate: mypy needs Home Assistant importable to check anything meaningful.
+In an isolated hook environment every HA symbol resolves to `Any` and most of
+the strict checks silently pass. The mypy configuration in `pyproject.toml`
+mirrors the one Home Assistant core generates for integrations listed in its
+`.strict-typing` file, and mypy is pinned so the hook and CI agree.
+
 ## Testing
 
 ### Running Tests

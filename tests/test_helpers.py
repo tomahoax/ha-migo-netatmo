@@ -151,9 +151,13 @@ class TestGetDeviceName:
         """An ID shorter than 4 characters is used unchanged."""
         assert get_device_name({"id": "a1"}, "Gateway") == "Gateway a1"
 
-    def test_missing_id_falls_back_to_unknown(self) -> None:
-        """A device dict without an 'id' key falls back to 'Unknown'."""
-        assert get_device_name({}, "Gateway") == "Gateway nown"
+    def test_missing_id_truncates_the_unknown_fallback(self) -> None:
+        """A device without an 'id' falls back to 'Unknown', truncated to 4 chars.
+
+        The truncation is applied to the fallback sentinel as well as to a real
+        ID, which is why the result reads oddly.
+        """
+        assert get_device_name({}, "Gateway") == f"Gateway {'Unknown'[-4:]}"
 
 
 class TestCalculateSignalQuality:

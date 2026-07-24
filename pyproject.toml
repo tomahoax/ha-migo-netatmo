@@ -36,7 +36,11 @@ dev = [
     "pytest-homeassistant-custom-component>=0.13.0",
     "ruff>=0.4.0",
     "pre-commit>=3.7.0",
-    "mypy>=1.13.0",
+    # Pinned, not floored: the mypy config mirrors Home Assistant core's and
+    # uses keys such as strict_bytes that only exist in mypy 2.x, and mypy
+    # hard-fails on an unrecognised config key. Pinning also keeps the
+    # pre-commit hook and the CI job on the same checker.
+    "mypy==2.3.0",
 ]
 
 [project.urls]
@@ -85,29 +89,54 @@ ignore = [
 known-first-party = ["custom_components.migo_netatmo"]
 
 [tool.mypy]
+# Mirrors the mypy.ini that Home Assistant core generates for an integration
+# listed in .strict-typing. The first group is core's GENERAL_SETTINGS, the
+# second its STRICT_SETTINGS, both from script/hassfest/mypy_config.py.
+# Deliberate divergences:
+#   - "plugins" is omitted (pydantic.mypy and mypy_plugins/
+#     enum_identity_compare.py are not reproducible outside the core repo, and
+#     neither applies here: no pydantic models, no enum identity comparisons).
+#   - "native_parser" and "num_workers" are omitted: performance only.
+# Note there is deliberately no ignore_missing_imports and no per-module
+# override: homeassistant, aiohttp and voluptuous all ship py.typed, and
+# disable_error_code below is core's own safety net for untyped dependencies.
 python_version = "3.13"
-warn_unused_configs = true
-check_untyped_defs = true
+platform = "linux"
+show_error_codes = true
+follow_imports = "normal"
+local_partial_types = true
+strict_equality = true
+strict_bytes = true
 no_implicit_optional = true
-follow_imports = "silent"
-ignore_missing_imports = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-disallow_untyped_decorators = true
-# warn_return_any is intentionally left off: this integration parses loosely
-# typed JSON from a third-party API, so `dict[str, Any].get(...)` naturally
-# returns Any at most read sites. Turning it on surfaces ~25 no-any-return
-# findings that would mostly need speculative casts rather than real bug
-# fixes; tracked as a follow-up (see quality_scale.yaml strict-typing).
-warn_return_any = false
-
-[[tool.mypy.overrides]]
-module = [
-    "homeassistant.*",
-    "voluptuous.*",
-    "aiohttp.*",
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+extra_checks = false
+enable_error_code = [
+    "deprecated",
+    "ignore-without-code",
+    "redundant-self",
+    "truthy-iterable",
 ]
-ignore_missing_imports = true
+disable_error_code = [
+    "annotation-unchecked",
+    "import-not-found",
+    "import-untyped",
+]
+
+# STRICT_SETTINGS: core applies these per-module to integrations listed in
+# .strict-typing. This repository holds a single integration, so they are
+# global. warn_return_any is the last one to be switched on, once the
+# remaining no-any-return sites are narrowed (see quality_scale.yaml).
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+warn_unreachable = true
+warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
