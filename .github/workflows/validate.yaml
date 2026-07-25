@@ -9,6 +9,11 @@ on:
     branches:
       - main
       - dev
+  # hacs/action and hassfest both track a moving branch, so their rules can
+  # change without a commit here. A weekly run surfaces that before it blocks a
+  # release or a default-store submission.
+  schedule:
+    - cron: "0 6 * * 1"
 
 # Declared explicitly rather than relying on the repository-wide default:
 # this workflow runs third-party actions and, on pull requests, arbitrary
@@ -27,6 +32,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # `ignore: brands` must be REMOVED before submitting to the HACS default
+      # store: inclusion requires this action to pass "without any errors or
+      # ignores". It cannot be removed yet, because the check needs an
+      # icon.png under custom_integrations/migo_netatmo/ in
+      # home-assistant/brands, and that entry does not exist. See
+      # docs/development/publishing.md for the ordering.
       - name: HACS validation
         uses: hacs/action@main
         with:

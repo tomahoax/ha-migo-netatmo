@@ -35,7 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Unused internal helpers and one unreachable entity class, which inflated the test coverage figure without protecting anything reachable
 
-## [0.41.0] - 2026-07-22
+## [0.41.0] - 2026-07-22 (never published)
+
+> [!NOTE]
+> No GitHub release was ever cut for this version, so nobody received it. The
+> work listed below reached users as part of the next published release.
+
 
 ### Added
 - **Reconfigure flow** - Change credentials from the integration entry menu; reauth and reconfigure refuse account switching

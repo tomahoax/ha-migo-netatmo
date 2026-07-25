@@ -15,6 +15,7 @@ Welcome to the MiGo (Netatmo) integration documentation for Home Assistant.
 - [Contributing](development/contributing.md) - How to contribute to the project
 - [Architecture](development/architecture.md) - Code structure and design patterns
 - [Testing](development/testing.md) - How to run and write tests
+- [Publishing](development/publishing.md) - Submitting to the HACS default store
 
 ## Overview
 
@@ -22,7 +23,7 @@ This integration connects your Saunier Duval thermostat (controlled via the MiGO
 
 ### Requirements
 
-- Home Assistant 2024.1.0 or later
+- Home Assistant 2025.8.0 or later (the floor declared in `hacs.json`)
 - A Saunier Duval thermostat compatible with the **MiGO** app
 - Valid MiGO app credentials (email and password)
 
