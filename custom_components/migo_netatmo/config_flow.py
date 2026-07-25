@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, override
+from collections.abc import Mapping
+from typing import Any, Final, override
 
 import voluptuous as vol
 from homeassistant.config_entries import (
@@ -79,6 +80,31 @@ OPTIONS_SCHEMA = vol.Schema(
         ),
     }
 )
+
+
+def _non_secret_suggestions(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop the secret fields before they are suggested back to the browser.
+
+    A suggested value is sent to the frontend over the websocket and sits in the
+    page as a pre-filled form value. Pre-filling the stored password and client
+    secret took them out of .storage and put them somewhere any script running in
+    that origin could read: a compromised custom Lovelace card, an HACS frontend
+    resource, a browser extension, or simply an unattended logged-in session. It
+    also offered the MiGO password to the browser's password manager under Home
+    Assistant's origin.
+
+    The other fields are safe to pre-fill and are what makes the form usable.
+
+    Args:
+        data: Config entry data, or the user input being re-shown after an error.
+
+    Returns:
+        A copy without CONF_PASSWORD or CONF_CLIENT_SECRET.
+    """
+    return {k: v for k, v in data.items() if k not in _SECRET_FIELDS}
+
+
+_SECRET_FIELDS: Final = frozenset({CONF_PASSWORD, CONF_CLIENT_SECRET})
 
 
 class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -200,7 +226,7 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
                 STEP_USER_DATA_SCHEMA,
-                user_input or reconfigure_entry.data,
+                _non_secret_suggestions(user_input or reconfigure_entry.data),
             ),
             errors=errors,
         )

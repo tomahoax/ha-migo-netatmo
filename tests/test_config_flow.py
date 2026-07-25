@@ -129,6 +129,33 @@ class TestUserFlow:
         assert result["type"] is FlowResultType.FORM
         assert result["errors"] == {"base": "cannot_connect"}
 
+    async def test_reconfigure_does_not_prefill_secrets(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """The reconfigure form must not send stored secrets back to the browser.
+
+        A suggested value travels over the frontend websocket and sits in the page
+        as a pre-filled form value, readable by anything running in that origin.
+        The username is safe and useful to pre-fill; the password is not.
+        """
+        mock_config_entry.add_to_hass(hass)
+        result = await mock_config_entry.start_reconfigure_flow(hass)
+
+        assert result["type"] is FlowResultType.FORM
+        suggested = {
+            str(key.schema): key.description.get("suggested_value")
+            for key in result["data_schema"].schema
+            if getattr(key, "description", None)
+        }
+
+        assert suggested.get("password") is None, "the stored password was pre-filled"
+        assert suggested.get("client_secret") is None, "the stored client secret was pre-filled"
+        # The non-secret field is still suggested, or the form is a pain to use.
+        assert suggested.get("username") == "test@example.com"
+
     async def test_unknown_error(
         self,
         hass: HomeAssistant,

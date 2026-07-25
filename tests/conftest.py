@@ -42,11 +42,21 @@ def homes_data_response() -> dict[str, Any]:
     """Return mock homes data response."""
     return {
         "body": {
+            "user": {"email": "test@example.com", "country": "FR"},
             "homes": [
                 {
                     "id": "home_123",
                     "name": "My Home",
                     "therm_mode": "schedule",
+                    # Personal data the real API returns. Present so the
+                    # redaction tests fail for the right reason: without these,
+                    # a broken redactor would still pass.
+                    "coordinates": [49.123456, 2.654321],
+                    "city": "Somewhere",
+                    "country": "FR",
+                    "altitude": 120,
+                    "timezone": "Europe/Paris",
+                    "invitation_code": ["ZsdApbpjOstMdOn1"],
                     "rooms": [
                         {
                             "id": "room_456",
@@ -60,6 +70,7 @@ def homes_data_response() -> dict[str, Any]:
                             "id": "gateway_001",
                             "type": "NAVaillant",
                             "subtype": "NAEbusSdbg",
+                            "oem_serial": "SN123456",
                         },
                         {
                             "id": "module_789",
@@ -78,7 +89,7 @@ def homes_data_response() -> dict[str, Any]:
                         }
                     ],
                 }
-            ]
+            ],
         },
         "status": "ok",
     }

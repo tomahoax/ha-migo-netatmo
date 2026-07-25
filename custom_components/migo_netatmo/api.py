@@ -44,8 +44,40 @@ from .models import (
     HomeStatusApiResponse,
     TokenResponse,
 )
+from .redact import mask_email, redact
 
 _LOGGER = logging.getLogger(__name__)
+
+# Opt-in channel for unredacted payloads. A child logger inherits its parent's
+# level, so checking the EFFECTIVE level here would defeat the whole point: it
+# would go live the moment anyone debugs the integration normally. Only an
+# explicit `custom_components.migo_netatmo.api.raw: debug` in Home Assistant's
+# logger configuration sets a level on this logger itself.
+_RAW_LOGGER = logging.getLogger(f"{__name__}.raw")
+
+
+def _raw_logging_enabled() -> bool:
+    """Return True only when the raw logger's own level was set explicitly."""
+    return _RAW_LOGGER.level == logging.DEBUG
+
+
+def _log_payload(label: str, payload: Any) -> None:
+    """Log an API payload, with sensitive values redacted by default.
+
+    The redacted form keeps the full structure, so it is still useful for
+    diagnosing an undocumented backend, but the account email, the home's GPS
+    coordinates, the invitation code and hardware serials come out replaced.
+
+    Args:
+        label: Human-readable description of what is being logged.
+        payload: The request or response payload.
+    """
+    if _raw_logging_enabled():
+        _RAW_LOGGER.debug("%s (raw, unredacted): %s", label, payload)
+    elif _LOGGER.isEnabledFor(logging.DEBUG):
+        # Guarded: redact() copies the whole payload, and this runs on every
+        # poll. No point paying for it when DEBUG is off.
+        _LOGGER.debug("%s: %s", label, redact(payload))
 
 
 class MigoApiError(Exception):
@@ -184,7 +216,8 @@ class MigoApi:
             "scope": SCOPE,
         }
 
-        _LOGGER.debug("Authenticating with Netatmo API for user: %s", self._username)
+        # Masked: the username is the account email, which is also the login.
+        _LOGGER.debug("Authenticating with Netatmo API for user: %s", mask_email(self._username))
 
         try:
             async with session.post(
@@ -353,7 +386,7 @@ class MigoApi:
         # Log request details
         _LOGGER.debug("API request: %s %s", method, url)
         if data is not None:
-            _LOGGER.debug("API request payload: %s", data)
+            _log_payload("API request payload", data)
 
         try:
             async with session.request(method, url, **request_kwargs) as response:
@@ -383,7 +416,7 @@ class MigoApi:
                             )
                             raise MigoApiError(f"API returned {retry_response.status}: {error_text}")
                         result = _as_json_object(await retry_response.json())
-                        _LOGGER.debug("API response data: %s", result)
+                        _log_payload("API response data", result)
                         return result
 
                 if response.status >= 400:
@@ -398,7 +431,7 @@ class MigoApi:
                     raise MigoApiError(f"API returned {response.status}: {error_text}")
 
                 result = _as_json_object(await response.json())
-                _LOGGER.debug("API response data: %s", result)
+                _log_payload("API response data", result)
                 return result
 
         except aiohttp.ClientResponseError as err:

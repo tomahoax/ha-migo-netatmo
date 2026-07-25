@@ -34,6 +34,7 @@ from .models import (
     RoomData,
     RoomStatus,
 )
+from .redact import redact
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -161,14 +162,13 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # Skip homes without modules (not properly configured)
         modules = home.get(KEY_MODULES) or []
         if not modules:
-            _LOGGER.debug("Skipping home %s (%s): no modules found", home_id, home_name)
+            _LOGGER.debug("Skipping home %s: no modules found", home_id)
             return
 
         rooms = home.get(KEY_ROOMS) or []
         _LOGGER.debug(
-            "Processing home %s (%s): %d rooms, %d modules",
+            "Processing home %s: %d rooms, %d modules",
             home_id,
-            home_name,
             len(rooms),
             len(modules),
         )
@@ -259,7 +259,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     _LOGGER.debug(
                         "Got config for module %s: %s",
                         module_id,
-                        module,
+                        redact(module),
                     )
 
         except MigoAuthError:
@@ -393,7 +393,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 )
 
                 body = response.get(KEY_BODY, {})
-                _LOGGER.debug("Consumption API response body: %s", body)
+                _LOGGER.debug("Consumption API response body: %s", redact(body))
 
                 # Handle dict format: {"timestamp": [boiler_on, boiler_off], ...}
                 if isinstance(body, dict):
