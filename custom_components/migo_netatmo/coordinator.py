@@ -107,7 +107,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 # message once, then stays quiet until recovery.
                 raise UpdateFailed("Invalid response from API: missing 'body'")
 
-            homes = body.get(KEY_HOMES, [])
+            # `or []`, not `.get(..., [])`: the API sends an explicit null here,
+            # which a default only covers when the key is absent entirely.
+            homes = body.get(KEY_HOMES) or []
             _LOGGER.debug("Found %d homes in API response", len(homes))
 
             # Reset data stores
@@ -157,12 +159,12 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         home_name = home.get("name", "Home")
 
         # Skip homes without modules (not properly configured)
-        modules = home.get(KEY_MODULES, [])
+        modules = home.get(KEY_MODULES) or []
         if not modules:
             _LOGGER.debug("Skipping home %s (%s): no modules found", home_id, home_name)
             return
 
-        rooms = home.get(KEY_ROOMS, [])
+        rooms = home.get(KEY_ROOMS) or []
         _LOGGER.debug(
             "Processing home %s (%s): %d rooms, %d modules",
             home_id,
@@ -204,15 +206,15 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         try:
             status = await self.api.get_home_status(home_id)
-            status_body = status.get(KEY_BODY)
-            home_data = status_body.get(KEY_HOME, {}) if status_body else {}
+            status_body = status.get(KEY_BODY) or {}
+            home_data = status_body.get(KEY_HOME) or {}
 
-            for room in home_data.get(KEY_ROOMS, []):
+            for room in home_data.get(KEY_ROOMS) or []:
                 room_id = room.get("id")
                 if room_id:
                     room_status[room_id] = room
 
-            for module in home_data.get(KEY_MODULES, []):
+            for module in home_data.get(KEY_MODULES) or []:
                 module_id = module.get("id")
                 if module_id:
                     module_status[module_id] = module
@@ -247,10 +249,10 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         try:
             configs = await self.api.get_configs(home_id)
-            configs_body = configs.get(KEY_BODY)
-            home_data = configs_body.get(KEY_HOME, {}) if configs_body else {}
+            configs_body = configs.get(KEY_BODY) or {}
+            home_data = configs_body.get(KEY_HOME) or {}
 
-            for module in home_data.get(KEY_MODULES, []):
+            for module in home_data.get(KEY_MODULES) or []:
                 module_id = module.get("id")
                 if module_id:
                     module_configs[module_id] = module
@@ -315,13 +317,18 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         if not module_id:
             return
 
-        # Merge static module data with real-time status
+        # Merge order matters: static configuration first, real-time status last.
+        # getconfigs returns more keys than ModuleConfigData declares, and those
+        # undeclared keys still land here via **. If any of them overlaps with
+        # homestatus (reachable, dhw_enabled), a stale config value would
+        # silently win over the live one and entities would report the wrong
+        # state with nothing in the logs.
         status_data = module_status.get(module_id, {})
         config_data = (module_configs or {}).get(module_id, {})
         self.devices[module_id] = {
             **module,
-            **status_data,
             **config_data,
+            **status_data,
             "home_id": home_id,
         }
 
@@ -416,9 +423,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 elif isinstance(body, list) and body:
                     first_entry = body[0]
                     if isinstance(first_entry, dict):
-                        series = first_entry.get("value", [])
+                        series = first_entry.get("value") or []
                         beg_time = first_entry.get("beg_time")
-                        step_time = first_entry.get("step_time", 86400)
+                        step_time = first_entry.get("step_time") or 86400
 
                         if beg_time is None:
                             # Timestamps below are derived from beg_time. This
@@ -433,7 +440,12 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
                         # Find the last non-null value (most recent with data)
                         for i, entry in enumerate(reversed(series)):
-                            if len(entry) >= 2:
+                            # The isinstance check is not redundant: the wire
+                            # payload is unvalidated and does carry nulls inside
+                            # "value". Without it, len(None) raises TypeError,
+                            # which escapes the handlers below and fails the
+                            # whole refresh instead of one reading.
+                            if isinstance(entry, list) and len(entry) >= 2:
                                 boiler_on, boiler_off = entry[0], entry[1]
                                 if boiler_on is not None:
                                     timestamp = beg_time + (len(series) - 1 - i) * step_time

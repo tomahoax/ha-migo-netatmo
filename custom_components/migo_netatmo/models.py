@@ -363,11 +363,16 @@ class GetConfigsResponse(TypedDict):
 
 
 class MeasureSeries(TypedDict):
-    """One series in the list form of a getmeasure response."""
+    """One series in the list form of a getmeasure response.
 
-    beg_time: NotRequired[int]
-    step_time: NotRequired[int]
-    value: NotRequired[list[list[float | None]]]
+    The element type of "value" admits None: the endpoint does return nulls in
+    place of a missing sample pair, so declaring list[list[float | None]] would
+    over-promise and make the runtime guard in the coordinator look redundant.
+    """
+
+    beg_time: NotRequired[int | None]
+    step_time: NotRequired[int | None]
+    value: NotRequired[list[list[float | None] | None] | None]
 
 
 class GetMeasureResponse(TypedDict):

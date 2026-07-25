@@ -13,6 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.const import DOMAIN
+from custom_components.migo_netatmo.coordinator import MigoDataUpdateCoordinator
 
 
 @pytest.fixture(autouse=True)
@@ -189,6 +190,21 @@ def mock_api(
     api.set_dhw_enabled.return_value = {"status": "ok"}
     api.switch_home_schedule.return_value = {"status": "ok"}
     return api
+
+
+@pytest.fixture
+def coordinator(
+    hass: HomeAssistant,
+    mock_api: MagicMock,
+    mock_config_entry: MockConfigEntry,
+) -> MigoDataUpdateCoordinator:
+    """Create a coordinator bound to a real Home Assistant test instance."""
+    mock_config_entry.add_to_hass(hass)
+    return MigoDataUpdateCoordinator(
+        hass=hass,
+        api=mock_api,
+        config_entry=mock_config_entry,
+    )
 
 
 @pytest.fixture

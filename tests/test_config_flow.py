@@ -11,7 +11,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.migo_netatmo.api import MigoAuthError
+from custom_components.migo_netatmo.api import MigoApiError, MigoAuthError
 from custom_components.migo_netatmo.const import DOMAIN
 
 USER_INPUT = {"username": "test@example.com", "password": "test_password"}
@@ -109,6 +109,25 @@ class TestUserFlow:
 
         assert result["type"] is FlowResultType.FORM
         assert result["errors"] == {"base": "no_homes"}
+
+    async def test_api_error_reports_cannot_connect(
+        self,
+        hass: HomeAssistant,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """Test a plain API error is reported as cannot_connect, not unknown.
+
+        MigoConnectionError is a subclass of MigoApiError, so a bare MigoApiError
+        (an HTTP 5xx, say) used to fall through to the catch-all and show "an
+        unknown error occurred" plus a traceback.
+        """
+        patch_migo_api.get_homes_data.side_effect = MigoApiError("API returned 500")
+
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "cannot_connect"}
 
     async def test_unknown_error(
         self,

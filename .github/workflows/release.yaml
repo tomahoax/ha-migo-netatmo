@@ -22,10 +22,14 @@ jobs:
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/migo_netatmo/manifest.json
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
 
+      # HACS extracts a zip_release archive straight into
+      # config/custom_components/<domain>/ (zip_file.extractall(content.path.local)),
+      # so the files must sit at the archive root. Zipping the directory itself
+      # would nest them one level deeper and the integration would not load.
       - name: Create release archive
         run: |
-          cd custom_components
-          zip -r ../migo_netatmo.zip migo_netatmo
+          cd custom_components/migo_netatmo
+          zip -r ../../migo_netatmo.zip . -x '__pycache__/*' -x '*/__pycache__/*'
 
       - name: Upload release asset
         env:

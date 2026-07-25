@@ -88,5 +88,14 @@ async def async_remove_config_entry_device(
 ) -> bool:
     """Allow removing a device that the API no longer reports."""
     coordinator = entry.runtime_data.coordinator
+
+    # Refuse while the caches cannot be trusted. _async_update_data clears
+    # homes/rooms/devices before repopulating them, and an auth failure part-way
+    # through aborts into ConfigEntryAuthFailed while leaving the entry loaded
+    # with empty stores. Without this guard, every device looks unreported during
+    # a password-expiry window and a user could delete a live one.
+    if not coordinator.last_update_success or not (coordinator.devices or coordinator.homes):
+        return False
+
     known_ids = set(coordinator.devices) | set(coordinator.homes)
     return not any(domain == DOMAIN and identifier in known_ids for domain, identifier in device_entry.identifiers)

@@ -24,7 +24,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .api import MigoApi, MigoAuthError, MigoConnectionError
+from .api import MigoApi, MigoApiError, MigoAuthError, MigoConnectionError
 from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
@@ -118,6 +118,11 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
             errors["base"] = "invalid_auth"
         except MigoConnectionError as err:
             _LOGGER.warning("Cannot connect to the MiGO API: %s", err)
+            errors["base"] = "cannot_connect"
+        except MigoApiError as err:
+            # The base class, so an HTTP 5xx from the API lands here rather than
+            # in the catch-all below, which would show "unknown" plus a traceback.
+            _LOGGER.warning("MiGO API returned an error: %s", err)
             errors["base"] = "cannot_connect"
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception while validating credentials")

@@ -5,28 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoApiError, MigoAuthError
 from custom_components.migo_netatmo.coordinator import MigoDataUpdateCoordinator
-
-
-@pytest.fixture
-def coordinator(
-    hass: HomeAssistant,
-    mock_api: MagicMock,
-    mock_config_entry: MockConfigEntry,
-) -> MigoDataUpdateCoordinator:
-    """Create a coordinator bound to a real Home Assistant test instance."""
-    mock_config_entry.add_to_hass(hass)
-    return MigoDataUpdateCoordinator(
-        hass=hass,
-        api=mock_api,
-        config_entry=mock_config_entry,
-    )
 
 
 class TestMigoDataUpdateCoordinator:

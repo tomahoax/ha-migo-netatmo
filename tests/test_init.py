@@ -117,6 +117,37 @@ async def test_remove_stale_device(
     assert await async_remove_config_entry_device(hass, init_integration, stale_device)
 
 
+async def test_no_device_removal_while_caches_are_empty(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Test nothing is removable when the coordinator caches cannot be trusted.
+
+    _async_update_data clears the stores before repopulating them, and an auth
+    failure part-way through leaves the entry loaded with them empty. Without a
+    guard, every device would look unreported and a live one could be deleted.
+    """
+    device_registry = dr.async_get(hass)
+    live_device = device_registry.async_get_device(identifiers={(DOMAIN, "gateway_001")})
+    assert live_device is not None
+
+    coordinator = init_integration.runtime_data.coordinator
+    coordinator.devices = {}
+    coordinator.homes = {}
+
+    assert not await async_remove_config_entry_device(hass, init_integration, live_device)
+
+    # Also refuse after a failed refresh, even if stale data is still around.
+    coordinator.devices = {"gateway_001": {"id": "gateway_001"}}
+    coordinator.last_update_success = False
+    stale_device = device_registry.async_get_or_create(
+        config_entry_id=init_integration.entry_id,
+        identifiers={(DOMAIN, "gateway_gone")},
+        name="Old Gateway",
+    )
+    assert not await async_remove_config_entry_device(hass, init_integration, stale_device)
+
+
 async def test_entities_unavailable_when_module_unreachable(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
