@@ -12,8 +12,9 @@ Requirements below are taken from
 
 ## The blocking dependency
 
-**`home-assistant/brands` has no entry for `migo_netatmo`.** Everything else is
-ready, and this one thing gates the rest, for a reason that is easy to miss:
+**`home-assistant/brands` has no entry for `migo_netatmo`.** A submission was
+made and rejected on substance, see step 1. Everything else is ready, and this one
+thing gates the rest, for a reason that is easy to miss:
 
 HACS requires its own GitHub Action to pass *"without any errors or ignores"*.
 Our workflow currently carries `ignore: brands` (`.github/workflows/validate.yaml`),
@@ -30,29 +31,70 @@ one that used to sit in `custom_components/migo_netatmo/` was removed: it was
 
 ## Step 1: submit to `home-assistant/brands`
 
-Fork [home-assistant/brands](https://github.com/home-assistant/brands), branch
-from `master`, and add exactly two files:
+### This was already attempted, and rejected on substance
+
+[home-assistant/brands#8958](https://github.com/home-assistant/brands/pull/8958),
+opened 2026-01-03, closed 2026-02-14 without merging. It added the two correct
+file paths, so the structure was right. The assets were not. Review by @frenck:
+
+> the provided brand assets are not correct; we collect manufacturer branding in
+> this repository, in this case the branding of Saunier Duval seems to be
+> different. Can you please make sure it matches?
+
+The bot then converted the PR to a draft awaiting changes, no response was made,
+and it was closed as stale six weeks later with an explicit invitation to reopen.
+
+**The rejection has not been addressed.** `brands_assets/icon.png` is
+byte-identical to the asset that was refused (both blob
+`3a0c2f66eb75c1c5153ddf82d2756e70b3ca8503`). Resubmitting it as-is will be
+refused again for the same reason.
+
+### What brands actually wants
+
+Manufacturer branding, not application branding. The submitted image is the MiGO
+**app** icon; brands wants the **Saunier Duval** company logo. This is consistent
+with the integration's own declaration, `const.py`:
+
+```python
+MANUFACTURER: Final = "Saunier Duval"
+```
+
+So the asset to supply is Saunier Duval's logo, sourced ideally from their own
+brand or press resources. This is the established convention in that repository,
+which is built almost entirely from manufacturer logos, so it is expected rather
+than exceptional. It is still a trademark asset, and choosing which mark to use
+is the maintainer's call, not something to settle from a search result.
+
+There is no precedent to copy: brands has no entry for `vaillant`,
+`myvaillant`, `saunier_duval` or `sdbg`. Only `netatmo` exists, as a core
+integration. This submission would be the first for the Vaillant Group family.
+
+### Requirements for the replacement assets
 
 ```
-custom_integrations/migo_netatmo/icon.png      <- brands_assets/icon.png      (256x256)
-custom_integrations/migo_netatmo/icon@2x.png   <- brands_assets/icon@2x.png   (512x512)
+custom_integrations/migo_netatmo/icon.png      256x256, PNG
+custom_integrations/migo_netatmo/icon@2x.png   512x512, PNG
 ```
 
-The assets in `brands_assets/` are already the right dimensions and format
-(PNG, RGBA), verified against the
-[brands requirements](https://github.com/home-assistant/brands#requirements).
+Only `icon.png` is strictly required by the HACS check; `icon@2x.png` is worth
+including for high-DPI displays. Per the
+[brands requirements](https://github.com/home-assistant/brands#requirements):
 
-Two things to know before opening it:
+- Trimmed, so there is minimal empty space or transparent padding at the edges.
+- Interlaced (progressive) PNG is **preferred**, not required. Run through
+  `optipng -i1` or `zopflipng` to match it.
+- Must not use Home Assistant branding. Not a concern here.
 
-- Brands **prefers** interlaced (progressive) PNG. Ours are non-interlaced. This
-  is a stated preference, not a requirement, so it should not block the PR. Run
-  them through `optipng -i1` or `zopflipng` first if you want to match it.
-- Brands requires the image be trimmed of surrounding empty space, and forbids
-  custom integrations from using Home Assistant branding. Ours is the MiGO app
-  icon, so check the trimming; the branding rule is not a concern.
+### Reopening rather than starting over
 
-Only `icon.png` is strictly required by the HACS check. `icon@2x.png` is worth
-including for high-DPI displays.
+The fork branch is intact: `tomahoax/brands`, branch `add-migo-netatmo`. Pushing
+corrected assets to that branch and reopening #8958 keeps the review thread and
+honours frenck's invitation, which is better than opening a fresh PR with no
+context. Reply to the review, then use the **Ready for review** button, since the
+bot drafted it and a draft is not reviewed.
+
+The lesson from the first attempt is the cheap one: the PR did not fail because
+of the assets alone, it died because nobody answered for six weeks.
 
 ## Step 2: remove the ignore, and confirm CI is green
 
@@ -128,7 +170,7 @@ Requirements on the PR itself:
 | Valid JSON, correct alphabetical sorting | see step 4 |
 | Hassfest passes | ready |
 | **HACS Action passes with no ignores** | **blocked on step 1** |
-| **Brands entry exists** | **blocked on step 1** |
+| **Brands entry exists** | **blocked: PR #8958 rejected, wrong assets** |
 | **A full release created after the actions pass** | see step 3 |
 
 Also confirmed absent from `hacs/default`'s `removed`, `blacklist` and `critical`
