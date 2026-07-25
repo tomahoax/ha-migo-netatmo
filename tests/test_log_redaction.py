@@ -39,6 +39,21 @@ LEAKY_VALUES = (
 )
 
 RAW_LOGGER_NAME = "custom_components.migo_netatmo.api.raw"
+INTEGRATION_LOGGER = "custom_components.migo_netatmo"
+
+
+def _integration_log(caplog: pytest.LogCaptureFixture) -> str:
+    """Return only the lines this integration emitted.
+
+    caplog captures every logger, and Home Assistant core logs its own bus
+    events at DEBUG, including entity friendly names. Those legitimately contain
+    the home name, because that is how HA names entities: "My Home Gateway
+    Refresh". Asserting against the raw caplog.text therefore fails on core's
+    output rather than on anything this integration wrote, which is not the
+    property under test.
+    """
+    return "\n".join(record.getMessage() for record in caplog.records if record.name.startswith(INTEGRATION_LOGGER))
+
 
 # The shape the real backend returns, reduced to the fields that leaked.
 HOMESDATA = {
@@ -81,10 +96,11 @@ class TestApiRequestDoesNotLeak:
             await api._api_request("https://app.netatmo.net/api/homesdata")
 
         # It was logged, and redacted, not merely skipped.
-        assert "API response data" in caplog.text
-        assert REDACTED in caplog.text
+        log = _integration_log(caplog)
+        assert "API response data" in log
+        assert REDACTED in log
         for value in LEAKY_VALUES:
-            assert value not in caplog.text, f"{value!r} was written to the log"
+            assert value not in _integration_log(caplog), f"{value!r} was written to the log"
 
     async def test_identifiers_survive_in_the_log(
         self,
@@ -99,8 +115,9 @@ class TestApiRequestDoesNotLeak:
         with caplog.at_level(logging.DEBUG, logger="custom_components.migo_netatmo"):
             await api._api_request("https://app.netatmo.net/api/homesdata")
 
-        assert "home_123" in caplog.text
-        assert "gateway_001" in caplog.text
+        log = _integration_log(caplog)
+        assert "home_123" in log
+        assert "gateway_001" in log
 
     async def test_the_account_email_is_masked_on_authentication(
         self,
@@ -118,9 +135,10 @@ class TestApiRequestDoesNotLeak:
         with caplog.at_level(logging.DEBUG, logger="custom_components.migo_netatmo"):
             await api.authenticate()
 
-        assert "test@example.com" not in caplog.text
+        log = _integration_log(caplog)
+        assert "test@example.com" not in log
         # Still distinguishable, for an install with more than one account.
-        assert "t***@example.com" in caplog.text
+        assert "t***@example.com" in log
 
 
 class TestCoordinatorLogsDoNotLeak:
@@ -140,7 +158,7 @@ class TestCoordinatorLogsDoNotLeak:
             await hass.async_block_till_done()
 
         for value in LEAKY_VALUES:
-            assert value not in caplog.text, f"{value!r} was written to the log"
+            assert value not in _integration_log(caplog), f"{value!r} was written to the log"
 
     async def test_home_name_is_not_logged(
         self,
@@ -155,8 +173,9 @@ class TestCoordinatorLogsDoNotLeak:
             await coordinator.async_refresh()
             await hass.async_block_till_done()
 
-        assert "Processing home home_123" in caplog.text
-        assert "My Home" not in caplog.text
+        log = _integration_log(caplog)
+        assert "Processing home home_123" in log
+        assert "My Home" not in log
 
 
 class TestRawLogger:
@@ -176,8 +195,9 @@ class TestRawLogger:
             assert _raw_logging_enabled() is False
             _log_payload("probe", {"email": "test@example.com"})
 
-        assert "test@example.com" not in caplog.text
-        assert REDACTED in caplog.text
+        log = _integration_log(caplog)
+        assert "test@example.com" not in log
+        assert REDACTED in log
 
     def test_verbose_only_when_the_raw_logger_is_set_explicitly(
         self,
@@ -192,7 +212,7 @@ class TestRawLogger:
                 assert _raw_logging_enabled() is True
                 _log_payload("probe", {"email": "test@example.com"})
 
-            assert "test@example.com" in caplog.text
+            assert "test@example.com" in _integration_log(caplog)
         finally:
             raw_logger.setLevel(previous)
 
@@ -208,4 +228,4 @@ class TestRawLogger:
         with caplog.at_level(logging.INFO, logger="custom_components.migo_netatmo"):
             _log_payload("probe", {"email": "test@example.com"})
 
-        assert "probe" not in caplog.text
+        assert "probe" not in _integration_log(caplog)
