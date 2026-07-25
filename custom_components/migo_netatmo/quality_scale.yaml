@@ -116,16 +116,24 @@ rules:
   entity-translations: done  # en/es/fr/it/ru
   exception-translations: done
   icon-translations:
-    status: todo
+    status: done
     comment: >
-      Partial, downgraded from an overstated "done" on 2026-07-25. All icons do
-      live in icons.json with no hardcoded _attr_icon anywhere, and number,
-      switch and button are fully covered. But climate, select and binary_sensor
-      have no entries at all. Most of that is harmless, since every binary
-      sensor carries a device_class (problem, running, connectivity) and climate
-      uses the domain default. Three entities genuinely fall back to a generic
-      icon: sensor.gateway_firmware, sensor.thermostat_firmware and
-      select.schedule.
+      All icons come from icons.json; there are zero hardcoded _attr_icon or
+      icon= assignments in the integration (verified 2026-07-25 by scanning
+      every module). Entities whose icon is supplied by their device_class carry
+      no entry on purpose: the rule explicitly says not to overwrite a
+      device-class icon when the entity's context matches it, which covers all
+      four binary sensors (problem, running, connectivity), the temperature,
+      humidity and battery sensors, and the climate entity's domain default.
+
+      Corrected on 2026-07-25 from a "todo" set earlier the same day. That
+      downgrade was based on a misreading: the rule governs how icons are
+      provided, not whether every entity has one, so the absence of climate and
+      binary_sensor sections is compliant rather than a gap. The three entities
+      that had neither a device_class nor an entry, and so fell back to a
+      generic icon, now have one anyway (sensor.gateway_firmware,
+      sensor.thermostat_firmware, select.schedule) as polish rather than to
+      satisfy the rule.
   reconfiguration-flow: done
   repair-issues: exempt  # no user-fixable server-side issues yet
   stale-devices:

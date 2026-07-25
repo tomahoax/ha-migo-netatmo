@@ -9,6 +9,17 @@
       },
       "daily_boiler_runtime": {
         "default": "mdi:fire"
+      },
+      "gateway_firmware": {
+        "default": "mdi:chip"
+      },
+      "thermostat_firmware": {
+        "default": "mdi:chip"
+      }
+    },
+    "select": {
+      "schedule": {
+        "default": "mdi:calendar-clock"
       }
     },
     "number": {
