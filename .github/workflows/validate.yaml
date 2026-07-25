@@ -10,6 +10,12 @@ on:
       - main
       - dev
 
+# Declared explicitly rather than relying on the repository-wide default:
+# this workflow runs third-party actions and, on pull requests, arbitrary
+# contributor code. Neither should ever sit next to a write token.
+permissions:
+  contents: read
+
 env:
   DEFAULT_PYTHON: "3.14"
 
@@ -98,25 +104,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      # --frozen resolves from uv.lock, which pins every package with a sha256.
+      # The previous `pip install -e ".[dev]"` did a fresh unhashed resolve of
+      # floored constraints on every run, which is the largest dependency
+      # install in the repo and had no integrity guarantee at all.
+      - name: Install dependencies from the lockfile
+        run: uv sync --frozen --extra dev
 
       - name: Pin Home Assistant to minimum supported version
         if: matrix.ha == '2025.8'
+        # This leg deliberately steps below the lockfile: pinning HA down is its
+        # entire purpose, so it cannot itself be locked. Everything else still
+        # comes from uv.lock.
         # pycares<5: pycares 5.0 (2025-12) drops the API used by the
         # aiodns 3.5.0 release that HA 2025.8 pins
-        run: pip install "pytest-homeassistant-custom-component==0.13.270" "pycares<5"
+        run: uv pip install "pytest-homeassistant-custom-component==0.13.270" "pycares<5"
 
       - name: Run tests with pytest
         run: |
-          pytest tests/ \
+          uv run --no-sync pytest tests/ \
             -v \
             --cov=custom_components/migo_netatmo \
             --cov-report=xml \

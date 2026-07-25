@@ -401,9 +401,24 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     if body:
                         timestamps = sorted(body.keys(), reverse=True)
                         for ts in timestamps:
+                            # The keys are server-chosen, so a non-numeric one
+                            # like "latest" is possible. int() would raise
+                            # ValueError, which is not a MigoApiError and would
+                            # escape into _async_update_data and fail the whole
+                            # refresh rather than skip one reading.
+                            if not ts.isdigit():
+                                _LOGGER.debug(
+                                    "Skipping non-numeric consumption timestamp %r for device %s",
+                                    ts,
+                                    device_id,
+                                )
+                                continue
                             values = body[ts]
                             if isinstance(values, list) and len(values) >= 2:
-                                boiler_on, boiler_off = values
+                                # Indexed, not unpacked: the guard allows 2 OR
+                                # MORE, so `a, b = values` raised ValueError on a
+                                # three-element list. Same escape as above.
+                                boiler_on, boiler_off = values[0], values[1]
                                 if boiler_on is not None:
                                     # Store by device_id for lookup
                                     self.consumption[device_id] = {

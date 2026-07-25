@@ -163,6 +163,40 @@ class TestNullsInConsumptionSeries:
         assert "gateway_001" not in coordinator.consumption
 
     @pytest.mark.asyncio
+    async def test_three_element_pair_does_not_break_the_refresh(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """A third element must not raise ValueError from tuple unpacking.
+
+        The guard allows 2 OR MORE elements, so unpacking into exactly two names
+        raised ValueError, which is not a MigoApiError and so failed the entire
+        refresh instead of skipping one reading.
+        """
+        mock_api.get_measure.return_value = {"body": {"1700000000": [120.0, 300.0, 999.0]}}
+
+        await coordinator._async_update_data()
+
+        assert coordinator.consumption["gateway_001"]["sum_boiler_on"] == 120.0
+        assert coordinator.consumption["gateway_001"]["sum_boiler_off"] == 300.0
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_timestamp_key_is_skipped(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """A server-chosen key like "latest" must not raise from int()."""
+        mock_api.get_measure.return_value = {"body": {"latest": [120.0, 300.0], "1700000000": [60.0, 200.0]}}
+
+        await coordinator._async_update_data()
+
+        # "latest" sorts above the digits, is skipped, and the real one is used.
+        assert coordinator.consumption["gateway_001"]["timestamp"] == 1700000000
+        assert coordinator.consumption["gateway_001"]["sum_boiler_on"] == 60.0
+
+    @pytest.mark.asyncio
     async def test_null_body_in_measure_skips_the_device(
         self,
         coordinator: MigoDataUpdateCoordinator,

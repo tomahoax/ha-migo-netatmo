@@ -224,6 +224,7 @@ class MigoApi:
                 API_AUTH_URL,
                 data=data,
                 headers=self._build_auth_headers(),
+                timeout=self._timeout,
             ) as response:
                 if response.status == 400:
                     error_data = await response.json()
@@ -281,6 +282,7 @@ class MigoApi:
                 API_AUTH_URL,
                 data=data,
                 headers=self._build_auth_headers(),
+                timeout=self._timeout,
             ) as response:
                 if response.status != 200:
                     _LOGGER.warning(
@@ -389,7 +391,7 @@ class MigoApi:
             _log_payload("API request payload", data)
 
         try:
-            async with session.request(method, url, **request_kwargs) as response:
+            async with session.request(method, url, timeout=self._timeout, **request_kwargs) as response:
                 # Log response status
                 _LOGGER.debug("API response: %s status=%d", url, response.status)
 
@@ -399,7 +401,7 @@ class MigoApi:
                     await self.authenticate()
                     request_kwargs["headers"] = self._build_api_headers(use_json)
 
-                    async with session.request(method, url, **request_kwargs) as retry_response:
+                    async with session.request(method, url, timeout=self._timeout, **request_kwargs) as retry_response:
                         _LOGGER.debug(
                             "API retry response: %s status=%d",
                             url,
