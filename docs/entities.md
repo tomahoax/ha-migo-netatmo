@@ -68,13 +68,19 @@ The wall-mounted thermostat connected to the Gateway via RF (radio). Battery pow
 
 ## Sensors
 
+Four sensors are marked *disabled by default*: the two signal strengths and the two
+firmware versions. They are verbose diagnostics, so a fresh install creates them
+switched off to save recorder storage. Enable any of them from the device page or
+from **Settings** → **Devices & services** → **Entities**, filtering on
+**Disabled**. Your choice persists across integration updates.
+
 ### Gateway Sensors
 
 | Entity ID Pattern | Name | Unit | Description |
 |-------------------|------|------|-------------|
 | `sensor.migo_{home}_outdoor_temperature` | Outdoor Temperature | °C | Outdoor temperature from gateway |
-| `sensor.migo_{home}_wifi_signal` | WiFi Signal | % | Gateway WiFi signal strength |
-| `sensor.migo_{home}_gateway_firmware` | Gateway Firmware | - | Gateway firmware version |
+| `sensor.migo_{home}_wifi_signal` | WiFi Signal | % | Gateway WiFi signal strength (disabled by default) |
+| `sensor.migo_{home}_gateway_firmware` | Gateway Firmware | - | Gateway firmware version (disabled by default) |
 
 ### Thermostat Sensors
 
@@ -83,8 +89,8 @@ The wall-mounted thermostat connected to the Gateway via RF (radio). Battery pow
 | `sensor.migo_{room}_temperature` | {Room} Temperature | °C | Room temperature |
 | `sensor.migo_{room}_humidity` | {Room} Humidity | % | Room humidity (if available) |
 | `sensor.migo_{home}_battery` | Battery | % | Thermostat battery level |
-| `sensor.migo_{home}_rf_signal` | RF Signal | % | Thermostat radio signal |
-| `sensor.migo_{home}_thermostat_firmware` | Thermostat Firmware | - | Thermostat firmware version |
+| `sensor.migo_{home}_rf_signal` | RF Signal | % | Thermostat radio signal (disabled by default) |
+| `sensor.migo_{home}_thermostat_firmware` | Thermostat Firmware | - | Thermostat firmware version (disabled by default) |
 
 ### Energy Consumption (Gateway)
 

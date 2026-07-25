@@ -134,6 +134,9 @@ THERMOSTAT_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
+        # Noisy and of no use to most users: a thermostat is not a device for
+        # measuring radio signal strength. Matches wifi_strength on the gateway.
+        entity_registry_enabled_default=False,
     ),
     MigoSensorEntityDescription(
         key="thermostat_firmware",
@@ -142,6 +145,7 @@ THERMOSTAT_SENSORS: tuple[MigoSensorEntityDescription, ...] = (
         translation_key="thermostat_firmware",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda v: str(v) if v is not None else None,
+        entity_registry_enabled_default=False,
     ),
 )
 

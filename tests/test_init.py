@@ -39,8 +39,10 @@ async def test_setup_entry_creates_entities(
     assert climate.attributes["current_temperature"] == 21.5
     assert climate.attributes["temperature"] == 20.0
 
-    # wifi_strength/firmware sensors are disabled by default (entity-disabled-by-default),
-    # so they exist in the entity registry but have no state; ebus_error stays enabled.
+    # The signal-strength and firmware sensors are disabled by default
+    # (entity-disabled-by-default), so they exist in the entity registry but have
+    # no state; ebus_error stays enabled. The exact set is pinned by
+    # test_unique_ids.test_disabled_by_default_contract.
     ebus_error = hass.states.get("binary_sensor.my_home_gateway_ebus_error")
     assert ebus_error is not None
     assert ebus_error.state == "off"

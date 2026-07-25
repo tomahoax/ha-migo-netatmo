@@ -106,13 +106,24 @@ rules:
   entity-disabled-by-default:
     status: done
     comment: >
-      entity_registry_enabled_default=False is set on 2 of the 4 verbose
-      diagnostic sensor.py descriptions: wifi and gateway_firmware. Corrected
-      2026-07-25, the previous comment claimed all 4. rf_strength and
-      thermostat_firmware still lack the flag; adding it is a two-line follow-up
-      and would not affect existing installs, since the flag is only read when an
-      entity is first written to the registry, so a user's prior enable/disable
-      choice persists.
+      entity_registry_enabled_default=False on all 4 verbose diagnostic sensor.py
+      descriptions: wifi_strength and gateway_firmware on the gateway, rf_strength
+      and thermostat_firmware on the thermostat. Completed 2026-07-25; the two
+      thermostat ones were missing, so the gateway and thermostat behaved
+      inconsistently for the same kind of measurement.
+
+      Signal strengths are noisy and firmware versions almost never change, so
+      neither is useful to most users, which is exactly the rule's own
+      signal-strength example. Deliberately left enabled: battery, boiler_error
+      and ebus_error, because the README's automation examples build on them, and
+      reachable, which is the connectivity diagnostic that stays available while a
+      module is unreachable.
+
+      No effect on existing installs: the flag is read only when an entity is
+      first written to the registry, so a user's prior enable/disable choice
+      persists. The exact set is pinned in both directions by
+      tests/test_unique_ids.py::test_disabled_by_default_contract, and documented
+      for users in README.md and docs/entities.md.
   entity-translations: done  # en/es/fr/it/ru
   exception-translations: done
   icon-translations:

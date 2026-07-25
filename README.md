@@ -81,15 +81,24 @@ This integration creates **two separate devices** in Home Assistant:
 
 #### Gateway Sensors
 - Outdoor temperature
-- WiFi signal strength
-- Gateway firmware version
+- WiFi signal strength *(disabled by default)*
+- Gateway firmware version *(disabled by default)*
 
 #### Thermostat Sensors
 - Temperature sensor per room
 - Humidity sensor per room (if available)
 - Battery level
-- RF signal strength
-- Thermostat firmware version
+- RF signal strength *(disabled by default)*
+- Thermostat firmware version *(disabled by default)*
+
+> [!NOTE]
+> The four sensors marked *disabled by default* are verbose diagnostics: signal
+> strengths change constantly and firmware versions almost never do, so neither is
+> useful to most users and both cost recorder storage. They are still created, just
+> switched off. To turn one on, open it from the device page and use **Enable**, or
+> go to **Settings** → **Devices & services** → **Entities**, filter on
+> **Disabled**, and enable it there. Your choice is remembered and is not undone by
+> integration updates.
 
 #### Energy Consumption
 - **Daily boiler runtime** - Tracks boiler operation time in seconds (compatible with Energy Dashboard via `state_class: total_increasing`)

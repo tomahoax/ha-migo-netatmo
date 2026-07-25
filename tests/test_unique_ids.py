@@ -46,6 +46,17 @@ EXPECTED_ENTITIES: list[tuple[str, str, str]] = [
 ]
 
 
+# Entities a fresh install gets disabled: verbose diagnostics that most users
+# have no use for. Enabling one of these later is the user's choice, and the
+# registry keeps that choice, so this set only governs new installs.
+EXPECTED_DISABLED_BY_DEFAULT: list[str] = [
+    "sensor.my_home_gateway_gateway_firmware",
+    "sensor.my_home_gateway_wifi_signal",
+    "sensor.my_home_thermostat_rf_signal",
+    "sensor.my_home_thermostat_thermostat_firmware",
+]
+
+
 async def test_entity_registry_contract(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
@@ -59,6 +70,32 @@ async def test_entity_registry_contract(
     )
 
     assert actual == EXPECTED_ENTITIES
+
+
+async def test_disabled_by_default_contract(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Exactly the verbose diagnostics must be disabled on a fresh install.
+
+    Pins the entity-disabled-by-default rule in both directions: a useful entity
+    silently becoming disabled is as much a regression as a noisy one becoming
+    enabled. Battery and the error binary sensors must stay enabled in
+    particular, since the README's automation examples build on them.
+    """
+    entity_registry = er.async_get(hass)
+    entries = er.async_entries_for_config_entry(entity_registry, init_integration.entry_id)
+
+    disabled = sorted(entry.entity_id for entry in entries if entry.disabled_by is not None)
+    assert disabled == EXPECTED_DISABLED_BY_DEFAULT
+
+    enabled = {entry.entity_id for entry in entries if entry.disabled_by is None}
+    for documented in (
+        "sensor.my_home_thermostat_battery",
+        "binary_sensor.my_home_gateway_boiler_error",
+        "binary_sensor.my_home_gateway_ebus_error",
+    ):
+        assert documented in enabled, f"{documented} is used by a README automation example"
 
 
 async def test_device_registry_contract(
