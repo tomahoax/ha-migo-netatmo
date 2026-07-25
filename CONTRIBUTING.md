@@ -153,6 +153,54 @@ This project follows [GitHub Flow](https://docs.github.com/en/get-started/using-
 
 6. **Releases**: When `dev` is stable, it gets merged to `main` and tagged
 
+### Releasing
+
+Both stable and pre-release tags are handled by the same workflow
+(`.github/workflows/release.yaml`), which triggers on `release: published`. It
+re-stamps the version in `manifest.json` and `pyproject.toml` from the tag, builds
+`migo_netatmo.zip` and uploads it as a release asset.
+
+**Stable release**, tagged on `main` after the merge:
+
+```bash
+gh release create v0.42.0 --target main --title v0.42.0 --notes-from-tag
+```
+
+**Pre-release from `dev`**, so testers can run development code through HACS without
+waiting for a stable version:
+
+```bash
+gh release create v0.42.0-beta.1 --target dev --prerelease --title v0.42.0-beta.1
+```
+
+Three things make this safe, and all three matter:
+
+- `--prerelease` is what keeps existing users on stable. HACS records a pre-release
+  separately from the latest version, so it is never offered to anyone who has not
+  explicitly enabled beta versions on the repository.
+- The tag must be a valid pre-release version for both PEP 440 and HACS's
+  `AwesomeVersion`. `v0.42.0-beta.1` and `v0.42.0-rc.1` both are, and both sort
+  below `0.42.0`. A bare suffix like `v0.42.0-dev` does not sort predictably, so
+  always number the pre-release.
+- `--target dev` is what points the tag at the development branch. Without it the
+  tag lands on the default branch and the release contains `main`'s code.
+
+The user-facing side of this is documented under
+[Switching to a pre-release (dev) build](README.md#switching-to-a-pre-release-dev-build).
+
+> [!IMPORTANT]
+> HACS cannot install a git branch, only a published version. `hacs.json` sets
+> `zip_release: true` and `hide_default_branch: true`, so the version list contains
+> release tags only. That is why testing `dev` goes through a pre-release tag rather
+> than a branch selector.
+
+> [!WARNING]
+> The release archive must have the integration's files at its **root**, not nested
+> in a `migo_netatmo/` folder. HACS extracts a `zip_release` asset straight into
+> `config/custom_components/<domain>/`, so an extra level of nesting stops the
+> integration from loading. This is why the workflow zips from inside the component
+> directory. Do not "tidy" that step.
+
 ### Commit Message Convention
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
