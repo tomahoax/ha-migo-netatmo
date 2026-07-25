@@ -119,6 +119,83 @@ async def test_remove_stale_device(
     assert await async_remove_config_entry_device(hass, init_integration, stale_device)
 
 
+async def test_stale_device_removed_automatically(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """A device the API stops reporting is removed without user action."""
+    device_registry = dr.async_get(hass)
+    stale = device_registry.async_get_or_create(
+        config_entry_id=init_integration.entry_id,
+        identifiers={(DOMAIN, "gateway_gone")},
+        name="Old Gateway",
+    )
+    assert stale.id in {d.id for d in dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)}
+
+    coordinator = init_integration.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    remaining = {
+        identifier
+        for device in dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)
+        for domain, identifier in device.identifiers
+        if domain == DOMAIN
+    }
+    assert "gateway_gone" not in remaining
+    # The devices the API still reports are untouched
+    assert {"gateway_001", "module_789"} <= remaining
+
+
+async def test_failed_refresh_removes_nothing(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    patch_migo_api: MagicMock,
+) -> None:
+    """A failed refresh must not wipe every device.
+
+    _async_update_data clears the stores before repopulating them, so without the
+    last_update_success guard an outage would look like "the API reports nothing"
+    and take every device with it.
+    """
+    device_registry = dr.async_get(hass)
+    before = {d.id for d in dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)}
+    assert len(before) == 2
+
+    patch_migo_api.get_homes_data.side_effect = MigoApiError("API is down")
+    coordinator = init_integration.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert not coordinator.last_update_success
+    after = {d.id for d in dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)}
+    assert after == before
+
+
+async def test_empty_refresh_removes_nothing(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    patch_migo_api: MagicMock,
+) -> None:
+    """A syntactically valid but empty response must not wipe every device.
+
+    This one succeeds, so last_update_success stays True and only the
+    non-empty-known-ids guard stands between it and deleting everything.
+    """
+    device_registry = dr.async_get(hass)
+    before = {d.id for d in dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)}
+
+    patch_migo_api.get_homes_data.return_value = {"body": {"homes": []}}
+    coordinator = init_integration.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.last_update_success
+    assert not coordinator.devices
+    after = {d.id for d in dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)}
+    assert after == before
+
+
 async def test_no_device_removal_while_caches_are_empty(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,

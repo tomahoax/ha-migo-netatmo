@@ -7,15 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Automatic removal of stale devices** - A device the MiGO account stops reporting is now removed from Home Assistant on the next refresh, instead of waiting for you to delete it by hand
+- **Icons** for the gateway and thermostat firmware sensors and the schedule selector, which previously showed a generic icon
+
+### Changed
+- **Strict typing** - The integration reaches the Platinum `strict-typing` rule: mypy now runs with Home Assistant core's full strict profile, with no suppressions
+- **Daily boiler runtime** - The sensor now reports fractional seconds rather than truncating to whole seconds
+- **Thermostat RF signal and firmware sensors are now disabled by default**, matching the gateway's equivalents. Existing installations keep them enabled: the setting only applies when an entity is first created
+
 ### Fixed
 - **Shared HTTP session in the config flow** - Setting up, reauthenticating or reconfiguring the integration no longer opens a private HTTP session outside Home Assistant's pool
 - **Quieter logs during an outage** - A sustained MiGO outage now logs one error when the integration goes unavailable and one message when it recovers, instead of several errors every polling cycle
 - **Boiler runtime crash** - A measurement series without a start time no longer raises an unhandled error mid-refresh
 - **Authentication errors** - An authentication response with no token now surfaces as an authentication failure instead of an internal error
-
-### Changed
-- **Strict typing** - The integration reaches the Platinum `strict-typing` rule: mypy now runs with Home Assistant core's full strict profile, with no suppressions
-- **Daily boiler runtime** - The sensor now reports fractional seconds rather than truncating to whole seconds
 
 ### Removed
 - Unused internal helpers and one unreachable entity class, which inflated the test coverage figure without protecting anything reachable

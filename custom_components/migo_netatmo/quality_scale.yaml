@@ -150,14 +150,30 @@ rules:
   stale-devices:
     status: done
     comment: >
-      Manual removal only, via async_remove_config_entry_device in __init__.py,
-      which allows deleting a device whose identifier is in neither
-      coordinator.devices nor coordinator.homes. Clarified 2026-07-25: the rule
-      prefers automatic removal when the integration can detect disappearance,
-      and this one receives the full device list on every poll, so it could.
-      Automatic removal is a follow-up (a coordinator listener calling
-      async_update_device(remove_config_entry_id=...), guarded against wiping
-      every device on a failed or empty refresh).
+      Automatic, as the rule prefers. Completed 2026-07-25; it was manual-only
+      before. _register_stale_device_removal in __init__.py registers a
+      coordinator listener that compares the device registry entries for this
+      entry against coordinator.devices | coordinator.homes after every
+      successful refresh, and calls async_update_device(
+      remove_config_entry_id=...) for the rest. homesdata is a full snapshot of
+      the account, so a device missing from it is genuinely gone. It also runs
+      once eagerly at setup, since the first refresh happens before the listener
+      exists and a device that vanished while the entry was unloaded would
+      otherwise linger for a polling cycle.
+
+      Lives in __init__.py rather than the coordinator on purpose: a coordinator
+      should not mutate the device registry mid-fetch, and a listener only runs
+      after a refresh the coordinator already considered successful.
+
+      Two guards against deleting everything, both covered by tests:
+      last_update_success (an outage clears the stores before repopulating them,
+      so without this it looks like "the API reports nothing") and a non-empty
+      known-id set (a syntactically valid but empty homes list succeeds, so the
+      first guard does not catch it).
+
+      async_remove_config_entry_device is kept for the other case: a device the
+      API still reports but the user no longer wants. It refuses while the caches
+      cannot be trusted, for the same reason.
 
   # Platinum
   async-dependency: done  # aiohttp

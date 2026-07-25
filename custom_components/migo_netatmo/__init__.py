@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -71,9 +72,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    _register_stale_device_removal(hass, entry, coordinator)
+
     # Options changes reload the entry automatically via OptionsFlowWithReload
 
     return True
+
+
+def _register_stale_device_removal(
+    hass: HomeAssistant,
+    entry: MigoConfigEntry,
+    coordinator: MigoDataUpdateCoordinator,
+) -> None:
+    """Drop devices the API has stopped reporting, on every successful refresh.
+
+    Satisfies the "stale-devices" quality-scale rule the way it prefers: the
+    homesdata response is a full snapshot of the account, so a device that
+    disappears from it is genuinely gone and can be removed without asking the
+    user. async_remove_config_entry_device is kept as well, for the case of a
+    device the API still reports but the user no longer wants.
+
+    This lives here rather than in the coordinator on purpose: a coordinator
+    should not be mutating the device registry mid-fetch. A listener runs only
+    after a refresh the coordinator already considered successful.
+    """
+
+    @callback
+    def _remove_stale_devices() -> None:
+        # Three guards against deleting everything on a bad refresh.
+        # _async_update_data clears homes/rooms/devices before repopulating, and
+        # an auth failure part-way through aborts into ConfigEntryAuthFailed
+        # while leaving the entry loaded with empty stores.
+        if not coordinator.last_update_success:
+            return
+        known_ids = set(coordinator.devices) | set(coordinator.homes)
+        if not known_ids:
+            return
+
+        device_registry = dr.async_get(hass)
+        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+            if any(domain == DOMAIN and identifier in known_ids for domain, identifier in device.identifiers):
+                continue
+            _LOGGER.debug(
+                "Removing device %s (%s): no longer reported by the API",
+                device.name,
+                device.identifiers,
+            )
+            device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+
+    # Run once now: the first refresh happened before this listener existed, so
+    # devices that vanished while the entry was unloaded would otherwise linger
+    # until the next polling cycle.
+    _remove_stale_devices()
+    entry.async_on_unload(coordinator.async_add_listener(_remove_stale_devices))
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool:
