@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       # Validate before stamping. A tag that is not a version is a mistake, and
       # the old sed-based stamping turned some of them into a silently corrupt
@@ -75,12 +75,23 @@ jobs:
           cd custom_components/migo_netatmo
           zip -r ../../migo_netatmo.zip . -x '__pycache__/*' -x '*/__pycache__/*'
 
+      # HACS verifies neither a signature nor a checksum before extracting the
+      # asset, so publishing one is what lets a third party confirm the archive
+      # matches the tagged source.
+      - name: Checksum the archive
+        run: |
+          sha256sum migo_netatmo.zip | tee migo_netatmo.zip.sha256
+          echo "### Archive checksum" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat migo_netatmo.zip.sha256 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       # The tag goes through env, never interpolated into the shell. A ${{ }}
       # expression is substituted textually before bash parses the line, so the
       # surrounding quotes give no protection and a crafted tag name would run
       # as shell in a job holding a contents:write token.
-      - name: Upload release asset
+      - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" ./migo_netatmo.zip
+        run: gh release upload "$TAG" ./migo_netatmo.zip ./migo_netatmo.zip.sha256

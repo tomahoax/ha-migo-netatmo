@@ -8,7 +8,14 @@ from unittest.mock import AsyncMock, MagicMock
 import aiohttp
 import pytest
 
-from custom_components.migo_netatmo.api import MigoApi, MigoApiError, MigoAuthError, MigoConnectionError
+from custom_components.migo_netatmo.api import (
+    ERROR_BODY_MAX_LENGTH,
+    MigoApi,
+    MigoApiError,
+    MigoAuthError,
+    MigoConnectionError,
+    _summarise_error_body,
+)
 from custom_components.migo_netatmo.const import (
     API_CHANGEHEATINGALGO_URL,
     API_CHANGEHEATINGCURVE_URL,
@@ -585,3 +592,51 @@ class TestMigoApiSession:
         )
         assert api._own_session is False
         assert api._session is mock_session
+
+
+class TestMigoApiCredentialHygiene:
+    """Tests for clear_credentials()."""
+
+    def test_clear_credentials_forgets_password_and_tokens(self) -> None:
+        """After clearing, nothing usable is left on the object."""
+        api = MigoApi(username="test@example.com", password="secret", session=MagicMock())
+        api._access_token = "live_access"
+        api._refresh_token = "live_refresh"
+        api._token_expiry = datetime.now(UTC) + timedelta(hours=1)
+
+        api.clear_credentials()
+
+        assert api._password == ""
+        assert api._access_token is None
+        assert api._refresh_token is None
+        assert api._token_expiry is None
+
+    def test_clear_credentials_leaves_the_shared_session_open(self) -> None:
+        """It must not close a session Home Assistant owns."""
+        session = MagicMock()
+        session.closed = False
+        api = MigoApi(username="test@example.com", password="secret", session=session)
+
+        api.clear_credentials()
+
+        session.close.assert_not_called()
+
+
+class TestErrorBodySummary:
+    """Tests for _summarise_error_body()."""
+
+    def test_short_bodies_pass_through(self) -> None:
+        """A normal Netatmo error body is already short."""
+        body = '{"error":{"code":11,"message":"failed to connect to the database"}}'
+        assert _summarise_error_body(body) == body
+
+    def test_long_bodies_are_truncated(self) -> None:
+        """A hostile backend must not get an unbounded channel into the UI."""
+        result = _summarise_error_body("A" * 5000)
+
+        assert len(result) == ERROR_BODY_MAX_LENGTH + 3
+        assert result.endswith("...")
+
+    def test_newlines_are_collapsed(self) -> None:
+        """Multi-line bodies must not break the single-line error notification."""
+        assert _summarise_error_body("line one\n\nline  two") == "line one line two"

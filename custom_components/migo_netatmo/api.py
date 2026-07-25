@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Final, cast
 
 import aiohttp
 
@@ -47,6 +47,10 @@ from .models import (
 from .redact import mask_email, redact
 
 _LOGGER = logging.getLogger(__name__)
+
+# Server error bodies reach a user-facing notification, so they are truncated
+# there. The untruncated text still goes to the debug log.
+ERROR_BODY_MAX_LENGTH: Final = 200
 
 # Opt-in channel for unredacted payloads. A child logger inherits its parent's
 # level, so checking the EFFECTIVE level here would defeat the whole point: it
@@ -113,6 +117,26 @@ def _as_json_object(payload: object) -> dict[str, Any]:
     return payload
 
 
+def _summarise_error_body(body: str) -> str:
+    """Return a short, safe form of a server error body for a user-facing error.
+
+    The full body ends up in a Home Assistant error notification through the
+    api_error translation placeholder, which gives an untrusted backend an
+    arbitrary-text channel into the frontend, usable for phishing. The complete
+    text is still written to the debug log, where it is genuinely useful.
+
+    Args:
+        body: The raw response body.
+
+    Returns:
+        The body collapsed to one line and truncated.
+    """
+    collapsed = " ".join(body.split())
+    if len(collapsed) <= ERROR_BODY_MAX_LENGTH:
+        return collapsed
+    return collapsed[:ERROR_BODY_MAX_LENGTH] + "..."
+
+
 class MigoApi:
     """API client for MiGo (Netatmo) thermostat.
 
@@ -166,6 +190,19 @@ class MigoApi:
         """Close the session if we own it."""
         if self._own_session and self._session and not self._session.closed:
             await self._session.close()
+
+    def clear_credentials(self) -> None:
+        """Forget the password and both tokens.
+
+        Called on unload. Not exploitable, purely hygiene: a memory capture taken
+        after a user removes the integration should not still contain live
+        credentials. Deliberately not close(): the session belongs to Home
+        Assistant, so closing it would be wrong.
+        """
+        self._password = ""
+        self._access_token = None
+        self._refresh_token = None
+        self._token_expiry = None
 
     def _build_auth_headers(self) -> dict[str, str]:
         """Build headers for form-urlencoded auth requests.
@@ -416,7 +453,9 @@ class MigoApi:
                                 retry_response.status,
                                 error_text,
                             )
-                            raise MigoApiError(f"API returned {retry_response.status}: {error_text}")
+                            raise MigoApiError(
+                                f"API returned {retry_response.status}: {_summarise_error_body(error_text)}"
+                            )
                         result = _as_json_object(await retry_response.json())
                         _log_payload("API response data", result)
                         return result
@@ -430,7 +469,7 @@ class MigoApi:
                         response.status,
                         error_text,
                     )
-                    raise MigoApiError(f"API returned {response.status}: {error_text}")
+                    raise MigoApiError(f"API returned {response.status}: {_summarise_error_body(error_text)}")
 
                 result = _as_json_object(await response.json())
                 _log_payload("API response data", result)

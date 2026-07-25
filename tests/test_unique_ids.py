@@ -9,6 +9,8 @@ an accident. Update the expected lists only in that case.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -109,7 +111,10 @@ async def test_device_registry_contract(
     assert gateway is not None
     assert gateway.name == "My Home Gateway"
     assert gateway.model == "NAVaillant"
-    assert gateway.connections == {(dr.CONNECTION_NETWORK_MAC, "gateway_001")}
+    # No MAC connection: "gateway_001" is not MAC-shaped. Registering an
+    # arbitrary API string as a MAC would let it merge with an unrelated device
+    # in the user's home, since HA joins registry entries sharing a connection.
+    assert gateway.connections == set()
     assert gateway.via_device_id is None
 
     thermostat = device_registry.async_get_device(identifiers={(DOMAIN, "module_789")})
@@ -121,3 +126,29 @@ async def test_device_registry_contract(
 
     devices = dr.async_entries_for_config_entry(device_registry, init_integration.entry_id)
     assert len(devices) == 2
+
+
+async def test_mac_shaped_ids_do_get_a_mac_connection(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    patch_migo_api: MagicMock,
+    homes_data_response: dict,
+) -> None:
+    """A real gateway id IS a MAC, and must still register the connection.
+
+    Covers the other branch of _looks_like_mac: the guard must not be so strict
+    that it drops the connection for the ids the API actually returns.
+    """
+    real_mac = "70:ee:50:6b:e3:6a"
+    home = homes_data_response["body"]["homes"][0]
+    home["modules"][0]["id"] = real_mac
+    home["modules"][1]["bridge"] = real_mac
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    gateway = device_registry.async_get_device(identifiers={(DOMAIN, real_mac)})
+    assert gateway is not None
+    assert gateway.connections == {(dr.CONNECTION_NETWORK_MAC, real_mac)}

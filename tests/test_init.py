@@ -248,3 +248,21 @@ async def test_entities_unavailable_when_module_unreachable(
     assert hass.states.get("binary_sensor.my_home_thermostat_device_reachable").state == "off"
     # Gateway entities are unaffected
     assert hass.states.get("binary_sensor.my_home_gateway_ebus_error").state == "off"
+
+
+async def test_unload_clears_credentials(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Unloading must not leave a live password and tokens in memory.
+
+    The API object stays reachable through entry.runtime_data after unload.
+    Hygiene rather than a vulnerability: a memory capture taken after a user
+    removes the integration should not still contain working credentials.
+    """
+    api = init_integration.runtime_data.api
+
+    assert await hass.config_entries.async_unload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    api.clear_credentials.assert_called_once()

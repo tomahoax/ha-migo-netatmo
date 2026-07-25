@@ -129,7 +129,12 @@ def _register_stale_device_removal(
 
 async def async_unload_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        # The API object stays reachable through entry.runtime_data after unload,
+        # holding a live password and both tokens. Hygiene, not a vulnerability.
+        entry.runtime_data.api.clear_credentials()
+    return unloaded
 
 
 async def async_remove_config_entry_device(

@@ -31,6 +31,25 @@ def _home_name(coordinator: MigoDataUpdateCoordinator, home_id: str) -> str:
     return coordinator.homes.get(home_id, {}).get("name", "MiGO")
 
 
+def _looks_like_mac(device_id: str) -> bool:
+    """Return True if device_id has the shape of a MAC address.
+
+    Device ids come straight from the API and are not validated by it. Home
+    Assistant merges device registry entries that share a connection tuple, so
+    registering an arbitrary string as a CONNECTION_NETWORK_MAC lets a wrong or
+    hostile value attach these entities to an unrelated device in the user's home
+    and overwrite its displayed name, manufacturer and model.
+
+    Args:
+        device_id: The identifier reported by the API.
+
+    Returns:
+        True for the aa:bb:cc:dd:ee:ff shape only.
+    """
+    parts = device_id.split(":")
+    return len(parts) == 6 and all(len(p) == 2 and all(c in "0123456789abcdefABCDEF" for c in p) for p in parts)
+
+
 def build_gateway_device_info(
     coordinator: MigoDataUpdateCoordinator,
     gateway_id: str,
@@ -47,8 +66,11 @@ def build_gateway_device_info(
         name=f"{_home_name(coordinator, home_id)} Gateway",
         manufacturer=MANUFACTURER,
         model=DEVICE_TYPE_GATEWAY,
-        connections={(CONNECTION_NETWORK_MAC, gateway_id)},
     )
+    # Only when it really is a MAC. The thermostat builder below always checked;
+    # this one did not, and registered whatever the API returned.
+    if _looks_like_mac(gateway_id):
+        info["connections"] = {(CONNECTION_NETWORK_MAC, gateway_id)}
     if firmware := device_data.get("firmware_revision"):
         info["sw_version"] = str(firmware)
     if hw_version := device_data.get("hardware_version"):
@@ -77,7 +99,7 @@ def build_thermostat_device_info(
     )
 
     # Add MAC address connection if the device_id looks like a MAC address
-    if ":" in thermostat_id and len(thermostat_id) == 17:
+    if _looks_like_mac(thermostat_id):
         info["connections"] = {(CONNECTION_NETWORK_MAC, thermostat_id)}
 
     # Link to the parent gateway device. `via_device` is the current,

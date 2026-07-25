@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Personal data no longer written to debug logs.** With debug logging on, the integration wrote your MiGO account email, your home's exact GPS coordinates, its city, and your home invitation code into the Home Assistant log on every polling cycle. Credentials and tokens were never affected. Debug logs still show the full structure of API responses, with those values replaced, so they remain useful for diagnosis and are now safe to attach to an issue. **If you have run this integration with debug logging enabled, your existing log files still contain that data**: delete or truncate them, and do not attach an old log to a bug report. Raw unredacted payloads remain available behind a separate opt-in logger, documented in [Troubleshooting](docs/troubleshooting.md)
+- **Diagnostics downloads were incompletely redacted.** Credentials and location were replaced, but the home invitation code, hardware serial numbers, the boiler ID and the names of your homes, rooms and schedules were not. A diagnostics file showing REDACTED markers was therefore not as safe to publish as it looked
+- **The Reconfigure dialog no longer pre-fills your stored password** or client secret. Sending them back to the browser as suggested form values put them where any script running in the Home Assistant page could read them
+- **Backend error messages shown in the UI are now truncated**, closing an arbitrary-text channel from the API into Home Assistant notifications
+- **Release archives now ship a `.sha256` checksum** so the download can be verified independently
+
 ### Added
 - **Automatic removal of stale devices** - A device the MiGO account stops reporting is now removed from Home Assistant on the next refresh, instead of waiting for you to delete it by hand
 - **Icons** for the gateway and thermostat firmware sensors and the schedule selector, which previously showed a generic icon
@@ -17,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thermostat RF signal and firmware sensors are now disabled by default**, matching the gateway's equivalents. Existing installations keep them enabled: the setting only applies when an entity is first created
 
 ### Fixed
+- **Request timeout was not applied.** Requests could hang for up to 5 minutes instead of the intended 30 seconds, leaving entities unavailable for far longer than necessary when the MiGO service was slow
+- **Malformed measurement data no longer breaks the whole refresh.** Two cases in the boiler-runtime parser raised an unhandled error that failed the entire update cycle instead of skipping one reading
+- **Gateway MAC addresses are validated** before being registered, so an unexpected device ID can no longer attach MiGO entities to an unrelated device in your Home Assistant
 - **Shared HTTP session in the config flow** - Setting up, reauthenticating or reconfiguring the integration no longer opens a private HTTP session outside Home Assistant's pool
 - **Quieter logs during an outage** - A sustained MiGO outage now logs one error when the integration goes unavailable and one message when it recovers, instead of several errors every polling cycle
 - **Boiler runtime crash** - A measurement series without a start time no longer raises an unhandled error mid-refresh
