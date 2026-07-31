@@ -337,12 +337,34 @@ All four are `device_class: energy` in kWh, which is what the dashboard accepts.
    split the MiGO app shows rather than one merged figure
 3. Under **Individual devices**, add the two electricity sensors
 
+> [!CAUTION]
+> **The two gas sensors also appear in the electricity picker. Do not add them
+> there.** Doing so would count your gas as electricity.
+>
+> This is unavoidable rather than a mistake in this integration. Home Assistant
+> accepts `device_class: energy` for both its electricity and its gas sources
+> (`GAS_USAGE_DEVICE_CLASSES` includes `ENERGY`), and a gas source measured in kWh
+> has no other device class available: `device_class: gas` requires a **volume**
+> unit such as m³. Your boiler reports energy, not volume, and converting would
+> mean guessing a calorific value, which is exactly the estimate these sensors
+> exist to avoid. So Home Assistant cannot tell that this particular energy is
+> gas. Only you can.
+>
+> If you already added one under electricity, remove it there: past statistics
+> stay attributed to electricity until you do.
+
 > [!NOTE]
-> They will not appear in the picker immediately. That picker is populated from
+> They will not appear in either picker immediately. It is populated from
 > long-term statistics rather than from live entities, which is why entities marked
 > *"Entity without state"* can show up in it while a brand-new sensor does not.
 > Statistics are compiled hourly, so give it an hour before concluding something is
 > wrong.
+
+> [!TIP]
+> Entity IDs are generated from the **translated** sensor name, so they follow your
+> Home Assistant language. On a French instance the gas heating sensor is
+> `sensor.migo_gateway_gaz_pour_le_chauffage`, not the English form used in examples
+> here. Check yours in **Developer tools** → **States**.
 
 ### What about the boiler runtime sensor?
 

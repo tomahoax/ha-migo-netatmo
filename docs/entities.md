@@ -106,6 +106,12 @@ The four energy sensors are `device_class: energy`, `state_class: total_increasi
 in kWh, so they can be added to the Energy dashboard directly. Values are read in Wh
 and divided by 1000; the API reports whole kWh, so nothing is lost.
 
+Note that the **gas** sensors also appear in the dashboard's *electricity* picker,
+and must not be added there. Home Assistant accepts `device_class: energy` for both
+source types, and a gas figure measured in kWh has no alternative device class:
+`device_class: gas` requires a volume unit. See
+[Energy Dashboard Integration](../README.md#energy-dashboard-integration).
+
 The daily boiler runtime sensor:
 - `device_class`: duration
 - `state_class`: total_increasing, so it gets long-term statistics
