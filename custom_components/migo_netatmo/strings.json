@@ -146,32 +146,44 @@
       }
     },
     "sensor": {
-      "room_temperature": {
-        "name": "{room_name} temperature"
-      },
-      "room_humidity": {
-        "name": "{room_name} humidity"
-      },
       "battery": {
         "name": "Battery"
       },
-      "wifi_strength": {
-        "name": "WiFi signal"
+      "daily_boiler_runtime": {
+        "name": "Daily boiler runtime"
       },
-      "rf_strength": {
-        "name": "RF signal"
+      "energy_elec_heating": {
+        "name": "Electricity for heating"
+      },
+      "energy_elec_hot_water": {
+        "name": "Electricity for hot water"
+      },
+      "energy_gas_heating": {
+        "name": "Gas for heating"
+      },
+      "energy_gas_hot_water": {
+        "name": "Gas for hot water"
       },
       "gateway_firmware": {
         "name": "Gateway firmware"
       },
-      "thermostat_firmware": {
-        "name": "Thermostat firmware"
-      },
       "outdoor_temperature": {
         "name": "Outdoor temperature"
       },
-      "daily_boiler_runtime": {
-        "name": "Daily boiler runtime"
+      "rf_strength": {
+        "name": "RF signal"
+      },
+      "room_humidity": {
+        "name": "{room_name} humidity"
+      },
+      "room_temperature": {
+        "name": "{room_name} temperature"
+      },
+      "thermostat_firmware": {
+        "name": "Thermostat firmware"
+      },
+      "wifi_strength": {
+        "name": "WiFi signal"
       }
     },
     "switch": {

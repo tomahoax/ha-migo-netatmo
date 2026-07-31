@@ -146,32 +146,44 @@
       }
     },
     "sensor": {
-      "room_temperature": {
-        "name": "Температура {room_name}"
-      },
-      "room_humidity": {
-        "name": "Влажность {room_name}"
-      },
       "battery": {
         "name": "Батарея"
       },
-      "wifi_strength": {
-        "name": "Сигнал WiFi"
+      "daily_boiler_runtime": {
+        "name": "Ежедневное время работы котла"
       },
-      "rf_strength": {
-        "name": "Сигнал RF"
+      "energy_elec_heating": {
+        "name": "Электричество на отопление"
+      },
+      "energy_elec_hot_water": {
+        "name": "Электричество на горячую воду"
+      },
+      "energy_gas_heating": {
+        "name": "Газ на отопление"
+      },
+      "energy_gas_hot_water": {
+        "name": "Газ на горячую воду"
       },
       "gateway_firmware": {
         "name": "Прошивка шлюза"
       },
-      "thermostat_firmware": {
-        "name": "Прошивка термостата"
-      },
       "outdoor_temperature": {
         "name": "Температура на улице"
       },
-      "daily_boiler_runtime": {
-        "name": "Ежедневное время работы котла"
+      "rf_strength": {
+        "name": "Сигнал RF"
+      },
+      "room_humidity": {
+        "name": "Влажность {room_name}"
+      },
+      "room_temperature": {
+        "name": "Температура {room_name}"
+      },
+      "thermostat_firmware": {
+        "name": "Прошивка термостата"
+      },
+      "wifi_strength": {
+        "name": "Сигнал WiFi"
       }
     },
     "switch": {

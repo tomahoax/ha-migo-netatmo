@@ -96,18 +96,26 @@ from **Settings** → **Devices & services** → **Entities**, filtering on
 
 | Entity ID Pattern | Name | Unit | Description |
 |-------------------|------|------|-------------|
+| `sensor.migo_{gateway}_gas_for_heating` | Gas for heating | kWh | Measured gas burned for space heating, per day |
+| `sensor.migo_{gateway}_gas_for_hot_water` | Gas for hot water | kWh | Measured gas burned for domestic hot water, per day |
+| `sensor.migo_{gateway}_electricity_for_heating` | Electricity for heating | kWh | The boiler's own electricity use for heating |
+| `sensor.migo_{gateway}_electricity_for_hot_water` | Electricity for hot water | kWh | The boiler's own electricity use for hot water |
 | `sensor.migo_{gateway}_daily_boiler_runtime` | Daily Boiler Runtime | s | Daily boiler operation time |
+
+The four energy sensors are `device_class: energy`, `state_class: total_increasing`,
+in kWh, so they can be added to the Energy dashboard directly. Values are read in Wh
+and divided by 1000; the API reports whole kWh, so nothing is lost.
 
 The daily boiler runtime sensor:
 - `device_class`: duration
 - `state_class`: total_increasing, so it gets long-term statistics
 - Resets daily
 
-It **cannot** be added to the Energy dashboard directly. That dashboard requires a
-gas source with `device_class: gas` (m³, ft³, L, CCF, MCF) or `device_class: energy`
-(kWh, MJ, ...), and this sensor measures time. See the
-[Energy Dashboard Integration](../README.md#energy-dashboard-integration) section
-for the template sensor that converts runtime into an eligible energy figure.
+It **cannot** be added to the Energy dashboard directly, because that dashboard
+requires `device_class: gas` (m³, ft³, L, CCF, MCF) or `device_class: energy`
+(kWh, MJ, ...) and this one measures time. Use the four energy sensors above
+instead; see
+[Energy Dashboard Integration](../README.md#energy-dashboard-integration).
 
 **Data Source:**
 - Retrieved via `/api/getmeasure` endpoint using gateway `device_id` and thermostat `module_id`

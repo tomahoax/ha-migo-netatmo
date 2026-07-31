@@ -162,14 +162,17 @@ def configs_response() -> dict[str, Any]:
 def consumption_response() -> dict[str, Any]:
     """Return mock consumption data response from /api/getmeasure.
 
-    The response format is a dict with timestamps as keys and
-    [sum_boiler_on, sum_boiler_off] arrays as values.
+    A dict keyed by timestamp, each value one row in const.MEASURE_TYPES order:
+    [boiler_on, boiler_off, gas_heating, gas_hot_water, elec_heating,
+     elec_hot_water]. Boiler times are seconds; energy is Wh at whole-kWh
+    resolution, which is what the real API returns.
     """
     return {
         "body": {
-            "1704067200": [3600, 82800],  # 1 hour on, 23 hours off
-            "1704153600": [7200, 79200],  # 2 hours on, 22 hours off
-            "1704240000": [5400, 81000],  # 1.5 hours on, 22.5 hours off
+            # 1 h on / 23 h off, 12 kWh gas heating, 3 kWh gas DHW, 0.1/0.05 elec
+            "1704067200": [3600, 82800, 12000, 3000, 100, 50],
+            "1704153600": [7200, 79200, 24000, 4000, 200, 100],
+            "1704240000": [5400, 81000, 18000, 2000, 150, 75],
         },
         "status": "ok",
         "time_exec": 0.05,

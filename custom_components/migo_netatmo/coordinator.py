@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 from datetime import timedelta
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -21,6 +22,7 @@ from .const import (
     KEY_HOMES,
     KEY_MODULES,
     KEY_ROOMS,
+    MEASURE_TYPES,
 )
 from .models import (
     ConsumptionData,
@@ -40,6 +42,38 @@ if TYPE_CHECKING:
     from . import MigoConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _consumption_record(values: Sequence[Any], timestamp: int) -> ConsumptionData:
+    """Map one getmeasure value row onto a ConsumptionData record.
+
+    getmeasure returns one value per requested measure type, positionally, so
+    const.MEASURE_TYPES is the schema and the indices below must stay in step with
+    it. tests/test_consumption_measures.py pins that.
+
+    Written with literal keys rather than zip(MEASURE_TYPES, values) so the
+    TypedDict stays statically checkable, and length-guarded in pairs rather than
+    unpacked so a boiler that reports only the two boiler-time measures yields a
+    shorter record instead of an IndexError.
+
+    Args:
+        values: One row from the response, in MEASURE_TYPES order.
+        timestamp: Unix timestamp this row covers.
+
+    Returns:
+        The record, carrying only the fields the row actually provided.
+    """
+    record: ConsumptionData = {"timestamp": timestamp}
+    if len(values) > 1:
+        record["sum_boiler_on"] = values[0]
+        record["sum_boiler_off"] = values[1]
+    if len(values) > 3:
+        record["sum_energy_gaz_heating"] = values[2]
+        record["sum_energy_gaz_hot_water"] = values[3]
+    if len(values) > 5:
+        record["sum_energy_elec_heating"] = values[4]
+        record["sum_energy_elec_hot_water"] = values[5]
+    return record
 
 
 class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
@@ -388,7 +422,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     device_id=device_id,
                     module_id=module_id,
                     scale="1day",
-                    measure_types=["sum_boiler_on", "sum_boiler_off"],
+                    measure_types=list(MEASURE_TYPES),
                     date_begin=date_begin,
                 )
 
@@ -414,25 +448,11 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                                 )
                                 continue
                             values = body[ts]
-                            if isinstance(values, list) and len(values) >= 2:
-                                # Indexed, not unpacked: the guard allows 2 OR
-                                # MORE, so `a, b = values` raised ValueError on a
-                                # three-element list. Same escape as above.
-                                boiler_on, boiler_off = values[0], values[1]
-                                if boiler_on is not None:
-                                    # Store by device_id for lookup
-                                    self.consumption[device_id] = {
-                                        "timestamp": int(ts),
-                                        "sum_boiler_on": boiler_on,
-                                        "sum_boiler_off": boiler_off,
-                                    }
-                                    _LOGGER.debug(
-                                        "Consumption for device %s: boiler_on=%s, boiler_off=%s",
-                                        device_id,
-                                        boiler_on,
-                                        boiler_off,
-                                    )
-                                    break
+                            if isinstance(values, list) and len(values) >= 2 and values[0] is not None:
+                                record = _consumption_record(values, int(ts))
+                                self.consumption[device_id] = record
+                                _LOGGER.debug("Consumption for device %s: %s", device_id, record)
+                                break
 
                 # Handle list format (fallback)
                 elif isinstance(body, list) and body:
@@ -460,22 +480,12 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
                             # "value". Without it, len(None) raises TypeError,
                             # which escapes the handlers below and fails the
                             # whole refresh instead of one reading.
-                            if isinstance(entry, list) and len(entry) >= 2:
-                                boiler_on, boiler_off = entry[0], entry[1]
-                                if boiler_on is not None:
-                                    timestamp = beg_time + (len(series) - 1 - i) * step_time
-                                    self.consumption[device_id] = {
-                                        "timestamp": timestamp,
-                                        "sum_boiler_on": boiler_on,
-                                        "sum_boiler_off": boiler_off,
-                                    }
-                                    _LOGGER.debug(
-                                        "Consumption for device %s: boiler_on=%s, boiler_off=%s",
-                                        device_id,
-                                        boiler_on,
-                                        boiler_off,
-                                    )
-                                    break
+                            if isinstance(entry, list) and len(entry) >= 2 and entry[0] is not None:
+                                timestamp = beg_time + (len(series) - 1 - i) * step_time
+                                record = _consumption_record(entry, timestamp)
+                                self.consumption[device_id] = record
+                                _LOGGER.debug("Consumption for device %s: %s", device_id, record)
+                                break
 
             except MigoAuthError:
                 # Must reach _async_update_data to trigger reauth

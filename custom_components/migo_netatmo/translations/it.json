@@ -146,32 +146,44 @@
       }
     },
     "sensor": {
-      "room_temperature": {
-        "name": "Temperatura {room_name}"
-      },
-      "room_humidity": {
-        "name": "Umidità {room_name}"
-      },
       "battery": {
         "name": "Batteria"
       },
-      "wifi_strength": {
-        "name": "Segnale WiFi"
+      "daily_boiler_runtime": {
+        "name": "Tempo di funzionamento giornaliero della caldaia"
       },
-      "rf_strength": {
-        "name": "Segnale RF"
+      "energy_elec_heating": {
+        "name": "Elettricità per il riscaldamento"
+      },
+      "energy_elec_hot_water": {
+        "name": "Elettricità per l'acqua calda"
+      },
+      "energy_gas_heating": {
+        "name": "Gas per il riscaldamento"
+      },
+      "energy_gas_hot_water": {
+        "name": "Gas per l'acqua calda"
       },
       "gateway_firmware": {
         "name": "Firmware gateway"
       },
-      "thermostat_firmware": {
-        "name": "Firmware termostato"
-      },
       "outdoor_temperature": {
         "name": "Temperatura esterna"
       },
-      "daily_boiler_runtime": {
-        "name": "Tempo di funzionamento giornaliero della caldaia"
+      "rf_strength": {
+        "name": "Segnale RF"
+      },
+      "room_humidity": {
+        "name": "Umidità {room_name}"
+      },
+      "room_temperature": {
+        "name": "Temperatura {room_name}"
+      },
+      "thermostat_firmware": {
+        "name": "Firmware termostato"
+      },
+      "wifi_strength": {
+        "name": "Segnale WiFi"
       }
     },
     "switch": {

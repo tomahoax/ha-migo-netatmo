@@ -707,10 +707,30 @@ device_id=<gateway_mac>&module_id=<thermostat_mac>&scale=1day&type=sum_boiler_on
 | `date_end` | No | int | End timestamp (Unix) |
 
 **Available Measure Types:**
-| Type | Description |
-|------|-------------|
-| `sum_boiler_on` | Cumulative boiler on time (seconds) |
-| `sum_boiler_off` | Cumulative boiler off time (seconds) |
+| Type | Unit | Description |
+|------|------|-------------|
+| `sum_boiler_on` | seconds | Boiler on time |
+| `sum_boiler_off` | seconds | Boiler off time |
+| `sum_energy_gaz_heating` | Wh | Gas burned for space heating |
+| `sum_energy_gaz_hot_water` | Wh | Gas burned for domestic hot water |
+| `sum_energy_elec_heating` | Wh | Boiler electricity use for heating |
+| `sum_energy_elec_hot_water` | Wh | Boiler electricity use for hot water |
+
+> **All six can be requested in a single call.** The response carries one value per
+> requested type, positionally, in the order requested. Verified against a live
+> NAVaillant gateway, so the energy measures cost no extra requests.
+
+> **Note the French spelling `gaz`.** `sum_energy_gas_heating` is silently accepted
+> and returns an **empty series rather than an error**, which is indistinguishable
+> from "this hardware does not support it".
+
+> **Energy is reported in Wh, at whole-kWh resolution** (values are always multiples
+> of 1000). Calibrated against the MiGO app's own weekly consumption figures: the
+> app's electricity values matched the API exactly.
+
+`scripts/probe_energy.py` exists to test candidate measure types against a real
+account, which is the only reliable way to learn what this undocumented endpoint
+supports.
 
 **Response:**
 ```json
@@ -726,16 +746,26 @@ device_id=<gateway_mac>&module_id=<thermostat_mac>&scale=1day&type=sum_boiler_on
 ```
 
 **Response Format:**
-- `body` is a dictionary with timestamps as keys
-- Each value is an array: `[sum_boiler_on, sum_boiler_off]`
-- `sum_boiler_on` and `sum_boiler_off` are in seconds
-- The scale determines the granularity (e.g., `1day` returns daily totals)
+
+The body comes back in one of two shapes, and both are seen in practice:
+
+- A dictionary keyed by Unix timestamp, each value an array of one element per
+  requested measure type, in the requested order.
+- A list of series objects, each with `beg_time`, `step_time` and `value`, where
+  `value` is a list of those same arrays. Timestamps are derived as
+  `beg_time + index * step_time`.
+
+The scale determines the granularity (e.g. `1day` returns daily totals). The
+integration requests `1day`.
 
 **Notes:**
-- Used by this integration for the **Daily boiler runtime** sensor
-- Compatible with Home Assistant Energy Dashboard via `state_class: total_increasing`
-- To estimate energy consumption: `energy_kWh = sum_boiler_on / 3600 * boiler_power_kW`
-- The `device_id` and `module_id` are MAC addresses found in the `/api/homesdata` response
+- Used by this integration for the **Daily boiler runtime** sensor and the four
+  energy sensors
+- The energy measures are what the Energy dashboard accepts (`device_class: energy`
+  in kWh). The runtime measure is not, and no arithmetic on it can be: the dashboard
+  filters on device class and unit, not on state class
+- The `device_id` and `module_id` are MAC addresses found in the `/api/homesdata`
+  response
 
 ---
 

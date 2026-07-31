@@ -96,6 +96,37 @@ SCHEDULE_TYPE_EVENT: Final = "event"  # DHW schedule
 # API Response Keys
 # =============================================================================
 
+# Measure types requested from /api/getmeasure, in this exact order: the endpoint
+# returns one value per requested type, positionally, so the order IS the schema.
+#
+# All six come back in a single request, so the energy measures cost nothing
+# extra. Verified against a live NAVaillant gateway.
+#
+# Note "gaz", the French spelling. "gas" is silently accepted and returns an
+# empty series, which is indistinguishable from "your boiler does not support
+# this", so this is an easy hour to lose.
+#
+# Energy values are in Wh at whole-kWh resolution (always multiples of 1000).
+# Calibrated against the MiGO app's own weekly figures.
+MEASURE_BOILER_ON: Final = "sum_boiler_on"
+MEASURE_BOILER_OFF: Final = "sum_boiler_off"
+MEASURE_GAS_HEATING: Final = "sum_energy_gaz_heating"
+MEASURE_GAS_HOT_WATER: Final = "sum_energy_gaz_hot_water"
+MEASURE_ELEC_HEATING: Final = "sum_energy_elec_heating"
+MEASURE_ELEC_HOT_WATER: Final = "sum_energy_elec_hot_water"
+
+MEASURE_TYPES: Final = (
+    MEASURE_BOILER_ON,
+    MEASURE_BOILER_OFF,
+    MEASURE_GAS_HEATING,
+    MEASURE_GAS_HOT_WATER,
+    MEASURE_ELEC_HEATING,
+    MEASURE_ELEC_HOT_WATER,
+)
+
+# Wh -> kWh. The API reports whole kWh already, so nothing is lost.
+WH_PER_KWH: Final = 1000
+
 KEY_BODY: Final = "body"
 KEY_HOME: Final = "home"
 KEY_HOMES: Final = "homes"

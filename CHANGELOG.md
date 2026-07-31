@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release archives now ship a `.sha256` checksum** so the download can be verified independently
 
 ### Added
+- **Measured gas and electricity consumption** - Four new sensors report what the boiler actually consumed, in kWh, split between heating and hot water: *Gas for heating*, *Gas for hot water*, *Electricity for heating*, *Electricity for hot water*. They go straight into the Energy dashboard, with no template sensor and no estimating from runtime. The data was always available from the same API call the integration already made; it simply was not being requested, so this costs no extra requests
 - **Automatic removal of stale devices** - A device the MiGO account stops reporting is now removed from Home Assistant on the next refresh, instead of waiting for you to delete it by hand
 - **Icons** for the gateway and thermostat firmware sensors and the schedule selector, which previously showed a generic icon
 
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thermostat RF signal and firmware sensors are now disabled by default**, matching the gateway's equivalents. Existing installations keep them enabled: the setting only applies when an entity is first created
 
 ### Fixed
+- **Energy dashboard documentation was wrong.** It instructed you to add the boiler runtime sensor under *Gas consumption*, which the dashboard cannot accept: it requires a gas or energy device class, and runtime measures time. The template-sensor workaround it offered lower down also referenced an entity ID that does not match this integration's naming, so it would have silently evaluated to zero
 - **Request timeout was not applied.** Requests could hang for up to 5 minutes instead of the intended 30 seconds, leaving entities unavailable for far longer than necessary when the MiGO service was slow
 - **Malformed measurement data no longer breaks the whole refresh.** Two cases in the boiler-runtime parser raised an unhandled error that failed the entire update cycle instead of skipping one reading
 - **Gateway MAC addresses are validated** before being registered, so an unexpected device ID can no longer attach MiGO entities to an unrelated device in your Home Assistant

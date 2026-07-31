@@ -394,15 +394,29 @@ class GetMeasureResponse(TypedDict):
 
 
 class ConsumptionData(TypedDict):
-    """Boiler runtime record, assembled by the coordinator from getmeasure.
+    """Runtime and energy record, assembled by the coordinator from getmeasure.
 
-    sum_boiler_on and sum_boiler_off are floats, not ints: they are unpacked
-    straight out of a JSON array whose element type the API does not pin down.
+    Field names deliberately match the API's own measure type names, including
+    the French "gaz" spelling, so a value in a log or a diagnostics file can be
+    traced straight back to the wire without a translation table.
+
+    Every value is a float rather than an int: they are unpacked straight out of
+    a JSON array whose element type the API does not pin down.
+
+    The energy fields are NotRequired for a real reason, not just for style: a
+    boiler that reports only the two boiler-time measures yields a shorter value
+    row, and the record is built from whatever length arrives.
+
+    Energy is in Wh. See const.WH_PER_KWH.
     """
 
     timestamp: NotRequired[int]
     sum_boiler_on: NotRequired[float]
     sum_boiler_off: NotRequired[float | None]
+    sum_energy_gaz_heating: NotRequired[float | None]
+    sum_energy_gaz_hot_water: NotRequired[float | None]
+    sum_energy_elec_heating: NotRequired[float | None]
+    sum_energy_elec_hot_water: NotRequired[float | None]
 
 
 class CoordinatorData(TypedDict):

@@ -12,14 +12,14 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfEnergy, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
+from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, WH_PER_KWH
 from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, safe_float
-from .models import ModuleData
+from .models import ConsumptionData, ModuleData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -193,6 +193,10 @@ async def async_setup_entry(
                 for description in GATEWAY_SENSORS
             ),
             MigoBoilerRuntimeSensor(coordinator=coordinator, device_id=device_id),
+            *(
+                MigoEnergySensor(coordinator=coordinator, device_id=device_id, description=description)
+                for description in ENERGY_SENSORS
+            ),
         ],
     )
 
@@ -301,6 +305,109 @@ class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
         """Initialize the thermostat sensor."""
         super().__init__(coordinator, device_id)
         self._init_sensor(device_id, description)
+
+
+@dataclass(frozen=True, kw_only=True)
+class MigoEnergyEntityDescription(SensorEntityDescription):
+    """Describes a MiGO energy sensor read from the consumption record.
+
+    value_fn rather than a key string on purpose: a literal key keeps the
+    TypedDict access statically checked, where a dynamic key would degrade to
+    object and need a cast at every read.
+    """
+
+    value_fn: Callable[[ConsumptionData], float | None]
+    unique_id_key: str
+
+
+# Energy actually measured by the boiler, not estimated. These are what the
+# Energy dashboard accepts directly: device_class energy in kWh.
+#
+# The API reports Wh at whole-kWh resolution, split heating vs domestic hot water
+# for both gas and electricity, which is exactly the breakdown the MiGO app shows.
+ENERGY_SENSORS: tuple[MigoEnergyEntityDescription, ...] = (
+    MigoEnergyEntityDescription(
+        key="energy_gas_heating",
+        unique_id_key="energy_gas_heating",
+        translation_key="energy_gas_heating",
+        value_fn=lambda c: c.get("sum_energy_gaz_heating"),
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=0,
+    ),
+    MigoEnergyEntityDescription(
+        key="energy_gas_hot_water",
+        unique_id_key="energy_gas_hot_water",
+        translation_key="energy_gas_hot_water",
+        value_fn=lambda c: c.get("sum_energy_gaz_hot_water"),
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=0,
+    ),
+    MigoEnergyEntityDescription(
+        key="energy_elec_heating",
+        unique_id_key="energy_elec_heating",
+        translation_key="energy_elec_heating",
+        value_fn=lambda c: c.get("sum_energy_elec_heating"),
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=0,
+    ),
+    MigoEnergyEntityDescription(
+        key="energy_elec_hot_water",
+        unique_id_key="energy_elec_hot_water",
+        translation_key="energy_elec_hot_water",
+        value_fn=lambda c: c.get("sum_energy_elec_hot_water"),
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=0,
+    ),
+)
+
+
+class MigoEnergySensor(MigoGatewayEntity, SensorEntity):
+    """Daily energy measured by the boiler, in kWh.
+
+    Unlike the runtime sensor beside it, this is directly usable as an Energy
+    dashboard source: device_class energy in kWh is accepted both under Gas
+    consumption and under Individual devices.
+
+    total_increasing is correct despite the daily reset: Home Assistant handles a
+    counter that returns to zero, and the API reports a per-day total.
+    """
+
+    entity_description: MigoEnergyEntityDescription
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        description: MigoEnergyEntityDescription,
+    ) -> None:
+        """Initialize the energy sensor."""
+        super().__init__(coordinator, device_id)
+        self.entity_description = description
+        self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
+
+    @property
+    @override
+    def native_value(self) -> float | None:
+        """Return today's energy in kWh, or None when the API reported nothing.
+
+        The API reports Wh. Dividing loses no precision, since the values are
+        always whole kWh.
+        """
+        consumption = self.coordinator.get_consumption(self._device_id)
+        if consumption is None:
+            return None
+        watt_hours = self.entity_description.value_fn(consumption)
+        if watt_hours is None:
+            return None
+        return watt_hours / WH_PER_KWH
 
 
 class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
