@@ -98,10 +98,16 @@ from **Settings** → **Devices & services** → **Entities**, filtering on
 |-------------------|------|------|-------------|
 | `sensor.migo_{gateway}_daily_boiler_runtime` | Daily Boiler Runtime | s | Daily boiler operation time |
 
-The daily boiler runtime sensor is compatible with the Home Assistant Energy Dashboard:
+The daily boiler runtime sensor:
 - `device_class`: duration
-- `state_class`: total_increasing
+- `state_class`: total_increasing, so it gets long-term statistics
 - Resets daily
+
+It **cannot** be added to the Energy dashboard directly. That dashboard requires a
+gas source with `device_class: gas` (m³, ft³, L, CCF, MCF) or `device_class: energy`
+(kWh, MJ, ...), and this sensor measures time. See the
+[Energy Dashboard Integration](../README.md#energy-dashboard-integration) section
+for the template sensor that converts runtime into an eligible energy figure.
 
 **Data Source:**
 - Retrieved via `/api/getmeasure` endpoint using gateway `device_id` and thermostat `module_id`

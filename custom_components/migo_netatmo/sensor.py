@@ -304,10 +304,16 @@ class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
 
 
 class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
-    """MiGO daily boiler runtime sensor for Energy Dashboard.
+    """MiGO daily boiler runtime sensor.
 
-    This sensor tracks the daily boiler runtime in seconds,
-    which can be used to estimate energy consumption.
+    Reports the daily boiler runtime in seconds. Deliberately NOT eligible for the
+    Energy dashboard, and it cannot be made so: that dashboard needs a gas source
+    with device_class gas (volume) or energy (kWh), and the API reports how long
+    the boiler ran, not how much gas it burned. Users convert runtime to energy
+    with a template sensor; see the README.
+
+    total_increasing is still correct here: it gives long-term statistics and
+    handles the daily reset.
     The boiler is connected to the gateway, so this sensor belongs to the Gateway device.
     Data is retrieved using the getmeasure API with device_id and module_id.
     """

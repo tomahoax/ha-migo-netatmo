@@ -20,7 +20,7 @@ This integration was created to fill that gap by reverse-engineering the Netatmo
 
 ## Use Cases
 
-- **Energy tracking**: feed the *Daily boiler runtime* sensor into the Home Assistant Energy Dashboard to see how much your boiler actually runs, day over day (see [Energy Dashboard Integration](#energy-dashboard-integration)).
+- **Energy tracking**: the *Daily boiler runtime* sensor tells you how long your boiler actually runs, day over day (see [Energy Dashboard Integration](#energy-dashboard-integration)).
 - **Remote control**: change the target temperature, switch modes (Auto/Heat/Off), or trigger a DHW boost from the Home Assistant app while away from home, instead of opening the MiGo app.
 - **Fixing a miscalibrated room sensor**: use the per-room *Temperature offset* number entity to correct a thermostat that reads a few degrees off, without touching the physical device.
 - **Fault alerting**: automate on the *Boiler error* or *eBus error* binary sensors to get a notification the moment something goes wrong, instead of noticing a cold house hours later (see [Automation Examples](#automation-examples)).
@@ -101,7 +101,7 @@ This integration creates **two separate devices** in Home Assistant:
 > integration updates.
 
 #### Energy Consumption
-- **Daily boiler runtime** - Tracks boiler operation time in seconds (compatible with Energy Dashboard via `state_class: total_increasing`)
+- **Daily boiler runtime** - Tracks boiler operation time in seconds. `state_class: total_increasing`, so it gets long-term statistics. It is *not* directly usable as an Energy dashboard gas source: see [Energy Dashboard Integration](#energy-dashboard-integration)
 
 ### Switches
 
@@ -168,7 +168,7 @@ This integration is **cloud polling**: it periodically calls the Netatmo API use
 
 1. Fetches real-time status (`/api/homestatus`) - room temperatures, setpoints, connectivity, boiler status.
 2. Fetches module configuration (`/syncapi/v1/getconfigs`) - DHW setpoint temperature and similar settings not present in the status response.
-3. Fetches consumption history (`/api/getmeasure`) - boiler runtime for the Energy Dashboard sensor.
+3. Fetches consumption history (`/api/getmeasure`) - boiler runtime for the *Daily boiler runtime* sensor.
 
 The default interval is **5 minutes (300 seconds)**, configurable between 60 and 3600 seconds (see [Configuration Options](#configuration-options)). A shorter interval gives more responsive updates at the cost of more API calls; a longer interval reduces load on the (unofficial, reverse-engineered) API.
 
@@ -315,28 +315,50 @@ Deleting the Home Assistant integration does **not** revoke access on the MiGO s
 
 ## Energy Dashboard Integration
 
-The **Daily boiler runtime** sensor can be used to track heating usage in the Home Assistant Energy Dashboard:
+> [!IMPORTANT]
+> The **Daily boiler runtime** sensor **cannot be added to the Energy dashboard
+> directly**, and it will not appear in the Gas consumption picker. This is not a
+> configuration problem: the dashboard only accepts a gas source whose
+> `device_class` is `gas` (in m³, ft³, L, CCF or MCF) or `energy` (in kWh, MJ and
+> the like). The runtime sensor measures *time*, in seconds, so it can never
+> qualify. `state_class: total_increasing` gives it long-term statistics, which is
+> a different thing from being an Energy dashboard source.
 
-1. Go to **Settings** → **Dashboards** → **Energy**
-2. Under **Gas consumption** or **Individual devices**, add the boiler runtime sensor
-3. The sensor uses `state_class: total_increasing` for proper energy tracking
+The MiGO API reports how long the boiler ran, not how much gas it burned, so no
+sensor this integration can create is directly eligible. To get heating into the
+Energy dashboard you have to convert runtime into energy yourself, with a template
+sensor:
 
-> [!NOTE]
-> The sensor reports boiler runtime in seconds. To estimate energy consumption, you can create a template sensor that multiplies runtime by your boiler's power rating.
-
-Example template sensor for estimated gas consumption:
 ```yaml
 template:
   - sensor:
       - name: "Estimated Gas Consumption"
+        unique_id: migo_estimated_gas_consumption
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         state: >
-          {% set runtime_seconds = states('sensor.migo_thermostat_daily_boiler_runtime') | float(0) %}
-          {% set boiler_power_kw = 25 %}  {# Adjust to your boiler's power #}
+          {% set runtime_seconds = states('sensor.my_home_gateway_daily_boiler_runtime') | float(0) %}
+          {% set boiler_power_kw = 25 %}  {# Adjust to your boiler's rated output #}
           {{ (runtime_seconds / 3600 * boiler_power_kw) | round(2) }}
 ```
+
+Then add **that** sensor under **Gas consumption**, or under **Individual
+devices**. Being `device_class: energy` in kWh, it is accepted by both.
+
+Three things to be aware of, in order of how much they will bite you:
+
+- **Adjust the entity ID.** The example uses this integration's default naming,
+  `<home>_<device>_daily_boiler_runtime`. Yours will differ if your home or
+  gateway is named differently. Check it in **Developer tools** → **States**.
+- **It is an estimate, not a measurement.** It assumes the boiler draws its full
+  rated output the entire time it is firing. A modulating boiler rarely does, so
+  the figure will read high. Treat it as a trend, not a bill.
+- **It will not appear in the picker straight away.** That picker is populated
+  from long-term statistics rather than from live entities, which is why unrelated
+  entities marked *"Entity without state"* can show up in it while a brand-new
+  sensor does not. Statistics are compiled hourly, so give it an hour before
+  concluding something is wrong.
 
 ## Automation Examples
 
