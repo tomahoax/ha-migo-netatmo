@@ -37,8 +37,8 @@ from .entity import (
     MigoGatewayControlEntity,
     MigoRoomControlEntity,
     MigoThermostatHomeControlEntity,
-    register_dynamic_entities,
 )
+from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
 from .models import ModuleData
 

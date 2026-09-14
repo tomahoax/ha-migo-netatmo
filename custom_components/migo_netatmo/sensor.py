@@ -24,7 +24,8 @@ from .const import (
     DEVICE_TYPE_THERMOSTAT,
     WH_PER_KWH,
 )
-from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
+from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import (
     derive_boiler_mode,
     generate_unique_id,

@@ -32,7 +32,8 @@ from .const import (
     TEMP_STEP,
 )
 from .coordinator import MigoDataUpdateCoordinator
-from .entity import MigoRoomControlEntity, register_dynamic_entities
+from .entity import MigoRoomControlEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_home_id_or_raise, get_thermostat_for_room, is_home_away, safe_float
 
 if TYPE_CHECKING:

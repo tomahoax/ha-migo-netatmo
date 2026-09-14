@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.migo_netatmo.entity import MigoApiControlMixin
+from custom_components.migo_netatmo.entity_mixin import MigoApiControlMixin
 
 
 class _FakeEntity(MigoApiControlMixin):

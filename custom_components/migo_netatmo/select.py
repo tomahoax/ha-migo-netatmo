@@ -11,7 +11,8 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SCHEDULE_TYPE_THERM
-from .entity import MigoHomeControlEntity, register_dynamic_entities
+from .entity import MigoHomeControlEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id
 
 if TYPE_CHECKING:

@@ -39,7 +39,8 @@ from custom_components.migo_netatmo.const import (
     TEMP_MAX,
 )
 from custom_components.migo_netatmo.datetime import MigoAwayReturnDateTime
-from custom_components.migo_netatmo.entity import MigoThermostatEntity, _entity_config_entry_id, _resolve_via_device_id
+from custom_components.migo_netatmo.entity import MigoThermostatEntity
+from custom_components.migo_netatmo.entity_device_info import _entity_config_entry_id, _resolve_via_device_id
 from custom_components.migo_netatmo.number import (
     MigoDHWTemperatureNumber,
     MigoHeatingCurveNumber,
@@ -1124,14 +1125,14 @@ class TestResolveViaDeviceId:
     def test_none_when_gateway_not_registered(self):
         """The gateway device hasn't been registered yet - omit rather than raise."""
         hass = MagicMock()
-        with patch("custom_components.migo_netatmo.entity.dr.async_get") as mock_async_get:
+        with patch("custom_components.migo_netatmo.entity_device_info.dr.async_get") as mock_async_get:
             mock_async_get.return_value.async_get_device_by_identifier.return_value = None
             assert _resolve_via_device_id(hass, "entry_1", "gateway_001") is None
 
     def test_returns_registry_device_id_when_found(self):
         """Resolves to the registry's own internal device_id, not the identifiers tuple."""
         hass = MagicMock()
-        with patch("custom_components.migo_netatmo.entity.dr.async_get") as mock_async_get:
+        with patch("custom_components.migo_netatmo.entity_device_info.dr.async_get") as mock_async_get:
             mock_async_get.return_value.async_get_device_by_identifier.return_value = MagicMock(
                 id="internal_device_id_123"
             )
@@ -1180,7 +1181,7 @@ class TestThermostatEntityDeviceInfo:
         entity.platform = MagicMock()
         entity.platform.config_entry.entry_id = "entry_1"
 
-        with patch("custom_components.migo_netatmo.entity.dr.async_get") as mock_async_get:
+        with patch("custom_components.migo_netatmo.entity_device_info.dr.async_get") as mock_async_get:
             mock_async_get.return_value.async_get_device_by_identifier.return_value = MagicMock(
                 id="internal_gateway_id"
             )

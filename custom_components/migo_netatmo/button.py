@@ -11,7 +11,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY
-from .entity import MigoThermostatHomeControlEntity, register_dynamic_entities
+from .entity import MigoThermostatHomeControlEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:

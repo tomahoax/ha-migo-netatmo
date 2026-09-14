@@ -16,7 +16,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
-from .entity import MigoGatewayEntity, MigoThermostatEntity, register_dynamic_entities
+from .entity import MigoGatewayEntity, MigoThermostatEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import (
     current_week_minutes,
     generate_unique_id,

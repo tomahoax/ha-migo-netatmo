@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY, MODE_SCHEDULE
-from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity, register_dynamic_entities
+from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise, is_home_away
 
 if TYPE_CHECKING:
