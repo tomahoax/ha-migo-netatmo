@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
@@ -127,6 +128,21 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         # the cache while every other path (the API fallback) returns an
         # aware one.
         aware_value = dt_util.as_utc(value)
+
+        # The API rejects a past endtime outright (400, "endtime in past"),
+        # confirmed live. Reported as "no way to confirm the value": the
+        # device page's compact date/time row can submit a partial edit
+        # (e.g. a date with no time yet, or a stray keystroke) before the
+        # user has actually finished picking a moment - Home Assistant's
+        # own frontend has a related bug there (a `RangeError: Invalid time
+        # value` in `ha-time-input.ts`/`hui-datetime-entity-row.ts`, not
+        # something this integration can fix). Catching it here at least
+        # turns a raw 400 (which silently rolled the value back to empty,
+        # looking exactly like "nothing happened") into a clear, immediate
+        # validation error instead of a wasted, confusing API round-trip.
+        if aware_value <= dt_util.utcnow():
+            raise ServiceValidationError("The Away return time must be in the future")
+
         endtime = int(aware_value.timestamp())
         _LOGGER.debug(
             "Activating away for home %s until %s (endtime=%s)",

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 import pytest
 from homeassistant.components.climate import PRESET_AWAY, PRESET_BOOST, HVACAction, HVACMode
 from homeassistant.const import EntityCategory
+from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.binary_sensor import (
@@ -1004,6 +1005,22 @@ class TestMigoAwayReturnDateTime:
 
         await entity.async_set_value(value)
 
+        assert cache == {}
+
+    @pytest.mark.asyncio
+    async def test_set_value_rejects_past_datetime(self, entity, cache):
+        """Regression guard: the real API rejects a past endtime with a 400
+        ("endtime in past"), reported live - `_call_api_optimistically`'s
+        rollback then silently cleared the value, looking exactly like
+        "no way to confirm the value" rather than a validation failure.
+        Caught here instead, before any API call or optimistic write.
+        """
+        past_value = datetime(2020, 1, 1, tzinfo=UTC)
+
+        with pytest.raises(ServiceValidationError):
+            await entity.async_set_value(past_value)
+
+        entity._api.set_home_therm_mode.assert_not_called()
         assert cache == {}
 
     @pytest.mark.asyncio
