@@ -36,8 +36,8 @@ from .const import (
     TEMP_STEP,
 )
 from .coordinator import MigoDataUpdateCoordinator
-from .entity import MigoRoomControlEntity, _resolve_via_device_id
-from .helpers import get_home_id_or_log_error, get_thermostat_for_room, safe_float
+from .entity import MigoRoomControlEntity, _entity_config_entry_id, _resolve_via_device_id
+from .helpers import get_home_id_or_log_error, get_thermostat_for_room, is_home_away, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -77,16 +77,6 @@ HVAC_TO_MIGO_MODE: dict[HVACMode, str] = {
     HVACMode.AUTO: MODE_SCHEDULE,
     HVACMode.HEAT: MODE_MANUAL,
     HVACMode.OFF: MODE_FROST_GUARD,
-}
-
-# Map preset names to MiGO modes, for presets whose write is a plain
-# `set_mode()` call. Boost, Frost guard and DHW only are handled by explicit
-# branches in async_set_preset_mode instead: boost needs a temperature/
-# duration, and Frost guard/DHW only both use MiGo's "hg" mode value but at
-# different API levels (home vs room) - collapsing them into this dict was
-# the root cause of Frost guard silently writing DHW only's room-level call.
-PRESET_TO_MIGO_MODE: dict[str, str] = {
-    PRESET_AWAY: MODE_AWAY,
 }
 
 # Map MiGO modes to preset names (None means no preset active)
@@ -172,7 +162,8 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 model=DEVICE_TYPE_THERMOSTAT,
             )
 
-            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+            config_entry_id = _entity_config_entry_id(self)
+            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, config_entry_id, gateway_id)):
                 info["via_device_id"] = via_device_id
 
             if firmware := thermostat_data.get("firmware_revision"):
@@ -206,6 +197,25 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         home_id = self._room_data.get("home_id", "")
         home_data = self.coordinator.homes.get(home_id, {})
         return home_data.get("therm_mode")
+
+    @property
+    def _home_is_away(self) -> bool:
+        """Return whether Away is active for this room's home.
+
+        Mirrors `helpers.is_home_away()`, used by the Away switch,
+        binary_sensor and datetime entities, so this entity doesn't briefly
+        disagree with them right after the switch is toggled and before the
+        coordinator's next refresh lands (see `MigoApiControlMixin`'s
+        optimistic cache). Falls back to the raw home-level `therm_mode` if
+        this room's gateway device can't be resolved.
+        """
+        thermostat_id = get_thermostat_for_room(self.coordinator, self._room_id)
+        gateway_id = self.coordinator.devices.get(thermostat_id, {}).get("bridge") if thermostat_id else None
+        if not gateway_id:
+            return self._home_therm_mode == MODE_AWAY
+
+        gateway_data = self.coordinator.devices.get(gateway_id, {})
+        return bool(is_home_away(self.coordinator, gateway_id, gateway_data))
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -344,7 +354,10 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         # it is the more actionable state when combined with any of them -
         # this must run before the manual/boost checks below, or an active
         # Away never surfaces while either override is also in effect.
-        if MODE_AWAY in (home_therm_mode, room_mode):
+        # `_home_is_away` (cache-aware) is used rather than a plain
+        # `home_therm_mode == MODE_AWAY` comparison so this doesn't briefly
+        # disagree with switch.migo_{home}_away_mode right after it's toggled.
+        if self._home_is_away or room_mode == MODE_AWAY:
             return PRESET_AWAY
 
         # Check if it's a boost (manual mode at max temperature)
@@ -410,23 +423,24 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 home_id=home_id,
                 mode=MODE_FROST_GUARD,
             )
-        else:
-            migo_mode = PRESET_TO_MIGO_MODE.get(preset_mode)
-            if not migo_mode:
-                _LOGGER.error("Unknown preset mode: %s", preset_mode)
-                return
-
-            _LOGGER.debug(
-                "Setting room %s preset to %s (migo: %s)",
-                self._room_id,
-                preset_mode,
-                migo_mode,
-            )
+        elif preset_mode == PRESET_AWAY:
+            # Home-level Away via sethomedata, the same call
+            # switch.migo_{home}_away_mode and button.migo_{home}_reset_away_until
+            # use, rather than the generic set_mode() dispatcher (which
+            # routes through setthermmode, with no endtime parameter, so it
+            # can't clear a return time left over from a previous Away period).
+            _LOGGER.debug("Setting home %s to Away", home_id)
             await self._call_api_and_refresh(
-                self._api.set_mode,
+                self._api.set_home_therm_mode,
                 home_id=home_id,
-                room_id=self._room_id,
-                mode=migo_mode,
+                mode=MODE_AWAY,
+                endtime=None,
             )
+        else:
+            # Every entry in _attr_preset_modes (Away, Frost guard, DHW only,
+            # Boost) is handled by an explicit branch above, so this is only
+            # reached for a preset Home Assistant shouldn't ever pass.
+            _LOGGER.error("Unknown preset mode: %s", preset_mode)
+            return
 
         _LOGGER.debug("Room %s preset set successfully", self._room_id)

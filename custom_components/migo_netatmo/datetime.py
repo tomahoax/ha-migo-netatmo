@@ -121,8 +121,13 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         # HA's datetime service schema normally supplies an aware value, but
         # guard against a naive one anyway rather than silently trusting the
         # system's own local timezone (which may not match HA's configured
-        # one) the way a plain value.timestamp() call would.
-        endtime = int(dt_util.as_utc(value).timestamp())
+        # one) the way a plain value.timestamp() call would. The same
+        # aware value is used for the optimistic cache below, so a naive
+        # `value` can't leave `native_value` returning a naive datetime from
+        # the cache while every other path (the API fallback) returns an
+        # aware one.
+        aware_value = dt_util.as_utc(value)
+        endtime = int(aware_value.timestamp())
         _LOGGER.debug(
             "Activating away for home %s until %s (endtime=%s)",
             home_id,
@@ -132,7 +137,7 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         await self._call_api_optimistically(
             self._api.set_home_therm_mode,
             cache_key=self._cache_key,
-            optimistic_value=value,
+            optimistic_value=aware_value,
             home_id=home_id,
             mode=MODE_AWAY,
             endtime=endtime,

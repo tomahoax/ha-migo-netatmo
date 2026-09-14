@@ -24,7 +24,6 @@ from custom_components.migo_netatmo.climate import (
     MIGO_TO_HVAC_MODE,
     PRESET_DHW_ONLY,
     PRESET_FROST_GUARD,
-    PRESET_TO_MIGO_MODE,
     MigoClimate,
 )
 from custom_components.migo_netatmo.const import (
@@ -42,7 +41,7 @@ from custom_components.migo_netatmo.const import (
     TEMP_MAX,
 )
 from custom_components.migo_netatmo.datetime import MigoAwayReturnDateTime
-from custom_components.migo_netatmo.entity import MigoThermostatEntity, _resolve_via_device_id
+from custom_components.migo_netatmo.entity import MigoThermostatEntity, _entity_config_entry_id, _resolve_via_device_id
 from custom_components.migo_netatmo.number import MigoDHWTemperatureNumber, MigoTemperatureOffsetNumber
 from custom_components.migo_netatmo.sensor import MigoBoilerModeSensor
 from custom_components.migo_netatmo.switch import (
@@ -162,6 +161,34 @@ class TestMigoClimate:
         mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_AWAY
         assert climate.preset_mode == "away"
 
+    def test_preset_mode_reads_away_switch_cache_via_resolved_gateway(self, climate, mock_coordinator):
+        """`_home_is_away` must not disagree with switch.migo_{home}_away_mode right after a toggle.
+
+        Regression guard: preset_mode used to compare raw
+        coordinator.homes data directly, so it could show the pre-toggle
+        state for a few seconds while the switch/binary_sensor/datetime
+        entities (already cache-aware) had already updated.
+        """
+        mock_coordinator.rooms["room_456"]["module_ids"] = ["module_789"]
+        mock_coordinator.devices["module_789"]["bridge"] = "gateway_001"
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
+        mock_coordinator.get_cached_value = MagicMock(
+            side_effect=lambda key, default=None: True if key == "away_mode_gateway_001" else default
+        )
+
+        assert climate.preset_mode == PRESET_AWAY
+
+    def test_preset_mode_not_away_when_switch_cache_says_off_despite_stale_home_data(self, climate, mock_coordinator):
+        """Same mechanism, the other direction: cache wins over stale raw data too."""
+        mock_coordinator.rooms["room_456"]["module_ids"] = ["module_789"]
+        mock_coordinator.devices["module_789"]["bridge"] = "gateway_001"
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.get_cached_value = MagicMock(
+            side_effect=lambda key, default=None: False if key == "away_mode_gateway_001" else default
+        )
+
+        assert climate.preset_mode != PRESET_AWAY
+
     @pytest.mark.asyncio
     async def test_set_temperature(self, climate):
         """Test setting temperature."""
@@ -213,12 +240,19 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_away(self, climate):
-        """Test setting preset mode to away."""
+        """Away writes home-level Away via set_home_therm_mode directly.
+
+        Regression guard: it used to go through the generic set_mode()
+        dispatcher (via setthermmode, with no endtime parameter), so it
+        could never clear a return time left over from a previous Away
+        period - unlike switch.migo_{home}_away_mode and
+        button.migo_{home}_reset_away_until, which already clear it via an
+        explicit endtime=None.
+        """
         await climate.async_set_preset_mode(PRESET_AWAY)
 
-        climate._api.set_mode.assert_called_once()
-        call_kwargs = climate._api.set_mode.call_args.kwargs
-        assert call_kwargs["mode"] == MODE_AWAY
+        climate._api.set_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY, endtime=None)
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_frost_guard(self, climate):
@@ -389,17 +423,6 @@ class TestModeMapping:
         assert HVAC_TO_MIGO_MODE[HVACMode.AUTO] == MODE_SCHEDULE
         assert HVAC_TO_MIGO_MODE[HVACMode.HEAT] == MODE_MANUAL
         assert HVAC_TO_MIGO_MODE[HVACMode.OFF] == MODE_FROST_GUARD
-
-    def test_preset_to_migo_mode(self):
-        """Test preset to MiGO mode mapping.
-
-        Frost guard and DHW only are deliberately absent: both share the
-        same underlying "hg" value but write at different API levels, so
-        async_set_preset_mode handles them via explicit branches instead of
-        this generic dict - see climate.py's comment on PRESET_TO_MIGO_MODE.
-        """
-        assert PRESET_TO_MIGO_MODE == {PRESET_AWAY: MODE_AWAY}
-        # Note: PRESET_BOOST is handled separately (not in mapping)
 
 
 class TestMigoAwayModeSwitch:
@@ -1072,6 +1095,28 @@ class TestMigoResetAwayUntilButton:
         mock_coordinator.clear_cached_value.assert_called_once_with("away_until_gateway_001")
         mock_coordinator.async_request_refresh.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_press_does_not_reactivate_away_when_switch_cache_says_off(self, button, mock_coordinator):
+        """Regression guard: must not act on stale raw coordinator.homes data.
+
+        If the user just turned switch.migo_{home}_away_mode off (its own
+        optimistic cache now says False) and immediately presses this
+        button before the switch's own refresh lands, coordinator.homes may
+        still say therm_mode="away" for a few more seconds. Reading that
+        raw data instead of is_home_away() would take the "currently Away"
+        branch and re-send set_home_therm_mode(mode=MODE_AWAY, ...) -
+        reactivating Away right after the user turned it off.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.get_cached_value = MagicMock(
+            side_effect=lambda key, default=None: False if key == "away_mode_gateway_001" else default
+        )
+
+        await button.async_press()
+
+        button._api.set_home_therm_mode.assert_not_called()
+        mock_coordinator.async_request_refresh.assert_not_called()
+
 
 class TestResolveViaDeviceId:
     """Tests for _resolve_via_device_id.
@@ -1084,25 +1129,61 @@ class TestResolveViaDeviceId:
     instead of just log - this broke entity setup live once already. All
     four `device_info` properties that link to a parent gateway now resolve
     `via_device_id` through this function instead.
+
+    Uses `async_get_device_by_identifier` (config-entry-scoped), not
+    `async_get_device` - that one is deprecated too (a live warning caught
+    after the first fix shipped), and the exact same "raises instead of
+    warns under some caller attributions" risk applies to it as well.
     """
 
     def test_none_when_hass_not_set(self):
         """No hass yet (as in every device_info test in this file, none of which set it)."""
-        assert _resolve_via_device_id(None, "gateway_001") is None
+        assert _resolve_via_device_id(None, "entry_1", "gateway_001") is None
+
+    def test_none_when_config_entry_id_not_set(self):
+        """No platform/config entry yet either - same "not fully added" case."""
+        hass = MagicMock()
+        assert _resolve_via_device_id(hass, None, "gateway_001") is None
 
     def test_none_when_gateway_not_registered(self):
         """The gateway device hasn't been registered yet - omit rather than raise."""
         hass = MagicMock()
         with patch("custom_components.migo_netatmo.entity.dr.async_get") as mock_async_get:
-            mock_async_get.return_value.async_get_device.return_value = None
-            assert _resolve_via_device_id(hass, "gateway_001") is None
+            mock_async_get.return_value.async_get_device_by_identifier.return_value = None
+            assert _resolve_via_device_id(hass, "entry_1", "gateway_001") is None
 
     def test_returns_registry_device_id_when_found(self):
         """Resolves to the registry's own internal device_id, not the identifiers tuple."""
         hass = MagicMock()
         with patch("custom_components.migo_netatmo.entity.dr.async_get") as mock_async_get:
-            mock_async_get.return_value.async_get_device.return_value = MagicMock(id="internal_device_id_123")
-            assert _resolve_via_device_id(hass, "gateway_001") == "internal_device_id_123"
+            mock_async_get.return_value.async_get_device_by_identifier.return_value = MagicMock(
+                id="internal_device_id_123"
+            )
+            result = _resolve_via_device_id(hass, "entry_1", "gateway_001")
+
+        assert result == "internal_device_id_123"
+        mock_async_get.return_value.async_get_device_by_identifier.assert_called_once_with(
+            ("migo_netatmo", "gateway_001"), "entry_1"
+        )
+
+
+class TestEntityConfigEntryId:
+    """Tests for _entity_config_entry_id."""
+
+    def test_none_when_platform_not_set(self):
+        """Matches every other test's entity construction - no platform, no crash."""
+        entity = MagicMock(spec=[])
+        assert _entity_config_entry_id(entity) is None
+
+    def test_none_when_platform_has_no_config_entry(self):
+        entity = MagicMock()
+        entity.platform.config_entry = None
+        assert _entity_config_entry_id(entity) is None
+
+    def test_returns_platform_config_entry_id(self):
+        entity = MagicMock()
+        entity.platform.config_entry.entry_id = "entry_123"
+        assert _entity_config_entry_id(entity) == "entry_123"
 
 
 class TestThermostatEntityDeviceInfo:
@@ -1120,9 +1201,13 @@ class TestThermostatEntityDeviceInfo:
         mock_coordinator.devices["module_789"]["bridge"] = "gateway_001"
         entity = MigoThermostatEntity(mock_coordinator, "module_789")
         entity.hass = MagicMock()
+        entity.platform = MagicMock()
+        entity.platform.config_entry.entry_id = "entry_1"
 
         with patch("custom_components.migo_netatmo.entity.dr.async_get") as mock_async_get:
-            mock_async_get.return_value.async_get_device.return_value = MagicMock(id="internal_gateway_id")
+            mock_async_get.return_value.async_get_device_by_identifier.return_value = MagicMock(
+                id="internal_gateway_id"
+            )
             info = entity.device_info
 
         assert info["via_device_id"] == "internal_gateway_id"

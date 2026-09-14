@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, MODE_AWAY
 from .entity import MigoGatewayControlEntity, MigoGatewayEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type
+from .helpers import generate_unique_id, get_devices_by_type, is_home_away
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -211,17 +211,23 @@ class MigoResetAwayUntilButton(MigoGatewayControlEntity, ButtonEntity):
         """Handle the button press - clear the cached and, if relevant, server-side return time."""
         cache_key = f"away_until_{self._device_id}"
         home_id = self._device_data.get("home_id")
-        home_data = self.coordinator.homes.get(home_id, {}) if home_id else {}
 
-        if home_id and home_data.get("therm_mode") == MODE_AWAY:
+        # is_home_away() checks the switch's optimistic cache before falling
+        # back to raw coordinator data, so this doesn't act on a stale Away
+        # state right after the switch was just toggled (see helpers.is_home_away).
+        if home_id and is_home_away(self.coordinator, self._device_id, self._device_data):
             _LOGGER.debug("Clearing away-until return time server-side for home %s", home_id)
+            # Clear and push before the API call/refresh, not after: the
+            # refresh's own listener push can otherwise fire while the cache
+            # is still populated, briefly re-rendering the stale value.
+            self.coordinator.clear_cached_value(cache_key)
+            self.coordinator.async_update_listeners()
             await self._call_api_and_refresh(
                 self._api.set_home_therm_mode,
                 home_id=home_id,
                 mode=MODE_AWAY,
                 endtime=None,
             )
-            self.coordinator.clear_cached_value(cache_key)
         else:
             _LOGGER.debug("Clearing away-until return time locally for device %s", self._device_id)
             self.coordinator.clear_cached_value(cache_key)

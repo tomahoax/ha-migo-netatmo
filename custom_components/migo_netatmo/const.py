@@ -70,20 +70,12 @@ MODE_HOME: Final = "home"
 MODE_OFF: Final = "off"
 MODE_MAX: Final = "max"
 
-# HVAC mode to API mode mapping
-HVAC_MODE_TO_API: Final = {
-    "auto": MODE_SCHEDULE,
-    "heat": MODE_MANUAL,
-    "off": MODE_FROST_GUARD,
-}
-
-API_MODE_TO_HVAC: Final = {
-    MODE_SCHEDULE: "auto",
-    MODE_MANUAL: "heat",
-    MODE_FROST_GUARD: "off",
-    MODE_AWAY: "off",
-    MODE_HOME: "heat",
-}
+# Note: the HVAC-mode <-> MiGO-mode mappings live in climate.py
+# (HVAC_TO_MIGO_MODE / MIGO_TO_HVAC_MODE), not here. An earlier pair of
+# unused dicts in this module (HVAC_MODE_TO_API / API_MODE_TO_HVAC) still
+# carried a stale, since-fixed mapping (MODE_HOME -> "heat" instead of
+# "auto") and was removed rather than left as a latent-bug trap for a future
+# caller to pick up by mistake.
 
 # =============================================================================
 # Boiler Mode (derived)

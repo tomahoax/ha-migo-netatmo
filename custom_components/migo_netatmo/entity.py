@@ -20,7 +20,11 @@ if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
 
 
-def _resolve_via_device_id(hass: HomeAssistant | None, gateway_id: str) -> str | None:
+def _resolve_via_device_id(
+    hass: HomeAssistant | None,
+    config_entry_id: str | None,
+    gateway_id: str,
+) -> str | None:
     """Resolve a gateway's registry-internal device_id, for `via_device_id`.
 
     `via_device_id` (the replacement for the deprecated `via_device`
@@ -28,16 +32,39 @@ def _resolve_via_device_id(hass: HomeAssistant | None, gateway_id: str) -> str |
     the `(DOMAIN, identifier)` tuple used everywhere else in this
     integration - this looks it up by the same identifier the gateway's own
     `DeviceInfo` registers under (`identifiers={(DOMAIN, gateway_id)}`, see
-    `MigoGatewayEntity.device_info`). Returns None if `hass` isn't set yet
-    (an entity's `device_info` can in principle be read before it's been
-    added to a platform) or the gateway device hasn't been registered yet -
-    in either case, the caller should just omit `via_device_id` rather than
-    raise, since a device with no parent is still a valid device.
+    `MigoGatewayEntity.device_info`), scoped to this entity's own config
+    entry via `async_get_device_by_identifier` - `async_get_device` is
+    itself deprecated (identifiers are no longer guaranteed unique across
+    config entries) and, like `via_device` before it, only warns *unless*
+    Home Assistant happens to attribute the call to a core integration
+    instead of this custom one, in which case it raises - the exact
+    mechanism that broke entity setup live once already (see the CHANGELOG
+    entry this helper was introduced for). Returns None if `hass` or
+    `config_entry_id` isn't set yet (an entity's `device_info` can in
+    principle be read before it's fully added to a platform) or the gateway
+    device hasn't been registered yet - in either case, the caller should
+    just omit `via_device_id` rather than raise, since a device with no
+    parent is still a valid device.
     """
-    if hass is None:
+    if hass is None or config_entry_id is None:
         return None
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, gateway_id)})
+    device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, gateway_id), config_entry_id)
     return device.id if device else None
+
+
+def _entity_config_entry_id(entity: object) -> str | None:
+    """Return the config entry ID an entity was added under, if it has one yet.
+
+    `Entity.platform` is set (alongside `Entity.hass`) by
+    `add_to_platform_start`, before `device_info` is ever read - see
+    `entity_platform.py`'s `_async_add_entity`. Guarded defensively anyway,
+    since nothing stops `device_info` being read earlier in principle (as
+    every device_info test in this file does, none of which set `hass` or
+    `platform` at all).
+    """
+    platform = getattr(entity, "platform", None)
+    config_entry = getattr(platform, "config_entry", None) if platform is not None else None
+    return config_entry.entry_id if config_entry is not None else None
 
 
 class MigoApiControlMixin:
@@ -202,7 +229,8 @@ class MigoRoomEntity(MigoEntity):
             )
 
             # Link to parent gateway device
-            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+            config_entry_id = _entity_config_entry_id(self)
+            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, config_entry_id, gateway_id)):
                 info["via_device_id"] = via_device_id
 
             # Add diagnostic information if available
@@ -341,7 +369,8 @@ class MigoThermostatEntity(MigoDeviceEntity):
             info["connections"] = {(CONNECTION_NETWORK_MAC, self._device_id)}
 
         # Link to parent gateway device
-        if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+        config_entry_id = _entity_config_entry_id(self)
+        if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, config_entry_id, gateway_id)):
             info["via_device_id"] = via_device_id
 
         # Add diagnostic information if available
@@ -531,7 +560,8 @@ class MigoThermostatHomeControlEntity(MigoEntity, MigoApiControlMixin):
                 if ":" in device_id and len(device_id) == 17:
                     info["connections"] = {(CONNECTION_NETWORK_MAC, device_id)}
 
-                if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+                config_entry_id = _entity_config_entry_id(self)
+                if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, config_entry_id, gateway_id)):
                     info["via_device_id"] = via_device_id
 
                 if firmware := device_data.get("firmware_revision"):

@@ -9,11 +9,13 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MigoApi, MigoApiError, MigoAuthError
-from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX
+from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX, DEVICE_TYPE_GATEWAY, DOMAIN
 from .coordinator import MigoDataUpdateCoordinator
+from .helpers import get_devices_by_type
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -68,6 +70,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = MigoData(api=api, coordinator=coordinator)
+
+    # Register each gateway device up front, before platforms are forwarded.
+    # Home Assistant forwards all platforms concurrently
+    # (async_forward_entry_setups), so without this a thermostat/room-owning
+    # entity's device_info (which links to its parent gateway via
+    # _resolve_via_device_id, looking the gateway up in the device registry)
+    # could run before any gateway-owning platform has registered the
+    # gateway device, silently omitting via_device_id for that session. The
+    # gateway platform's own entities still register the full DeviceInfo
+    # (name, model, connections, ...) afterwards - the registry merges it
+    # into this same device, matched by identifiers.
+    device_registry = dr.async_get(hass)
+    for gateway_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, gateway_id)},
+        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
