@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -13,8 +14,30 @@ from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, MANUFACT
 from .helpers import get_gateway_mac_for_home, get_thermostat_for_room
 
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
     from .api import MigoApi
     from .coordinator import MigoDataUpdateCoordinator
+
+
+def _resolve_via_device_id(hass: HomeAssistant | None, gateway_id: str) -> str | None:
+    """Resolve a gateway's registry-internal device_id, for `via_device_id`.
+
+    `via_device_id` (the replacement for the deprecated `via_device`
+    identifiers-tuple form) needs the device registry's own internal ID, not
+    the `(DOMAIN, identifier)` tuple used everywhere else in this
+    integration - this looks it up by the same identifier the gateway's own
+    `DeviceInfo` registers under (`identifiers={(DOMAIN, gateway_id)}`, see
+    `MigoGatewayEntity.device_info`). Returns None if `hass` isn't set yet
+    (an entity's `device_info` can in principle be read before it's been
+    added to a platform) or the gateway device hasn't been registered yet -
+    in either case, the caller should just omit `via_device_id` rather than
+    raise, since a device with no parent is still a valid device.
+    """
+    if hass is None:
+        return None
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, gateway_id)})
+    return device.id if device else None
 
 
 class MigoApiControlMixin:
@@ -154,8 +177,8 @@ class MigoRoomEntity(MigoEntity):
             )
 
             # Link to parent gateway device
-            if gateway_id:
-                info["via_device"] = (DOMAIN, gateway_id)
+            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+                info["via_device_id"] = via_device_id
 
             # Add diagnostic information if available
             if firmware := thermostat_data.get("firmware_revision"):
@@ -268,7 +291,7 @@ class MigoThermostatEntity(MigoDeviceEntity):
 
     Thermostat entities are associated with the physical thermostat device
     and include sensors like battery, RF strength, temperature offset.
-    The thermostat is connected via the gateway (via_device).
+    The thermostat is connected via the gateway (via_device_id).
     """
 
     @property
@@ -278,7 +301,7 @@ class MigoThermostatEntity(MigoDeviceEntity):
         home_data = self.coordinator.homes.get(home_id, {})
         home_name = home_data.get("name", "MiGO")
 
-        # Get the gateway ID (bridge) for via_device
+        # Get the gateway ID (bridge) for via_device_id
         gateway_id = self._device_data.get("bridge")
 
         info = DeviceInfo(
@@ -293,8 +316,8 @@ class MigoThermostatEntity(MigoDeviceEntity):
             info["connections"] = {(CONNECTION_NETWORK_MAC, self._device_id)}
 
         # Link to parent gateway device
-        if gateway_id:
-            info["via_device"] = (DOMAIN, gateway_id)
+        if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+            info["via_device_id"] = via_device_id
 
         # Add diagnostic information if available
         if firmware := self._device_data.get("firmware_revision"):
@@ -483,8 +506,8 @@ class MigoThermostatHomeControlEntity(MigoEntity, MigoApiControlMixin):
                 if ":" in device_id and len(device_id) == 17:
                     info["connections"] = {(CONNECTION_NETWORK_MAC, device_id)}
 
-                if gateway_id:
-                    info["via_device"] = (DOMAIN, gateway_id)
+                if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+                    info["via_device_id"] = via_device_id
 
                 if firmware := device_data.get("firmware_revision"):
                     info["sw_version"] = str(firmware)

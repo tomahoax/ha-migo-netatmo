@@ -36,7 +36,7 @@ from .const import (
     TEMP_STEP,
 )
 from .coordinator import MigoDataUpdateCoordinator
-from .entity import MigoRoomControlEntity
+from .entity import MigoRoomControlEntity, _resolve_via_device_id
 from .helpers import get_home_id_or_log_error, get_thermostat_for_room, safe_float
 
 if TYPE_CHECKING:
@@ -162,7 +162,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             home_data = self.coordinator.homes.get(home_id, {})
             home_name = home_data.get("name", "MiGO")
 
-            # Get the gateway ID for via_device
+            # Get the gateway ID for via_device_id
             gateway_id = thermostat_data.get("bridge")
 
             info = DeviceInfo(
@@ -172,8 +172,8 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 model=DEVICE_TYPE_THERMOSTAT,
             )
 
-            if gateway_id:
-                info["via_device"] = (DOMAIN, gateway_id)
+            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, gateway_id)):
+                info["via_device_id"] = via_device_id
 
             if firmware := thermostat_data.get("firmware_revision"):
                 info["sw_version"] = str(firmware)
