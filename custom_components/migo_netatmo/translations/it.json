@@ -83,6 +83,12 @@
       },
       "ebus_error": {
         "name": "Errore eBus"
+      },
+      "away_mode": {
+        "name": "Modalità assente"
+      },
+      "dhw_schedule": {
+        "name": "ACS programmata"
       }
     },
     "button": {
@@ -101,6 +107,7 @@
             "state": {
               "away": "Assente",
               "frost_guard": "Antigelo",
+              "dhw_only": "Solo acqua calda",
               "boost": "Boost"
             }
           }
@@ -156,6 +163,14 @@
       },
       "daily_boiler_runtime": {
         "name": "Tempo di funzionamento giornaliero della caldaia"
+      },
+      "boiler_mode": {
+        "name": "Modalità caldaia",
+        "state": {
+          "normal": "Normale",
+          "dhw_only": "Solo acqua calda",
+          "frost_guard": "Antigelo"
+        }
       }
     },
     "switch": {
@@ -164,6 +179,9 @@
       },
       "anticipation": {
         "name": "Anticipazione riscaldamento"
+      },
+      "away_mode": {
+        "name": "Modalità assente"
       }
     }
   }

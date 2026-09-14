@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release incorporates analysis and real-device testing shared by the
+community on the [HACF forum thread](https://forum.hacf.fr/t/developpement-dune-integration-custom-migo-netatmo-pour-thermostats-saunier-duval-appel-aux-testeurs/73717/14).
+
+### Fixed
+- **Climate entity showing the wrong state during Frost guard / DHW-only quick actions** - MiGo stacks three independent notions (boiler quick-action mode, home-level Away, and the room's own setpoint) that no single room-level field can represent on its own
+  - Real standby ("Veille" / Frost guard) used to display as "Heating": the room-level `therm_setpoint_mode` is `home` in that state, which incorrectly mapped to `HVACMode.HEAT`
+  - Away mode was invisible in Home Assistant: only the room's `therm_setpoint_mode` was ever read, never the home-level `therm_mode` field that actually carries it
+  - The "Away" preset was write-only: setting it worked, but `preset_mode` could never read it back afterwards
+  - `hvac_mode` and `preset_mode` now derive from the home's `therm_mode` together with the room's `therm_setpoint_mode`
+  - `hvac_action` now uses the thermostat's real `boiler_status` when available, falling back to the previous temperature-delta heuristic when it isn't
+  - Added a read-only "Hot water only" preset for MiGo's DHW-only quick action, previously indistinguishable from real Frost guard
+- **DHW boost and Heating anticipation switches lagging one poll cycle behind the API** - the DHW switch had no optimistic cache at all, and the anticipation switch filled its cache *after* the coordinator refresh that writes entity state, so neither reflected a toggle immediately
+  - Both switches now use a shared `_call_api_optimistically` helper (`MigoApiControlMixin`) that writes the optimistic value and entity state *before* the API call, and restores the previous value if the call fails
+  - Fixes a related latent bug: the optimistic cache (`coordinator._config_cache`) was never invalidated between refreshes, unlike `homes`/`rooms`/`devices` - a written key could shadow API data indefinitely. The new helper clears its key after a successful refresh, via a new `coordinator.clear_cached_value()`
+
+### Added
+- **Away mode entities** - `binary_sensor.migo_{home}_away_mode` (read-only) and `switch.migo_{home}_away_mode` (read/write), reading and writing the home-level `therm_mode` field directly. The switch writes via `setthermmode`, the same call the climate preset uses, so it has no side effect on the boiler quick-action mode
+- **Boiler mode sensor** - `sensor.migo_{home}_boiler_mode`, exposing the derived boiler quick-action mode (Normal / DHW only / Frost guard) as its own entity, independent of Away
+- **Scheduled DHW binary sensor** - `binary_sensor.migo_{home}_dhw_schedule`, resolving the currently active time slot of the selected DHW (`event`-type) schedule and reporting its `dhw_enabled` flag - data already returned by `homesdata` but previously read by no entity. Forced `off` while Away is active; reports `unavailable` rather than a guessed value when the schedule can't be resolved
+
+### Documentation
+- Documented `event`-type (DHW) schedules, `linked_schedules`, and the timetable-resolution algorithm in `docs/api/reference.md`
+- Documented the legacy `getthermostatsdata` endpoint (a second Netatmo host accepting the same MiGo token) under "Known Limitations" - not wired into this release since `therm_mode`/`therm_setpoint_mode` already cover the boiler mode and Away state at no extra API cost, and the endpoint's own response envelope and behavior on `api.netatmo.com` haven't been verified against live traffic in this codebase
+
 ## [0.40.2] - 2026-07-22
 
 ### Fixed

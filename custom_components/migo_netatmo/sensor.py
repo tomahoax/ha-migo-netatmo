@@ -15,9 +15,15 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature, U
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
+from .const import (
+    BOILER_MODE_DHW_ONLY,
+    BOILER_MODE_FROST_GUARD,
+    BOILER_MODE_NORMAL,
+    DEVICE_TYPE_GATEWAY,
+    DEVICE_TYPE_THERMOSTAT,
+)
 from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
-from .helpers import generate_unique_id, get_devices_by_type, safe_float
+from .helpers import derive_boiler_mode, generate_unique_id, get_devices_by_type, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -193,6 +199,15 @@ async def async_setup_entry(
             )
         )
 
+    # Boiler mode sensor - one per gateway
+    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        entities.append(
+            MigoBoilerModeSensor(
+                coordinator=coordinator,
+                device_id=device_id,
+            )
+        )
+
     async_add_entities(entities)
 
 
@@ -342,3 +357,44 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
                 "measurement_timestamp": consumption.get("timestamp"),
             }
         return {}
+
+
+class MigoBoilerModeSensor(MigoGatewayEntity, SensorEntity):
+    """MiGO boiler quick-action mode (Normal / DHW only / Frost guard).
+
+    MiGo does not return this as a single field: it is derived from the
+    home's `therm_mode` and its rooms' `therm_setpoint_mode`, see
+    `helpers.derive_boiler_mode`. Independent of the Away preset, which the
+    app lets you combine with any of these three.
+    """
+
+    _attr_translation_key = "boiler_mode"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [BOILER_MODE_NORMAL, BOILER_MODE_DHW_ONLY, BOILER_MODE_FROST_GUARD]
+    _attr_icon = "mdi:radiator"
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+    ) -> None:
+        """Initialize the boiler mode sensor."""
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = generate_unique_id("boiler_mode", device_id)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the current boiler mode."""
+        home_id = self._device_data.get("home_id")
+        if not home_id:
+            return None
+        home_data = self.coordinator.homes.get(home_id)
+        if home_data is None:
+            return None
+
+        room_modes = [
+            room.get("therm_setpoint_mode")
+            for room in self.coordinator.rooms.values()
+            if room.get("home_id") == home_id
+        ]
+        return derive_boiler_mode(home_data.get("therm_mode"), room_modes)

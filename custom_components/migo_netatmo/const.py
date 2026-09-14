@@ -86,6 +86,18 @@ API_MODE_TO_HVAC: Final = {
 }
 
 # =============================================================================
+# Boiler Mode (derived)
+# =============================================================================
+# MiGo's "Actions rapides" (Normal / DHW only / Frost guard) are not returned
+# as a single API field. They are derived from the home's `therm_mode` and the
+# rooms' `therm_setpoint_mode` - see helpers.derive_boiler_mode(). Distinct
+# from MODE_AWAY, which is an independent, orthogonal home-level flag.
+
+BOILER_MODE_NORMAL: Final = "normal"
+BOILER_MODE_DHW_ONLY: Final = "dhw_only"
+BOILER_MODE_FROST_GUARD: Final = "frost_guard"
+
+# =============================================================================
 # Schedule Types
 # =============================================================================
 

@@ -83,6 +83,12 @@
       },
       "ebus_error": {
         "name": "eBus error"
+      },
+      "away_mode": {
+        "name": "Away mode"
+      },
+      "dhw_schedule": {
+        "name": "Scheduled DHW"
       }
     },
     "button": {
@@ -101,6 +107,7 @@
             "state": {
               "away": "Away",
               "frost_guard": "Frost guard",
+              "dhw_only": "Hot water only",
               "boost": "Boost"
             }
           }
@@ -156,6 +163,14 @@
       },
       "daily_boiler_runtime": {
         "name": "Daily boiler runtime"
+      },
+      "boiler_mode": {
+        "name": "Boiler mode",
+        "state": {
+          "normal": "Normal",
+          "dhw_only": "Hot water only",
+          "frost_guard": "Frost guard"
+        }
       }
     },
     "switch": {
@@ -164,6 +179,9 @@
       },
       "anticipation": {
         "name": "Heating anticipation"
+      },
+      "away_mode": {
+        "name": "Away mode"
       }
     }
   }

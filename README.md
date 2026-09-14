@@ -65,7 +65,8 @@ This integration creates **two separate devices** in Home Assistant:
   - **Off** (Frost guard)
 - Preset modes:
   - **Away** - Away mode
-  - **Frost guard** - Minimum temperature protection
+  - **Frost guard** - Minimum temperature protection (real boiler standby)
+  - **Hot water only** - MiGo's "DHW only" quick action (read-only)
   - **Boost** - Forces maximum temperature (30°C) for 1 hour
 
 ### Sensors
@@ -74,6 +75,7 @@ This integration creates **two separate devices** in Home Assistant:
 - Outdoor temperature
 - WiFi signal strength
 - Gateway firmware version
+- **Boiler mode** - Normal / DHW only / Frost guard quick-action mode (derived)
 
 #### Thermostat Sensors
 - Temperature sensor per room
@@ -89,6 +91,7 @@ This integration creates **two separate devices** in Home Assistant:
 
 - **DHW boost** (hot water boost) - Gateway
 - **Heating anticipation** (enable/disable) - Home setting
+- **Away mode** (enable/disable) - Gateway, writes the same home-level flag as the climate "Away" preset
 
 ### Number Controls (Configuration)
 
@@ -107,6 +110,8 @@ This integration creates **two separate devices** in Home Assistant:
 #### Gateway Binary Sensors
 - eBus error
 - Boiler error
+- **Away mode** (read-only)
+- **Scheduled DHW** - hot water state for the currently active schedule time slot
 
 #### Thermostat Binary Sensors
 - Boiler status (running/idle)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 # =============================================================================
 # OAuth / Authentication
@@ -244,6 +244,9 @@ class HomeConfig(TypedDict):
     rooms: list[RoomConfig]
     modules: list[GatewayConfig | ThermostatConfig]
     schedules: NotRequired[list[Schedule]]
+    # Pairs up "therm" and "event" schedules. Shape undocumented by Netatmo;
+    # see helpers.get_event_schedule() for the defensive parsing this needs.
+    linked_schedules: NotRequired[Any]
 
 
 class HomeStatusResponse(TypedDict):

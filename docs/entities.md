@@ -42,13 +42,29 @@ The wall-mounted thermostat connected to the Gateway via RF (radio). Battery pow
 
 ### Presets
 
-| Preset | API Mode | Description |
-|--------|----------|-------------|
-| **Away** | `away` | Away mode - reduced temperature |
-| **Frost guard** | `hg` | Frost protection mode |
-| **Boost** | `manual` | Forces maximum temperature (30°C) for 1 hour |
+MiGo stacks three independent notions: the boiler's own quick-action mode
+(Normal / DHW only / Frost guard, home-level `therm_mode` combined with the
+room's `therm_setpoint_mode`), a home-level Away flag (also `therm_mode`),
+and the room's own setpoint. A single room-level API field cannot represent
+all three, so the climate entity derives `hvac_mode` and `preset_mode` from
+both the home's `therm_mode` and the room's `therm_setpoint_mode` together -
+see `climate.MigoClimate._home_therm_mode` for the exact precedence.
+
+| Preset | Source | Description |
+|--------|--------|-------------|
+| **Away** | home `therm_mode == "away"` | Away mode - reduced temperature. Read/write. |
+| **Frost guard** | home `therm_mode == "hg"` | Real standby: the boiler is stopped. Read/write. |
+| **Hot water only** | room `therm_setpoint_mode == "hg"` while home `therm_mode` is not `"hg"` | MiGo's "DHW only" quick-action. **Read-only** - no known API call sets it independently of Frost guard; attempting to set it from Home Assistant is rejected with a log message. |
+| **Boost** | room `therm_setpoint_mode == "manual"` at max temperature | Forces maximum temperature (30°C) for 1 hour |
 
 > **Note:** The preset is cleared (set to None) when switching back to Auto mode.
+>
+> **Note:** When Away and "DHW only"/"Frost guard" are combined (the app
+> allows this), the climate preset shows Away - it takes priority since it is
+> the more actionable state. The boiler quick-action mode remains visible
+> independently via the `sensor.migo_{home}_boiler_mode` entity below, and
+> Away itself via `binary_sensor.migo_{home}_away_mode` /
+> `switch.migo_{home}_away_mode`.
 
 ### Attributes
 
@@ -106,6 +122,12 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 - `boiler_off_time`: Time boiler was off (seconds)
 - `measurement_timestamp`: Unix timestamp of the measurement
 
+### Boiler Mode (Gateway)
+
+| Entity ID Pattern | Name | Description |
+|-------------------|------|--------------|
+| `sensor.migo_{home}_boiler_mode` | Boiler Mode | The boiler's "Actions rapides" quick-action mode: `normal`, `dhw_only` (Hot water only), or `frost_guard`. Derived from the home's `therm_mode` and the rooms' `therm_setpoint_mode` - MiGo does not return this as a single field. Independent of Away, which the app lets you combine with any of these three. |
+
 ---
 
 ## Binary Sensors
@@ -116,6 +138,8 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|--------------|-------------|
 | `binary_sensor.migo_{home}_boiler_error` | Boiler Error | problem | Boiler error detected |
 | `binary_sensor.migo_{home}_ebus_error` | eBus Error | problem | eBus communication error |
+| `binary_sensor.migo_{home}_away_mode` | Away Mode | - | Home-level Away flag (`therm_mode == "away"`). Read-only companion to `switch.migo_{home}_away_mode`. |
+| `binary_sensor.migo_{home}_dhw_schedule` | Scheduled DHW | - | Whether hot water production is enabled for the *currently active* time slot of the selected DHW (`event`-type) schedule. Forced `off` while Away is active. `unavailable` if the schedule/slot can't be resolved - never a guessed value. See [API Reference](api/reference.md#event-dhw-schedules) for how the slot is resolved. |
 
 ### Thermostat Binary Sensors
 
@@ -132,6 +156,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|--------|-------------|
 | `switch.migo_{home}_dhw_boost` | DHW Boost | Gateway | Hot water temperature boost |
 | `switch.migo_{home}_anticipation` | Heating Anticipation | Home | Predictive heating |
+| `switch.migo_{home}_away_mode` | Away Mode | Gateway | Home-wide Away flag. Writes via `setthermmode`, the same call the climate preset uses, so it has no side effect on the boiler quick-action mode. |
 
 ---
 

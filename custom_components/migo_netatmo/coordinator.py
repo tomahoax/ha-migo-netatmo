@@ -510,3 +510,16 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             The cached value, or default if not found.
         """
         return self._config_cache.get(key, default)
+
+    def clear_cached_value(self, key: str) -> None:
+        """Remove a value from the optimistic cache.
+
+        Used after a successful write-and-refresh so API data regains
+        authority instead of the cached value shadowing it indefinitely
+        (unlike `homes`/`rooms`/`devices`, `_config_cache` is never reset
+        wholesale between refreshes).
+
+        Args:
+            key: Cache key to remove.
+        """
+        self._config_cache.pop(key, None)

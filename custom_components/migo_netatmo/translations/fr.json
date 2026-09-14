@@ -83,6 +83,12 @@
       },
       "ebus_error": {
         "name": "Erreur eBus"
+      },
+      "away_mode": {
+        "name": "Mode absent"
+      },
+      "dhw_schedule": {
+        "name": "ECS planifiée"
       }
     },
     "button": {
@@ -101,6 +107,7 @@
             "state": {
               "away": "Absent",
               "frost_guard": "Hors-gel",
+              "dhw_only": "Eau chaude seule",
               "boost": "Boost"
             }
           }
@@ -156,6 +163,14 @@
       },
       "daily_boiler_runtime": {
         "name": "Temps de fonctionnement chaudière"
+      },
+      "boiler_mode": {
+        "name": "Mode chaudière",
+        "state": {
+          "normal": "Normal",
+          "dhw_only": "Eau chaude seule",
+          "frost_guard": "Hors-gel"
+        }
       }
     },
     "switch": {
@@ -164,6 +179,9 @@
       },
       "anticipation": {
         "name": "Anticipation chauffage"
+      },
+      "away_mode": {
+        "name": "Mode absent"
       }
     }
   }

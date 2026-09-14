@@ -83,6 +83,12 @@
       },
       "ebus_error": {
         "name": "Ошибка eBus"
+      },
+      "away_mode": {
+        "name": "Режим отсутствия"
+      },
+      "dhw_schedule": {
+        "name": "ГВС по расписанию"
       }
     },
     "button": {
@@ -101,6 +107,7 @@
             "state": {
               "away": "Нет дома",
               "frost_guard": "Защита от замерзания",
+              "dhw_only": "Только ГВС",
               "boost": "Boost"
             }
           }
@@ -156,6 +163,14 @@
       },
       "daily_boiler_runtime": {
         "name": "Ежедневное время работы котла"
+      },
+      "boiler_mode": {
+        "name": "Режим котла",
+        "state": {
+          "normal": "Обычный",
+          "dhw_only": "Только ГВС",
+          "frost_guard": "Защита от замерзания"
+        }
       }
     },
     "switch": {
@@ -164,6 +179,9 @@
       },
       "anticipation": {
         "name": "Упреждение отопления"
+      },
+      "away_mode": {
+        "name": "Режим отсутствия"
       }
     }
   }

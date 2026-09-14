@@ -27,6 +27,12 @@ class MigoApiControlMixin:
     _api: MigoApi
     coordinator: MigoDataUpdateCoordinator
 
+    if TYPE_CHECKING:
+        # Provided by the Entity base class this mixin is always combined
+        # with (see MigoGatewayControlEntity etc.) - declared here only so
+        # the methods below type-check.
+        def async_write_ha_state(self) -> None: ...
+
     async def _call_api_and_refresh(
         self,
         api_method: Callable[..., Awaitable[Any]],
@@ -40,6 +46,48 @@ class MigoApiControlMixin:
         """
         await api_method(**kwargs)
         await self.coordinator.async_request_refresh()
+
+    async def _call_api_optimistically(
+        self,
+        api_method: Callable[..., Awaitable[Any]],
+        *,
+        cache_key: str,
+        optimistic_value: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Call an API method with immediate optimistic UI feedback.
+
+        Unlike `_call_api_and_refresh`, this writes `optimistic_value` to the
+        coordinator's cache and to entity state *before* the API call, so the
+        UI reacts immediately instead of waiting for the coordinator's next
+        refresh cycle. On success, it requests a refresh and then clears the
+        cache entry so API data regains authority - the cache key is not left
+        behind to shadow future API values. On failure, the previous cached
+        value (or its absence) is restored before the exception propagates.
+
+        Args:
+            api_method: The async API method to call.
+            cache_key: The coordinator optimistic-cache key for this entity.
+            optimistic_value: The value to show immediately while the call is
+                in flight.
+            **kwargs: Arguments to pass to the API method.
+        """
+        previous = self.coordinator.get_cached_value(cache_key)
+        self.coordinator.set_cached_value(cache_key, optimistic_value)
+        self.async_write_ha_state()
+
+        try:
+            await api_method(**kwargs)
+        except Exception:
+            if previous is None:
+                self.coordinator.clear_cached_value(cache_key)
+            else:
+                self.coordinator.set_cached_value(cache_key, previous)
+            self.async_write_ha_state()
+            raise
+
+        await self.coordinator.async_request_refresh()
+        self.coordinator.clear_cached_value(cache_key)
 
 
 class MigoEntity(CoordinatorEntity["MigoDataUpdateCoordinator"]):

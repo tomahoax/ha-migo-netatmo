@@ -112,7 +112,7 @@ Retrieves the static configuration of homes (structure, schedules, modules).
 | `therm_heating_priority` | Heating priority: `eco`, `comfort` |
 | `outdoor_temperature_source` | Outdoor temperature source |
 | `capabilities` | Available features (e.g., `peak_and_off_peak_electricity_times`) |
-| `linked_schedules` | Links between therm and event schedules |
+| `linked_schedules` | Links between `therm` and `event` schedules. **Shape not documented by Netatmo** and not directly observed - the integration parses it defensively (mapping, list of pairs, or list of `{key: id, ...}` dicts) and falls back to picking the `event` schedule independently marked `selected` if it can't be resolved. See `helpers.get_event_schedule()`. |
 
 #### Modules (NAVaillant - Gateway)
 | Field | Description |
@@ -169,6 +169,45 @@ Retrieves the static configuration of homes (structure, schedules, modules).
 |-------|-------------|
 | `zone_id` | Zone ID |
 | `m_offset` | Minutes since Monday 00:00 |
+
+---
+
+### Event (DHW) schedules
+
+Every home has two parallel families of schedules with the same names, zone
+ids and timetables, distinguished by `type`: `therm` (room temperatures,
+`zones[].rooms`) and `event` (DHW on/off per zone, `zones[].modules[].dhw_enabled`).
+Both a `therm` and an `event` schedule are typically marked `selected: true`
+at the same time - they are meant to be read together, not as alternatives.
+
+**Resolving the DHW state for "right now"** (used by
+`binary_sensor.migo_{home}_dhw_schedule`, see [entities](../entities.md#binary-sensors)):
+
+1. Pick the active `event` schedule: prefer the one paired to the selected
+   `therm` schedule via `linked_schedules` (shape not documented by Netatmo,
+   parsed defensively - see `helpers.get_event_schedule()`), falling back to
+   the `event` schedule independently marked `selected`.
+2. Compute minutes elapsed since Monday 00:00 in the local timezone
+   (`helpers.current_week_minutes()`).
+3. In the schedule's `timetable` (not guaranteed sorted - sort by `m_offset`
+   first), find the last entry whose `m_offset` is not in the future. If none
+   qualifies (e.g. early Monday morning, before the week's first slot), wrap
+   around to the timetable's last entry (`helpers.resolve_timetable_zone()`).
+4. Look up that `zone_id` in `zones`, then read `dhw_enabled` from the module
+   entry matching the gateway's `id` (falling back to the zone's single
+   module if there's exactly one, since the module entry's `id` field is not
+   always present in practice).
+5. Force the result to `off` while the home's `therm_mode` is `"away"`: the
+   Away temperature slot replaces the current schedule slot with hot water
+   production disabled, so a plain timetable lookup would otherwise be
+   misleading during Away.
+
+**A caveat found in community testing:** the legacy `getthermostatsdata`
+endpoint (see [Known limitations](#known-limitations-legacy-getthermostatsdata-endpoint)
+below) also carries a per-zone DHW flag, `hw`, directly in its own schedule
+data - but it is not kept in sync with the app once `event` schedules exist;
+only `homesdata`'s `dhw_enabled` matches what the app actually shows. Do not
+use `hw` for this.
 
 ---
 
@@ -785,6 +824,39 @@ device_id=<gateway_mac>&module_id=<thermostat_mac>&scale=1day&type=sum_boiler_on
 
 ---
 
+## Known Limitations: Legacy `getthermostatsdata` Endpoint
+
+Community forum testing (see project CHANGELOG for the thread reference)
+found that `POST https://api.netatmo.com/api/getthermostatsdata` - the
+legacy endpoint used by the older `vaillant-vsmart` integration, on a
+*different host* than everything else in this document (`api.netatmo.com`
+instead of `app.netatmo.net`) - accepts the same bearer token obtained via
+this integration's OAuth flow, and returns fields not present in
+`homesdata`/`homestatus`:
+
+| Field | Description |
+|-------|-------------|
+| `system_mode` | The boiler quick-action mode as a single value: `winter` / `summer` / `frostguard` |
+| `setpoint_away.setpoint_activate` | Boolean Away flag, radio-synced with the thermostat (can lag `homesdata`'s `therm_mode` by a few minutes right after a change) |
+| `setpoint_hwb` | DHW boost state |
+| `dhw`, `dhw_min`, `dhw_max` | DHW temperature and its configured range |
+
+**This integration does not call this endpoint.** `therm_mode` (home-level,
+already returned by `homesdata` at no extra API cost) and
+`therm_setpoint_mode` (room-level) are sufficient to derive the boiler mode
+and Away state used by `sensor.migo_{home}_boiler_mode`,
+`binary_sensor.migo_{home}_away_mode` and the climate preset - see
+`helpers.derive_boiler_mode()`. Calling a second, undocumented Netatmo host
+with a token minted for a different one was judged to need its own
+verification (real traffic capture, response envelope shape - this endpoint
+returns `body.devices[]` rather than `body.homes[]`) before depending on it.
+A throwaway probe script for that verification exists in this project's
+development history; revisit `dhw_min`/`dhw_max` (DHW temperature range) if
+that verification is done, since it is the one piece of data with no
+existing equivalent path.
+
+---
+
 ## Available Webhooks
 
 | Event | Description |
@@ -819,6 +891,7 @@ device_id=<gateway_mac>&module_id=<thermostat_mac>&scale=1day&type=sum_boiler_on
 - [x] Thermostat firmware version
 - [x] Room humidity
 - [x] Daily boiler runtime (Energy Dashboard compatible)
+- [x] Boiler mode (Normal / DHW only / Frost guard, derived)
 
 ### Binary Sensor Entities
 - [x] Boiler running
@@ -826,10 +899,13 @@ device_id=<gateway_mac>&module_id=<thermostat_mac>&scale=1day&type=sum_boiler_on
 - [x] Boiler error
 - [x] eBus error
 - [x] Anticipating (heating anticipation in progress)
+- [x] Away mode
+- [x] Scheduled DHW state (currently active time slot)
 
 ### Switch Entities
 - [x] Domestic Hot Water (DHW)
 - [x] Heating anticipation
+- [x] Away mode
 
 ### Number Entities
 - [x] Heating curve (slope)
