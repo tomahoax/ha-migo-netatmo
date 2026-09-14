@@ -8,14 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 import aiohttp
 import pytest
 
-from custom_components.migo_netatmo.api import (
-    ERROR_BODY_MAX_LENGTH,
-    MigoApi,
-    MigoApiError,
-    MigoAuthError,
-    MigoConnectionError,
-    _summarise_error_body,
-)
+from custom_components.migo_netatmo.api import MigoApi, MigoApiError, MigoAuthError, MigoConnectionError
+from custom_components.migo_netatmo.api.transport import ERROR_BODY_MAX_LENGTH, _summarise_error_body
 from custom_components.migo_netatmo.const import (
     API_CHANGEHEATINGALGO_URL,
     API_CHANGEHEATINGCURVE_URL,
