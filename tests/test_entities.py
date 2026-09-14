@@ -17,6 +17,7 @@ from custom_components.migo_netatmo.binary_sensor import (
 from custom_components.migo_netatmo.button import (
     MigoGatewayRefreshButton,
     MigoResetAwayUntilButton,
+    MigoResetHeatingCurveButton,
     MigoThermostatRefreshButton,
 )
 from custom_components.migo_netatmo.climate import (
@@ -31,6 +32,7 @@ from custom_components.migo_netatmo.const import (
     BOILER_MODE_FROST_GUARD,
     BOILER_MODE_NORMAL,
     DEFAULT_BOOST_DURATION,
+    DEFAULT_HEATING_CURVE,
     DEFAULT_MANUAL_SETPOINT_DURATION,
     MODE_AWAY,
     MODE_FROST_GUARD,
@@ -42,7 +44,11 @@ from custom_components.migo_netatmo.const import (
 )
 from custom_components.migo_netatmo.datetime import MigoAwayReturnDateTime
 from custom_components.migo_netatmo.entity import MigoThermostatEntity, _entity_config_entry_id, _resolve_via_device_id
-from custom_components.migo_netatmo.number import MigoDHWTemperatureNumber, MigoTemperatureOffsetNumber
+from custom_components.migo_netatmo.number import (
+    MigoDHWTemperatureNumber,
+    MigoHeatingCurveNumber,
+    MigoTemperatureOffsetNumber,
+)
 from custom_components.migo_netatmo.sensor import MigoBoilerModeSensor
 from custom_components.migo_netatmo.switch import (
     MigoAnticipationSwitch,
@@ -926,6 +932,44 @@ class TestNumberOptimisticCacheClearing:
 
         api.set_temperature_offset.assert_called_once_with(home_id="home_123", room_id="room_456", offset=1.5)
         assert cache == {}
+
+
+class TestHeatingCurveDefault:
+    """Tests for MigoHeatingCurveNumber/MigoResetHeatingCurveButton and DEFAULT_HEATING_CURVE.
+
+    Reported live: "Reset heating curve" set the value to 1.5, not the 2.6
+    shown in the MiGo app. Root cause investigated via a live debug-log
+    capture: `heating_curve` is never present in homesdata/homestatus/
+    getconfigs, so there is no API-discoverable "true default" to reset to
+    at all - it's an installation-specific calibration value. The user
+    chose to just update the constant to match their own installation
+    (2.6) rather than remove the button; these tests pin that constant's
+    current value and confirm both entities are wired to use it, not that
+    2.6 is itself "correct" in any universal sense.
+    """
+
+    def test_default_heating_curve_is_2_6(self):
+        """Pins the constant so a future edit doesn't silently drift again."""
+        assert DEFAULT_HEATING_CURVE == 2.6
+
+    @pytest.mark.asyncio
+    async def test_reset_button_writes_default_heating_curve(self, mock_coordinator):
+        api = create_autospec(MigoApi, instance=True)
+        api.set_heating_curve.return_value = {"status": "ok"}
+        entity = MigoResetHeatingCurveButton(mock_coordinator, "home_123", "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_press()
+
+        api.set_heating_curve.assert_called_once_with(device_id="gateway_001", slope=DEFAULT_HEATING_CURVE)
+
+    def test_number_native_value_falls_back_to_default(self, mock_coordinator):
+        """No cache, no API data (heating_curve is write-only) - falls back to the constant."""
+        entity = MigoHeatingCurveNumber(
+            mock_coordinator, "home_123", "gateway_001", create_autospec(MigoApi, instance=True)
+        )
+
+        assert entity.native_value == DEFAULT_HEATING_CURVE
 
 
 class TestMigoAwayReturnDateTime:

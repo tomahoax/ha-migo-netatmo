@@ -139,6 +139,16 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
 
     Stays Configuration (unlike the refresh buttons): it directly acts on
     the Heating curve setting, so it belongs grouped with it.
+
+    Not a true "reset to factory default": the API has no such concept for
+    this value (`changeheatingcurve` is a plain set, nothing more), and
+    nothing this integration calls ever echoes back a per-installation
+    default to reset to - it's installation-specific (heating type,
+    radiator sizing, ...), confirmed to vary between at least two real
+    installations captured during development (1.4 and 2.6). This writes
+    `DEFAULT_HEATING_CURVE` (`const.py`), a plain constant - update it there
+    to match your own installation's calibrated value if this button's
+    result doesn't match what the MiGo app shows.
     """
 
     _attr_translation_key = "reset_heating_curve"

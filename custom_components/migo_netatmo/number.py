@@ -409,7 +409,18 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Return the current heating curve slope."""
+        """Return the current heating curve slope.
+
+        Write-only setting: `heating_curve` is never present in
+        `homesdata`/`homestatus`/`getconfigs` (confirmed via a live
+        debug-log capture across all three), so `self._device_data.get(...)`
+        below never actually has anything to return - it's kept in case a
+        future capture ever finds it echoed back somewhere, but in practice
+        this always falls through to the optimistic cache (right after a
+        write from Home Assistant) or DEFAULT_HEATING_CURVE (everywhere
+        else, including right after the reset button - see its own
+        docstring on why that's not a real factory default).
+        """
         # Check optimistic cache first
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
@@ -418,7 +429,6 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         api_slope = self._device_data.get("heating_curve")
         if api_slope is not None:
             return round(api_slope / 10, 1)
-        # Default to 1.5 as typical value
         return DEFAULT_HEATING_CURVE
 
     async def async_set_native_value(self, value: float) -> None:

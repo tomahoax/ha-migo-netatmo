@@ -182,7 +182,14 @@ HYSTERESIS_STEP: Final = 0.1
 HEATING_CURVE_MIN: Final = 0.0
 HEATING_CURVE_MAX: Final = 5.0
 HEATING_CURVE_STEP: Final = 0.1
-DEFAULT_HEATING_CURVE: Final = 1.5
+# No universal factory default exists for this value - it's installation-
+# specific (heating type, radiator sizing, ...) and never echoed back by any
+# API endpoint this integration calls (homesdata/homestatus/getconfigs all
+# confirmed, via a live debug-log capture, not to carry it). This is simply
+# the value MigoResetHeatingCurveButton and MigoHeatingCurveNumber's no-data
+# fallback use - set per the user's own calibrated value, not a Netatmo/
+# Saunier Duval constant.
+DEFAULT_HEATING_CURVE: Final = 2.6
 
 # =============================================================================
 # Timing Constants

@@ -193,7 +193,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|-------|-------------|
 | `number.migo_{home}_dhw_temperature` | DHW Temperature | 45-60°C | Hot water temperature setpoint |
 | `number.migo_{home}_hysteresis` | Hysteresis Threshold | 0.1-2.0°C | Heating algorithm threshold |
-| `number.migo_{home}_heating_curve` | Heating Curve | 0.0-5.0 | Heating curve slope adjustment |
+| `number.migo_{home}_heating_curve` | Heating Curve | 0.0-5.0 | Heating curve slope adjustment. Write-only: never echoed back by the API, so this always shows either what was last set from Home Assistant or `DEFAULT_HEATING_CURVE` (`const.py`) - never the boiler's real current value on its own |
 
 ### Home Controls
 
@@ -230,7 +230,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
 | `button.migo_{home}_refresh` | Refresh | Force data refresh from API |
-| `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Reset heating curve to default value (1.5) |
+| `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Sets the heating curve to `DEFAULT_HEATING_CURVE` (`const.py`, currently `2.6`) - not a true "reset to factory default": no such concept exists in the API, and this value is installation-specific, not universal. Edit the constant to match your own installation if the shipped value doesn't match what the MiGo app shows |
 | `button.migo_{home}_reset_away_until` | Reset Away Until | Clears `datetime.migo_{home}_away_until` back to empty. While currently Away, also clears `therm_mode_endtime` server-side (via `sethomedata`, `endtime=None`) so it can't resurface on the next refresh; otherwise there is nothing to clear server-side, only this integration's own cache. |
 
 ---
