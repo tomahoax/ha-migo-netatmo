@@ -154,11 +154,10 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
             DEFAULT_HEATING_CURVE,
             self._device_id,
         )
-        await self._api.set_heating_curve(
+        await self._call_api_optimistically(
+            self._api.set_heating_curve,
+            cache_key=f"heating_curve_{self._device_id}",
+            optimistic_value=DEFAULT_HEATING_CURVE,
             device_id=self._device_id,
             slope=DEFAULT_HEATING_CURVE,
         )
-        # Clear cache and refresh
-        cache_key = f"heating_curve_{self._device_id}"
-        self.coordinator.set_cached_value(cache_key, DEFAULT_HEATING_CURVE)
-        await self.coordinator.async_request_refresh()

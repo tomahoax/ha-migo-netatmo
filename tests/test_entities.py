@@ -35,6 +35,7 @@ from custom_components.migo_netatmo.const import (
     MODE_SCHEDULE,
     TEMP_MAX,
 )
+from custom_components.migo_netatmo.number import MigoDHWTemperatureNumber, MigoTemperatureOffsetNumber
 from custom_components.migo_netatmo.sensor import MigoBoilerModeSensor
 from custom_components.migo_netatmo.switch import MigoAnticipationSwitch, MigoAwayModeSwitch, MigoDHWSwitch
 
@@ -581,3 +582,57 @@ class TestDevicePageOrganization:
         """Read-only companion to the switch: moved out of Sensors to avoid duplicating it."""
         entity = MigoAwayModeBinarySensor(mock_coordinator, "gateway_001")
         assert entity.entity_category == EntityCategory.DIAGNOSTIC
+
+
+class TestNumberOptimisticCacheClearing:
+    """Regression guard: number entities must clear their optimistic cache
+    after a successful write.
+
+    A user reported that a DHW temperature change made from the MiGo mobile
+    app didn't show up in Home Assistant after pressing Refresh. Root cause
+    investigation (see CHANGELOG) found the real bug wasn't that report
+    itself (a backend propagation delay, outside our control) but a related
+    latent one: these entities set an optimistic cache on write and never
+    cleared it, so touching a slider from Home Assistant even once would
+    permanently mask all future out-of-band changes until the next restart.
+    All five `number` entities plus `MigoResetHeatingCurveButton` were
+    switched to `_call_api_optimistically`, whose clearing behavior is
+    covered generically in test_entity_mixin.py - these two tests just
+    confirm each entity is actually wired up to use it, with the right API
+    call and cache key.
+    """
+
+    @pytest.fixture
+    def cache(self, mock_coordinator):
+        """Give mock_coordinator a real dict-backed cache instead of a bare MagicMock."""
+        store: dict = {}
+        mock_coordinator.get_cached_value = MagicMock(side_effect=lambda k, default=None: store.get(k, default))
+        mock_coordinator.set_cached_value = MagicMock(side_effect=store.__setitem__)
+        mock_coordinator.clear_cached_value = MagicMock(side_effect=lambda k: store.pop(k, None))
+        return store
+
+    @pytest.mark.asyncio
+    async def test_dhw_temperature_clears_cache_after_refresh(self, mock_coordinator, cache):
+        """This is the exact entity from the bug report."""
+        api = create_autospec(MigoApi, instance=True)
+        api.set_dhw_temperature.return_value = {"status": "ok"}
+        entity = MigoDHWTemperatureNumber(mock_coordinator, "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_set_native_value(52)
+
+        api.set_dhw_temperature.assert_called_once_with(home_id="home_123", module_id="gateway_001", temperature=52)
+        assert cache == {}
+
+    @pytest.mark.asyncio
+    async def test_temperature_offset_clears_cache_after_refresh(self, mock_coordinator, cache):
+        """Also verifies the MigoRoomControlEntity base class swap (it had no mixin before)."""
+        api = create_autospec(MigoApi, instance=True)
+        api.set_temperature_offset.return_value = {"status": "ok"}
+        entity = MigoTemperatureOffsetNumber(mock_coordinator, "room_456", "home_123", api)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_set_native_value(1.5)
+
+        api.set_temperature_offset.assert_called_once_with(home_id="home_123", room_id="room_456", offset=1.5)
+        assert cache == {}

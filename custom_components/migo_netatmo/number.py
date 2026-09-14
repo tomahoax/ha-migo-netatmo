@@ -33,7 +33,7 @@ from .const import (
     TEMP_OFFSET_MIN,
     TEMP_OFFSET_STEP,
 )
-from .entity import MigoGatewayControlEntity, MigoRoomEntity, MigoThermostatHomeControlEntity
+from .entity import MigoGatewayControlEntity, MigoRoomControlEntity, MigoThermostatHomeControlEntity
 from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
@@ -164,17 +164,17 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
             minutes,
             self._home_id,
         )
-        await self._api.set_manual_setpoint_duration(
+        await self._call_api_optimistically(
+            self._api.set_manual_setpoint_duration,
+            cache_key=self._cache_key,
+            optimistic_value=minutes,
             home_id=self._home_id,
             duration=minutes,
         )
-        # Store in optimistic cache
-        self.coordinator.set_cached_value(self._cache_key, minutes)
         _LOGGER.debug("Manual setpoint duration set for home %s", self._home_id)
-        await self.coordinator.async_request_refresh()
 
 
-class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
+class MigoTemperatureOffsetNumber(MigoRoomControlEntity, NumberEntity):
     """MiGO Temperature offset number entity for rooms."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -194,9 +194,8 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
         api: MigoApi,
     ) -> None:
         """Initialize the temperature offset number entity."""
-        super().__init__(coordinator, room_id)
+        super().__init__(coordinator, room_id, api)
         self._home_id = home_id
-        self._api = api
         self._attr_unique_id = generate_unique_id("temp_offset", room_id)
 
     @property
@@ -223,15 +222,15 @@ class MigoTemperatureOffsetNumber(MigoRoomEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the temperature offset."""
         _LOGGER.debug("Setting temperature offset to %s°C for room %s", value, self._room_id)
-        await self._api.set_temperature_offset(
+        await self._call_api_optimistically(
+            self._api.set_temperature_offset,
+            cache_key=self._cache_key,
+            optimistic_value=value,
             home_id=self._home_id,
             room_id=self._room_id,
             offset=value,
         )
-        # Store in optimistic cache (API doesn't return this value)
-        self.coordinator.set_cached_value(self._cache_key, value)
         _LOGGER.debug("Temperature offset set for room %s", self._room_id)
-        await self.coordinator.async_request_refresh()
 
 
 class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
@@ -289,15 +288,15 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
             temperature,
             self._device_id,
         )
-        await self._api.set_dhw_temperature(
+        await self._call_api_optimistically(
+            self._api.set_dhw_temperature,
+            cache_key=self._cache_key,
+            optimistic_value=temperature,
             home_id=home_id,
             module_id=self._device_id,
             temperature=temperature,
         )
-        # Store in optimistic cache
-        self.coordinator.set_cached_value(self._cache_key, temperature)
         _LOGGER.debug("DHW temperature set for device %s", self._device_id)
-        await self.coordinator.async_request_refresh()
 
 
 class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
@@ -361,14 +360,14 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
             hysteresis,
             self._device_id,
         )
-        await self._api.set_hysteresis(
+        await self._call_api_optimistically(
+            self._api.set_hysteresis,
+            cache_key=self._cache_key,
+            optimistic_value=hysteresis,
             device_id=self._device_id,
             hysteresis=hysteresis,
         )
-        # Store in optimistic cache
-        self.coordinator.set_cached_value(self._cache_key, hysteresis)
         _LOGGER.debug("Hysteresis set for device %s", self._device_id)
-        await self.coordinator.async_request_refresh()
 
 
 class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
@@ -431,11 +430,11 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
             slope,
             self._device_id,
         )
-        await self._api.set_heating_curve(
+        await self._call_api_optimistically(
+            self._api.set_heating_curve,
+            cache_key=self._cache_key,
+            optimistic_value=slope,
             device_id=self._device_id,
             slope=slope,
         )
-        # Store in optimistic cache
-        self.coordinator.set_cached_value(self._cache_key, slope)
         _LOGGER.debug("Heating curve set for device %s", self._device_id)
-        await self.coordinator.async_request_refresh()
