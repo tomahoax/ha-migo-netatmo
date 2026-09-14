@@ -47,10 +47,12 @@ _LOGGER = logging.getLogger(__name__)
 
 # Custom preset mode names for MiGO-specific states
 PRESET_FROST_GUARD = "frost_guard"
-# Read-only: MiGo's "DHW only" boiler quick-action shows up as the room's
-# therm_setpoint_mode being "hg" while the home's therm_mode stays "schedule"
-# (as opposed to real frost guard/standby, where therm_mode itself is "hg").
-# There is no known write path for it distinct from PRESET_FROST_GUARD.
+# MiGo's "DHW only" boiler quick-action: the room's therm_setpoint_mode is
+# "hg" while the home's therm_mode stays "schedule" (as opposed to real
+# frost guard/standby, where therm_mode itself is "hg"). Both share the same
+# underlying MiGo mode value ("hg") but at different API levels - see
+# async_set_preset_mode, which writes each one explicitly rather than
+# through the ambiguous generic dispatcher (MigoApi.set_mode()).
 PRESET_DHW_ONLY = "dhw_only"
 
 # Map MiGO room-level modes to HVAC modes.
@@ -77,10 +79,14 @@ HVAC_TO_MIGO_MODE: dict[HVACMode, str] = {
     HVACMode.OFF: MODE_FROST_GUARD,
 }
 
-# Map preset names to MiGO modes (boost is handled separately)
+# Map preset names to MiGO modes, for presets whose write is a plain
+# `set_mode()` call. Boost, Frost guard and DHW only are handled by explicit
+# branches in async_set_preset_mode instead: boost needs a temperature/
+# duration, and Frost guard/DHW only both use MiGo's "hg" mode value but at
+# different API levels (home vs room) - collapsing them into this dict was
+# the root cause of Frost guard silently writing DHW only's room-level call.
 PRESET_TO_MIGO_MODE: dict[str, str] = {
     PRESET_AWAY: MODE_AWAY,
-    PRESET_FROST_GUARD: MODE_FROST_GUARD,
 }
 
 # Map MiGO modes to preset names (None means no preset active)
@@ -382,13 +388,26 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 duration=DEFAULT_BOOST_DURATION,
             )
         elif preset_mode == PRESET_DHW_ONLY:
-            # Read-only: no known API call sets "DHW only" independently of
-            # the boiler quick-action mode. See PRESET_DHW_ONLY's docstring.
-            _LOGGER.error(
-                "Preset '%s' is read-only and cannot be set from Home Assistant (no known MiGo API call for it)",
-                PRESET_DHW_ONLY,
+            # Room-level "hg": MiGo's DHW-only quick action. The same call
+            # HVACMode.OFF already makes - see PRESET_DHW_ONLY's docstring.
+            _LOGGER.debug("Setting room %s to DHW-only (room-level hg)", self._room_id)
+            await self._call_api_and_refresh(
+                self._api.set_room_state,
+                home_id=home_id,
+                room_id=self._room_id,
+                mode=MODE_FROST_GUARD,
             )
-            return
+        elif preset_mode == PRESET_FROST_GUARD:
+            # Home-level "hg": real standby. Distinct from DHW only above -
+            # MigoApi.set_mode() routes "hg" to the room unconditionally and
+            # never to the home-level endpoint, so this bypasses it and
+            # calls set_therm_mode (setthermmode) directly.
+            _LOGGER.debug("Setting home %s to Frost guard (home-level hg)", home_id)
+            await self._call_api_and_refresh(
+                self._api.set_therm_mode,
+                home_id=home_id,
+                mode=MODE_FROST_GUARD,
+            )
         else:
             migo_mode = PRESET_TO_MIGO_MODE.get(preset_mode)
             if not migo_mode:

@@ -114,6 +114,11 @@
         }
       }
     },
+    "datetime": {
+      "away_until": {
+        "name": "Away until"
+      }
+    },
     "number": {
       "dhw_temperature": {
         "name": "DHW temperature"

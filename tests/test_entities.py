@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
@@ -35,6 +36,7 @@ from custom_components.migo_netatmo.const import (
     MODE_SCHEDULE,
     TEMP_MAX,
 )
+from custom_components.migo_netatmo.datetime import MigoAwayReturnDateTime
 from custom_components.migo_netatmo.number import MigoDHWTemperatureNumber, MigoTemperatureOffsetNumber
 from custom_components.migo_netatmo.sensor import MigoBoilerModeSensor
 from custom_components.migo_netatmo.switch import MigoAnticipationSwitch, MigoAwayModeSwitch, MigoDHWSwitch
@@ -209,12 +211,16 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_frost_guard(self, climate):
-        """Test setting preset mode to frost guard."""
+        """Frost guard (Veille) writes home-level hg via set_therm_mode directly.
+
+        Regression guard: it used to go through the generic set_mode()
+        dispatcher, which always routes "hg" to the room, silently producing
+        the DHW-only effect instead of real standby.
+        """
         await climate.async_set_preset_mode(PRESET_FROST_GUARD)
 
-        climate._api.set_mode.assert_called_once()
-        call_kwargs = climate._api.set_mode.call_args.kwargs
-        assert call_kwargs["mode"] == MODE_FROST_GUARD
+        climate._api.set_mode.assert_not_called()
+        climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_boost(self, climate):
@@ -298,12 +304,18 @@ class TestMigoClimate:
         assert climate.hvac_action == HVACAction.OFF
 
     @pytest.mark.asyncio
-    async def test_set_preset_mode_dhw_only_is_rejected(self, climate):
-        """DHW only is read-only: setting it must not call any API method."""
+    async def test_set_preset_mode_dhw_only_writes_room_level_hg(self, climate):
+        """DHW only (Eau chaude seulement) writes room-level hg via set_room_state directly.
+
+        The same call HVACMode.OFF already makes - previously misdiagnosed
+        as "no known write path" and rejected outright.
+        """
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
         climate._api.set_mode.assert_not_called()
-        climate._api.set_temperature.assert_not_called()
+        climate._api.set_room_state.assert_called_once_with(
+            home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
+        )
 
     def test_hvac_action_uses_real_boiler_status_when_available(self, climate, mock_coordinator):
         """boiler_status from the thermostat device takes priority over the temperature heuristic."""
@@ -348,9 +360,14 @@ class TestModeMapping:
         assert HVAC_TO_MIGO_MODE[HVACMode.OFF] == MODE_FROST_GUARD
 
     def test_preset_to_migo_mode(self):
-        """Test preset to MiGO mode mapping."""
-        assert PRESET_TO_MIGO_MODE[PRESET_AWAY] == MODE_AWAY
-        assert PRESET_TO_MIGO_MODE[PRESET_FROST_GUARD] == MODE_FROST_GUARD
+        """Test preset to MiGO mode mapping.
+
+        Frost guard and DHW only are deliberately absent: both share the
+        same underlying "hg" value but write at different API levels, so
+        async_set_preset_mode handles them via explicit branches instead of
+        this generic dict - see climate.py's comment on PRESET_TO_MIGO_MODE.
+        """
+        assert PRESET_TO_MIGO_MODE == {PRESET_AWAY: MODE_AWAY}
         # Note: PRESET_BOOST is handled separately (not in mapping)
 
 
@@ -636,3 +653,69 @@ class TestNumberOptimisticCacheClearing:
 
         api.set_temperature_offset.assert_called_once_with(home_id="home_123", room_id="room_456", offset=1.5)
         assert cache == {}
+
+
+class TestMigoAwayReturnDateTime:
+    """Tests for the Away return date/time entity.
+
+    Unlike the number entities above, this one's cache must survive a
+    successful call (see the class docstring in datetime.py): there is no
+    API readback for therm_mode_endtime at all, so clearing the cache the
+    way _call_api_optimistically does would make the value vanish right
+    after every successful set.
+    """
+
+    @pytest.fixture
+    def cache(self, mock_coordinator):
+        """Give mock_coordinator a real dict-backed cache instead of a bare MagicMock."""
+        store: dict = {}
+        mock_coordinator.get_cached_value = MagicMock(side_effect=lambda k, default=None: store.get(k, default))
+        mock_coordinator.set_cached_value = MagicMock(side_effect=store.__setitem__)
+        mock_coordinator.clear_cached_value = MagicMock(side_effect=lambda k: store.pop(k, None))
+        return store
+
+    @pytest.fixture
+    def entity(self, mock_coordinator):
+        api = create_autospec(MigoApi, instance=True)
+        api.set_home_therm_mode.return_value = {"status": "ok"}
+        ent = MigoAwayReturnDateTime(mock_coordinator, "gateway_001", api)
+        ent.async_write_ha_state = MagicMock()
+        return ent
+
+    @pytest.mark.asyncio
+    async def test_set_value_activates_away_with_endtime(self, entity, cache):
+        """Converts the datetime to a Unix timestamp and activates Away."""
+        value = datetime(2026, 12, 24, 18, 0, tzinfo=UTC)
+
+        await entity.async_set_value(value)
+
+        entity._api.set_home_therm_mode.assert_called_once_with(
+            home_id="home_123", mode=MODE_AWAY, endtime=int(value.timestamp())
+        )
+
+    @pytest.mark.asyncio
+    async def test_native_value_survives_after_successful_set(self, entity, cache):
+        """The cache is NOT cleared after a successful call, unlike _call_api_optimistically."""
+        value = datetime(2026, 12, 24, 18, 0, tzinfo=UTC)
+
+        await entity.async_set_value(value)
+
+        assert entity.native_value == value
+        assert cache != {}
+
+    @pytest.mark.asyncio
+    async def test_native_value_none_by_default(self, entity):
+        """No return time has been set yet."""
+        assert entity.native_value is None
+
+    @pytest.mark.asyncio
+    async def test_set_value_restores_previous_on_failure(self, entity, cache):
+        """A failed call restores whatever return time was cached before it."""
+        previous = datetime(2026, 12, 20, 9, 0, tzinfo=UTC)
+        cache["away_until_gateway_001"] = previous
+        entity._api.set_home_therm_mode.side_effect = RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            await entity.async_set_value(datetime(2026, 12, 24, 18, 0, tzinfo=UTC))
+
+        assert entity.native_value == previous

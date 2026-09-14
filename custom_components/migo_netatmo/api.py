@@ -627,6 +627,46 @@ class MigoApi:
         _LOGGER.debug("Setting home %s therm mode to: %s", home_id, mode)
         return await self._api_request(API_SETTHERMMODE_URL, data)
 
+    async def set_home_therm_mode(
+        self,
+        home_id: str,
+        mode: str,
+        endtime: int | None = None,
+    ) -> dict[str, Any]:
+        """Set the home-level therm_mode via sethomedata, optionally with an end time.
+
+        Unlike `set_therm_mode` (the setthermmode endpoint), this supports an
+        optional Unix timestamp after which the mode automatically reverts -
+        used for a "return home at" time when activating Away, which the
+        MiGo app itself offers but setthermmode has no documented parameter
+        for. `endtime` is always sent explicitly (including as `None`), so a
+        call with no end time also clears out any previously-set one.
+
+        Args:
+            home_id: The home ID.
+            mode: The mode (schedule, away, hg).
+            endtime: Optional Unix timestamp when the mode should end.
+                None means indefinite.
+
+        Returns:
+            The API response.
+        """
+        data = {
+            "home": {
+                "id": home_id,
+                "therm_mode": mode,
+                "therm_mode_endtime": endtime,
+            }
+        }
+
+        _LOGGER.debug(
+            "Setting home %s therm_mode=%s endtime=%s via sethomedata",
+            home_id,
+            mode,
+            endtime,
+        )
+        return await self._api_request(API_SETHOMEDATA_URL, data)
+
     async def set_dhw_enabled(
         self,
         home_id: str,

@@ -33,7 +33,7 @@ what kind of thing it is, not by matching a neighbor at random:
 
 | Card | `entity_category` | What belongs there |
 |------|--------------------|---------------------|
-| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Heating anticipation, the active schedule, Refresh, the climate entity itself). |
+| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Away until, Heating anticipation, the active schedule, Refresh, the climate entity itself). |
 | **Configuration** | `config` | A setpoint or tuning value you set occasionally and mostly leave alone (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset) - plus any button that directly acts on one of those (Reset heating curve). |
 | **Sensors** | *(unset)*, read-only domain | A measured or derived value you monitor (temperatures, boiler mode, scheduled DHW state). |
 | **Diagnostic** | `diagnostic` | Read-only technical/troubleshooting data (signal strength, battery, error flags) - plus a read-only companion to a Controls entity, when its only purpose is history graphs or automation triggers rather than being the entity a user interacts with (Away mode's binary_sensor companion to its switch). |
@@ -72,9 +72,9 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 
 | Preset | Source | Description |
 |--------|--------|-------------|
-| **Away** | home `therm_mode == "away"` | Away mode - reduced temperature. Read/write. |
-| **Frost guard** | home `therm_mode == "hg"` | Real standby: the boiler is stopped. Read/write. |
-| **Hot water only** | room `therm_setpoint_mode == "hg"` while home `therm_mode` is not `"hg"` | MiGo's "DHW only" quick-action. **Read-only** - no known API call sets it independently of Frost guard; attempting to set it from Home Assistant is rejected with a log message. |
+| **Away** | home `therm_mode == "away"` | Away mode - reduced temperature. Read/write, via `setthermmode` (no return-time support - see `datetime.migo_{home}_away_until` below for that). |
+| **Frost guard** | home `therm_mode == "hg"` | Real standby: the boiler is stopped. Read/write, via `setthermmode` directly (bypassing `set_mode()`, which always routes `"hg"` to the room). |
+| **Hot water only** | room `therm_setpoint_mode == "hg"` while home `therm_mode` is not `"hg"` | MiGo's "DHW only" quick-action. Read/write, via `setstate` at the room level - the same call selecting HVAC mode Off makes. |
 | **Boost** | room `therm_setpoint_mode == "manual"` at max temperature | Forces maximum temperature (30°C) for 1 hour |
 
 > **Note:** The preset is cleared (set to None) when switching back to Auto mode.
@@ -212,6 +212,14 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 | Entity ID Pattern | Name | Options | Description |
 |-------------------|------|---------|-------------|
 | `select.migo_{home}_schedule` | Active Schedule | (Your configured schedules) | Switch between schedules |
+
+---
+
+## Date/Time
+
+| Entity ID Pattern | Name | Description |
+|-------------------|------|-------------|
+| `datetime.migo_{home}_away_until` | Away Until | Sets a return date/time when activating Away, matching the MiGo app's own option. Writes via `sethomedata`'s `therm_mode`/`therm_mode_endtime`, activating Away and setting the return time in one action - separate from `switch.migo_{home}_away_mode`, which stays on the simpler indefinite on/off call. Read-only in practice: the API never echoes the end time back, so the displayed value is only ever what was last set from Home Assistant, and is lost across a full restart. |
 
 ---
 

@@ -66,7 +66,7 @@ This integration creates **two separate devices** in Home Assistant:
 - Preset modes:
   - **Away** - Away mode
   - **Frost guard** - Minimum temperature protection (real boiler standby)
-  - **Hot water only** - MiGo's "DHW only" quick action (read-only)
+  - **Hot water only** - MiGo's "DHW only" quick action
   - **Boost** - Forces maximum temperature (30°C) for 1 hour
 
 ### Sensors
@@ -92,6 +92,10 @@ Firmware version is shown on each device's info card, not as a separate sensor.
 - **DHW boost** (hot water boost) - Gateway
 - **Heating anticipation** (enable/disable) - Home setting
 - **Away mode** (enable/disable) - Gateway, writes the same home-level flag as the climate "Away" preset
+
+### Date/Time
+
+- **Away until** - set a return date/time when leaving, matching the MiGo app's own option. Activates Away and sets the return time in one action; separate from the plain Away switch above, which stays indefinite
 
 ### Number Controls (Configuration)
 

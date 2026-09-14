@@ -114,6 +114,11 @@
         }
       }
     },
+    "datetime": {
+      "away_until": {
+        "name": "Assente fino a"
+      }
+    },
     "number": {
       "dhw_temperature": {
         "name": "Temperatura ACS"
