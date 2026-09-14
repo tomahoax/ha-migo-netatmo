@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Final, cast
 
 import aiohttp
 
@@ -37,8 +37,51 @@ from .const import (
     TOKEN_EXPIRY_BUFFER,
     USER_PREFIX,
 )
+from .models import (
+    GetConfigsResponse,
+    GetMeasureResponse,
+    HomesDataResponse,
+    HomeStatusApiResponse,
+    TokenResponse,
+)
+from .redact import mask_email, redact
 
 _LOGGER = logging.getLogger(__name__)
+
+# Server error bodies reach a user-facing notification, so they are truncated
+# there. The untruncated text still goes to the debug log.
+ERROR_BODY_MAX_LENGTH: Final = 200
+
+# Opt-in channel for unredacted payloads. A child logger inherits its parent's
+# level, so checking the EFFECTIVE level here would defeat the whole point: it
+# would go live the moment anyone debugs the integration normally. Only an
+# explicit `custom_components.migo_netatmo.api.raw: debug` in Home Assistant's
+# logger configuration sets a level on this logger itself.
+_RAW_LOGGER = logging.getLogger(f"{__name__}.raw")
+
+
+def _raw_logging_enabled() -> bool:
+    """Return True only when the raw logger's own level was set explicitly."""
+    return _RAW_LOGGER.level == logging.DEBUG
+
+
+def _log_payload(label: str, payload: Any) -> None:
+    """Log an API payload, with sensitive values redacted by default.
+
+    The redacted form keeps the full structure, so it is still useful for
+    diagnosing an undocumented backend, but the account email, the home's GPS
+    coordinates, the invitation code and hardware serials come out replaced.
+
+    Args:
+        label: Human-readable description of what is being logged.
+        payload: The request or response payload.
+    """
+    if _raw_logging_enabled():
+        _RAW_LOGGER.debug("%s (raw, unredacted): %s", label, payload)
+    elif _LOGGER.isEnabledFor(logging.DEBUG):
+        # Guarded: redact() copies the whole payload, and this runs on every
+        # poll. No point paying for it when DEBUG is off.
+        _LOGGER.debug("%s: %s", label, redact(payload))
 
 
 class MigoApiError(Exception):
@@ -51,6 +94,47 @@ class MigoAuthError(MigoApiError):
 
 class MigoConnectionError(MigoApiError):
     """Connection error."""
+
+
+def _as_json_object(payload: object) -> dict[str, Any]:
+    """Return payload as a JSON object, or raise if it is not one.
+
+    aiohttp's response.json() is typed Any, so without this every caller would
+    silently treat a JSON array or scalar as if it were a mapping. This is the
+    one place the untrusted wire format becomes a typed value.
+
+    Args:
+        payload: The decoded JSON payload.
+
+    Returns:
+        The payload, as a JSON object.
+
+    Raises:
+        MigoApiError: If the payload is not a JSON object.
+    """
+    if not isinstance(payload, dict):
+        raise MigoApiError(f"Expected a JSON object from the API, got {type(payload).__name__}")
+    return payload
+
+
+def _summarise_error_body(body: str) -> str:
+    """Return a short, safe form of a server error body for a user-facing error.
+
+    The full body ends up in a Home Assistant error notification through the
+    api_error translation placeholder, which gives an untrusted backend an
+    arbitrary-text channel into the frontend, usable for phishing. The complete
+    text is still written to the debug log, where it is genuinely useful.
+
+    Args:
+        body: The raw response body.
+
+    Returns:
+        The body collapsed to one line and truncated.
+    """
+    collapsed = " ".join(body.split())
+    if len(collapsed) <= ERROR_BODY_MAX_LENGTH:
+        return collapsed
+    return collapsed[:ERROR_BODY_MAX_LENGTH] + "..."
 
 
 class MigoApi:
@@ -107,6 +191,19 @@ class MigoApi:
         if self._own_session and self._session and not self._session.closed:
             await self._session.close()
 
+    def clear_credentials(self) -> None:
+        """Forget the password and both tokens.
+
+        Called on unload. Not exploitable, purely hygiene: a memory capture taken
+        after a user removes the integration should not still contain live
+        credentials. Deliberately not close(): the session belongs to Home
+        Assistant, so closing it would be wrong.
+        """
+        self._password = ""
+        self._access_token = None
+        self._refresh_token = None
+        self._token_expiry = None
+
     def _build_auth_headers(self) -> dict[str, str]:
         """Build headers for form-urlencoded auth requests.
 
@@ -156,13 +253,15 @@ class MigoApi:
             "scope": SCOPE,
         }
 
-        _LOGGER.debug("Authenticating with Netatmo API for user: %s", self._username)
+        # Masked: the username is the account email, which is also the login.
+        _LOGGER.debug("Authenticating with Netatmo API for user: %s", mask_email(self._username))
 
         try:
             async with session.post(
                 API_AUTH_URL,
                 data=data,
                 headers=self._build_auth_headers(),
+                timeout=self._timeout,
             ) as response:
                 if response.status == 400:
                     error_data = await response.json()
@@ -174,7 +273,9 @@ class MigoApi:
                     _LOGGER.error("Authentication failed with status: %d", response.status)
                     raise MigoAuthError(f"Authentication failed: HTTP {response.status}")
 
-                result = await response.json()
+                # _as_json_object checks it really is an object; the cast then
+                # asserts the field shape, same as the other JSON boundaries.
+                result = cast(TokenResponse, _as_json_object(await response.json()))
                 self._store_tokens(result)
 
                 _LOGGER.debug(
@@ -218,6 +319,7 @@ class MigoApi:
                 API_AUTH_URL,
                 data=data,
                 headers=self._build_auth_headers(),
+                timeout=self._timeout,
             ) as response:
                 if response.status != 200:
                     _LOGGER.warning(
@@ -226,7 +328,7 @@ class MigoApi:
                     )
                     return await self.authenticate()
 
-                result = await response.json()
+                result = cast(TokenResponse, _as_json_object(await response.json()))
                 self._store_tokens(result, preserve_refresh=True)
 
                 _LOGGER.debug("Token refreshed successfully")
@@ -238,7 +340,7 @@ class MigoApi:
 
     def _store_tokens(
         self,
-        token_data: dict[str, Any],
+        token_data: TokenResponse,
         preserve_refresh: bool = False,
     ) -> None:
         """Store tokens from API response.
@@ -246,8 +348,16 @@ class MigoApi:
         Args:
             token_data: The token response from the API.
             preserve_refresh: If True, preserve existing refresh token if not in response.
+
+        Raises:
+            MigoAuthError: If the response carries no access token.
         """
-        self._access_token = token_data["access_token"]
+        access_token = token_data.get("access_token")
+        if access_token is None:
+            # Previously a bare KeyError, which escaped authenticate() as-is
+            # instead of surfacing as an auth failure.
+            raise MigoAuthError("Authentication response carried no access token")
+        self._access_token = access_token
 
         if preserve_refresh:
             self._refresh_token = token_data.get("refresh_token", self._refresh_token)
@@ -315,10 +425,10 @@ class MigoApi:
         # Log request details
         _LOGGER.debug("API request: %s %s", method, url)
         if data is not None:
-            _LOGGER.debug("API request payload: %s", data)
+            _log_payload("API request payload", data)
 
         try:
-            async with session.request(method, url, **request_kwargs) as response:
+            async with session.request(method, url, timeout=self._timeout, **request_kwargs) as response:
                 # Log response status
                 _LOGGER.debug("API response: %s status=%d", url, response.status)
 
@@ -328,7 +438,7 @@ class MigoApi:
                     await self.authenticate()
                     request_kwargs["headers"] = self._build_api_headers(use_json)
 
-                    async with session.request(method, url, **request_kwargs) as retry_response:
+                    async with session.request(method, url, timeout=self._timeout, **request_kwargs) as retry_response:
                         _LOGGER.debug(
                             "API retry response: %s status=%d",
                             url,
@@ -336,35 +446,37 @@ class MigoApi:
                         )
                         if retry_response.status >= 400:
                             error_text = await retry_response.text()
-                            _LOGGER.error(
+                            _LOGGER.debug(
                                 "API error after retry: %s %s returned %d: %s",
                                 method,
                                 url,
                                 retry_response.status,
                                 error_text,
                             )
-                            raise MigoApiError(f"API returned {retry_response.status}: {error_text}")
-                        result = await retry_response.json()
-                        _LOGGER.debug("API response data: %s", result)
+                            raise MigoApiError(
+                                f"API returned {retry_response.status}: {_summarise_error_body(error_text)}"
+                            )
+                        result = _as_json_object(await retry_response.json())
+                        _log_payload("API response data", result)
                         return result
 
                 if response.status >= 400:
                     error_text = await response.text()
-                    _LOGGER.error(
+                    _LOGGER.debug(
                         "API error: %s %s returned %d: %s",
                         method,
                         url,
                         response.status,
                         error_text,
                     )
-                    raise MigoApiError(f"API returned {response.status}: {error_text}")
+                    raise MigoApiError(f"API returned {response.status}: {_summarise_error_body(error_text)}")
 
-                result = await response.json()
-                _LOGGER.debug("API response data: %s", result)
+                result = _as_json_object(await response.json())
+                _log_payload("API response data", result)
                 return result
 
         except aiohttp.ClientResponseError as err:
-            _LOGGER.error(
+            _LOGGER.debug(
                 "API request failed: %s %s - status=%d message=%s",
                 method,
                 url,
@@ -373,14 +485,14 @@ class MigoApi:
             )
             raise MigoApiError(f"API request failed: {err}") from err
         except aiohttp.ClientError as err:
-            _LOGGER.error("API connection error: %s %s - %s", method, url, err)
+            _LOGGER.debug("API connection error: %s %s - %s", method, url, err)
             raise MigoConnectionError(f"Connection error: {err}") from err
 
     # =========================================================================
     # Data Retrieval Methods
     # =========================================================================
 
-    async def get_homes_data(self) -> dict[str, Any]:
+    async def get_homes_data(self) -> HomesDataResponse:
         """Get homes data (static configuration) from API.
 
         This returns the structure of all homes, rooms, modules, and schedules.
@@ -397,9 +509,9 @@ class MigoApi:
         }
 
         _LOGGER.debug("Fetching homes data")
-        return await self._api_request(API_HOMESDATA_URL, data)
+        return cast(HomesDataResponse, await self._api_request(API_HOMESDATA_URL, data))
 
-    async def get_home_status(self, home_id: str) -> dict[str, Any]:
+    async def get_home_status(self, home_id: str) -> HomeStatusApiResponse:
         """Get home status (real-time data) from API.
 
         This returns current temperatures, states, and device status.
@@ -413,9 +525,9 @@ class MigoApi:
         data = {"home_id": home_id}
 
         _LOGGER.debug("Fetching home status for: %s", home_id)
-        return await self._api_request(API_HOMESTATUS_URL, data)
+        return cast(HomeStatusApiResponse, await self._api_request(API_HOMESTATUS_URL, data))
 
-    async def get_configs(self, home_id: str) -> dict[str, Any]:
+    async def get_configs(self, home_id: str) -> GetConfigsResponse:
         """Get module configurations from API.
 
         This returns configuration data that may not be in homesdata/homestatus,
@@ -430,7 +542,7 @@ class MigoApi:
         data = {"home_id": home_id}
 
         _LOGGER.debug("Fetching configs for: %s", home_id)
-        return await self._api_request(API_GETCONFIGS_URL, data)
+        return cast(GetConfigsResponse, await self._api_request(API_GETCONFIGS_URL, data))
 
     async def get_measure(
         self,
@@ -440,7 +552,7 @@ class MigoApi:
         measure_types: list[str] | None = None,
         date_begin: int | None = None,
         date_end: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> GetMeasureResponse:
         """Get measurements (historical data) from API using device/module IDs.
 
         This is the endpoint used by Vaillant vSmart integration for boiler runtime.
@@ -484,7 +596,7 @@ class MigoApi:
             measure_types,
         )
         # getmeasure uses form data, not JSON (legacy API)
-        return await self._api_request(API_GETMEASURE_URL, data, use_json=False)
+        return cast(GetMeasureResponse, await self._api_request(API_GETMEASURE_URL, data, use_json=False))
 
     # =========================================================================
     # Room Control Methods
@@ -798,6 +910,10 @@ class MigoApi:
     ) -> dict[str, Any]:
         """Set heating system type.
 
+        No entity exposes this yet: it is kept as a wrapper over a real
+        endpoint, ready for a "heating type" select. Do not delete it as
+        unused without also dropping that plan.
+
         Args:
             device_id: The gateway device ID.
             heating_type: The heating type (radiators, convector, floor_heating, unknown).
@@ -820,6 +936,10 @@ class MigoApi:
         use_water_tank: bool,
     ) -> dict[str, Any]:
         """Set DHW storage mode (water tank vs instantaneous).
+
+        No entity exposes this yet: it is kept as a wrapper over a real
+        endpoint, ready for a DHW storage switch. Do not delete it as
+        unused without also dropping that plan.
 
         Args:
             home_id: The home ID.

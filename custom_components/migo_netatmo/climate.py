@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components.climate import (
     PRESET_AWAY,
@@ -15,15 +15,11 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DEFAULT_BOOST_DURATION,
     DEFAULT_MANUAL_SETPOINT_DURATION,
-    DEVICE_TYPE_THERMOSTAT,
-    DOMAIN,
-    MANUFACTURER,
     MODE_AWAY,
     MODE_FROST_GUARD,
     MODE_HOME,
@@ -36,14 +32,17 @@ from .const import (
     TEMP_STEP,
 )
 from .coordinator import MigoDataUpdateCoordinator
-from .entity import MigoRoomControlEntity, _entity_config_entry_id, _resolve_via_device_id
-from .helpers import get_home_id_or_log_error, get_thermostat_for_room, is_home_away, safe_float
+from .entity import MigoRoomControlEntity, register_dynamic_entities
+from .helpers import generate_unique_id, get_home_id_or_raise, get_thermostat_for_room, is_home_away, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
     from .api import MigoApi
 
 _LOGGER = logging.getLogger(__name__)
+
+# Serialise write commands against the cloud API
+PARALLEL_UPDATES = 1
 
 # Custom preset mode names for MiGO-specific states
 PRESET_FROST_GUARD = "frost_guard"
@@ -100,18 +99,13 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[MigoClimate] = []
-
-    for room_id in coordinator.rooms:
-        entities.append(
-            MigoClimate(
-                coordinator=coordinator,
-                room_id=room_id,
-                api=data.api,
-            )
-        )
-
-    async_add_entities(entities)
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.rooms,
+        create_entities=lambda room_id: [MigoClimate(coordinator=coordinator, room_id=room_id, api=data.api)],
+    )
 
 
 class MigoClimate(MigoRoomControlEntity, ClimateEntity):
@@ -139,47 +133,17 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
     ) -> None:
         """Initialize the climate entity."""
         super().__init__(coordinator, room_id, api)
-        self._attr_unique_id = f"migo_netatmo_climate_{room_id}"
+        self._attr_unique_id = generate_unique_id("climate", room_id)
         self._attr_translation_key = "thermostat"
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info - climate belongs to thermostat device."""
-        thermostat_id = get_thermostat_for_room(self.coordinator, self._room_id)
-        if thermostat_id:
-            thermostat_data = self.coordinator.devices.get(thermostat_id, {})
-            home_id = self._room_data.get("home_id", "")
-            home_data = self.coordinator.homes.get(home_id, {})
-            home_name = home_data.get("name", "MiGO")
-
-            # Get the gateway ID for via_device_id
-            gateway_id = thermostat_data.get("bridge")
-
-            info = DeviceInfo(
-                identifiers={(DOMAIN, thermostat_id)},
-                name=f"{home_name} Thermostat",
-                manufacturer=MANUFACTURER,
-                model=DEVICE_TYPE_THERMOSTAT,
-            )
-
-            config_entry_id = _entity_config_entry_id(self)
-            if gateway_id and (via_device_id := _resolve_via_device_id(self.hass, config_entry_id, gateway_id)):
-                info["via_device_id"] = via_device_id
-
-            if firmware := thermostat_data.get("firmware_revision"):
-                info["sw_version"] = str(firmware)
-
-            return info
-
-        # Fallback to parent implementation
-        return super().device_info
-
-    @property
+    @override
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
         return safe_float(self._room_data.get("therm_measured_temperature"))
 
     @property
+    @override
     def target_temperature(self) -> float | None:
         """Return the target temperature."""
         return safe_float(self._room_data.get("therm_setpoint_temperature"))
@@ -218,6 +182,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         return bool(is_home_away(self.coordinator, gateway_id, gateway_data))
 
     @property
+    @override
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
         room_mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
@@ -238,6 +203,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         return MIGO_TO_HVAC_MODE.get(room_mode, HVACMode.AUTO)
 
     @property
+    @override
     def hvac_action(self) -> HVACAction | None:
         """Return the current HVAC action."""
         if self.hvac_mode == HVACMode.OFF:
@@ -267,15 +233,14 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             return None
         return self.coordinator.devices.get(thermostat_id, {}).get("boiler_status")
 
+    @override
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
 
-        home_id = get_home_id_or_log_error(self._room_data, "room", self._room_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         _LOGGER.debug("Setting room %s temperature to %s°C", self._room_id, temperature)
         await self._call_api_and_refresh(
@@ -286,11 +251,10 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         )
         _LOGGER.debug("Room %s temperature set successfully", self._room_id)
 
+    @override
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
-        home_id = get_home_id_or_log_error(self._room_data, "room", self._room_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         if hvac_mode == HVACMode.HEAT:
             # Heat mode = manual override with configurable duration
@@ -332,15 +296,18 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         _LOGGER.debug("Room %s HVAC mode set successfully", self._room_id)
 
+    @override
     async def async_turn_on(self) -> None:
         """Turn on the thermostat."""
         await self.async_set_hvac_mode(HVACMode.HEAT)
 
+    @override
     async def async_turn_off(self) -> None:
         """Turn off the thermostat."""
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     @property
+    @override
     def preset_mode(self) -> str | None:
         """Return the current preset mode."""
         room_mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
@@ -381,11 +348,10 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         return MIGO_MODE_TO_PRESET.get(room_mode)
 
+    @override
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
-        home_id = get_home_id_or_log_error(self._room_data, "room", self._room_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         if preset_mode == PRESET_BOOST:
             # Boost = force heating at max temperature for 1 hour

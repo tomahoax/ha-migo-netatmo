@@ -10,7 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release incorporates analysis and real-device testing shared by the
 community on the [HACF forum thread](https://forum.hacf.fr/t/developpement-dune-integration-custom-migo-netatmo-pour-thermostats-saunier-duval-appel-aux-testeurs/73717/14).
 
+### Security
+- **Personal data no longer written to debug logs.** With debug logging on, the integration wrote your MiGO account email, your home's exact GPS coordinates, its city, and your home invitation code into the Home Assistant log on every polling cycle. Credentials and tokens were never affected. Debug logs still show the full structure of API responses, with those values replaced, so they remain useful for diagnosis and are now safe to attach to an issue. **If you have run this integration with debug logging enabled, your existing log files still contain that data**: delete or truncate them, and do not attach an old log to a bug report. Raw unredacted payloads remain available behind a separate opt-in logger, documented in [Troubleshooting](docs/troubleshooting.md)
+- **Diagnostics downloads were incompletely redacted.** Credentials and location were replaced, but the home invitation code, hardware serial numbers, the boiler ID and the names of your homes, rooms and schedules were not. A diagnostics file showing REDACTED markers was therefore not as safe to publish as it looked
+- **The Reconfigure dialog no longer pre-fills your stored password** or client secret. Sending them back to the browser as suggested form values put them where any script running in the Home Assistant page could read them
+- **Backend error messages shown in the UI are now truncated**, closing an arbitrary-text channel from the API into Home Assistant notifications
+- **Release archives now ship a `.sha256` checksum** so the download can be verified independently
+
 ### Fixed
+- **Energy dashboard documentation was wrong.** It instructed you to add the boiler runtime sensor under *Gas consumption*, which the dashboard cannot accept: it requires a gas or energy device class, and runtime measures time. The template-sensor workaround it offered lower down also referenced an entity ID that does not match this integration's naming, so it would have silently evaluated to zero
+- **Request timeout was not applied.** Requests could hang for up to 5 minutes instead of the intended 30 seconds, leaving entities unavailable for far longer than necessary when the MiGO service was slow
+- **Malformed measurement data no longer breaks the whole refresh.** Two cases in the boiler-runtime parser raised an unhandled error that failed the entire update cycle instead of skipping one reading
+- **Gateway MAC addresses are validated** before being registered, so an unexpected device ID can no longer attach MiGO entities to an unrelated device in your Home Assistant
+- **Shared HTTP session in the config flow** - Setting up, reauthenticating or reconfiguring the integration no longer opens a private HTTP session outside Home Assistant's pool
+- **Quieter logs during an outage** - A sustained MiGO outage now logs one error when the integration goes unavailable and one message when it recovers, instead of several errors every polling cycle
+- **Boiler runtime crash** - A measurement series without a start time no longer raises an unhandled error mid-refresh
+- **Authentication errors** - An authentication response with no token now surfaces as an authentication failure instead of an internal error
 - **Reactivating Away mode after a previous Away period (with a return time set) briefly flashed the old return time on `datetime.migo_{home}_away_until` before it disappeared** - reported as working but "pas très propre." `MigoAwayModeSwitch.async_turn_on()`'s `on_optimistic` hook pushes this entity's listener right after the switch's own cache is set to `True`, but *before* the API call - at that instant `is_home_away()` already reads `True` from the switch's fresh cache, while `coordinator.homes` itself hasn't been refreshed yet and still carries `therm_mode_endtime` from the *previous* Away period. `native_value` now also requires the *raw* `coordinator.homes["therm_mode"]` to already say `"away"` before trusting `therm_mode_endtime` - `is_home_away()` alone only proves Away is conceptually active, not that the rest of `coordinator.homes` has caught up to it yet. Once the real refresh lands, both agree and the correct value (`None`) shows with no intermediate flash. Turning Away *off* was already correct and is unaffected (the early "not Away" return happens before this new check)
 - **Away mode couldn't be turned on - toggling it immediately reverted to off**, with a raw API error visible in the UI: `403 {"error":{"code":13,"message":"Cannot change therm_mode while being in temperature_control_mode cooling"}}`. `MigoApi.set_home_therm_mode()` (`sethomedata`) never sent `temperature_control_mode` at all, so it stayed stuck at whatever the account happened to have - `"cooling"`, which the API refuses to change `therm_mode` under. The MiGo app's own traffic (captured in `docs/api/reference.md`) always sends `"temperature_control_mode": "heating"` alongside every `therm_mode` change; this boiler line (gas heating only) has no cooling capability, so that's never a legitimate value to preserve. Now sent unconditionally on every call. The toggle correctly reverting to its previous state on API failure was already working as designed (`_call_api_optimistically`'s documented rollback contract) - nothing needed fixing there
 - **`datetime.migo_{home}_away_until` silently rejected any value set on it** - same root cause as above: setting a return time activates Away via the same `set_home_therm_mode` call, so it hit the identical 403 and rolled back to empty, which looked like "no way to confirm the value" rather than a failed write. Fixed by the same change; confirmed no separate datetime-widget bug exists (no availability/editability coupling in `datetime.py` at all)
@@ -50,6 +65,9 @@ community on the [HACF forum thread](https://forum.hacf.fr/t/developpement-dune-
   - **`_resolve_via_device_id()` itself used another deprecated device registry call** - `async_get_device` (identifiers-set lookup) is deprecated too, for the exact same reason and with the exact same raise-instead-of-warn risk as `via_device` above (identifiers are no longer guaranteed unique across config entries) - caught live, as a new warning, right after the first fix shipped. Switched to `async_get_device_by_identifier`, which is config-entry-scoped and needs this entity's own `config_entry_id` (a new `_entity_config_entry_id()` helper reads it off `Entity.platform.config_entry`, set alongside `Entity.hass` before `device_info` is ever read)
 
 ### Added
+- **Measured gas and electricity consumption** - Four new sensors report what the boiler actually consumed, in kWh, split between heating and hot water: *Gas for heating*, *Gas for hot water*, *Electricity for heating*, *Electricity for hot water*. They go straight into the Energy dashboard, with no template sensor and no estimating from runtime. The data was always available from the same API call the integration already made; it simply was not being requested, so this costs no extra requests
+- **Automatic removal of stale devices** - A device the MiGO account stops reporting is now removed from Home Assistant on the next refresh, instead of waiting for you to delete it by hand
+- **Icons** for the gateway and thermostat firmware sensors and the schedule selector, which previously showed a generic icon
 - **Away mode entities** - `binary_sensor.migo_{home}_away_mode` (read-only) and `switch.migo_{home}_away_mode` (read/write), reading and writing the home-level `therm_mode` field directly. The switch writes via `set_home_therm_mode` (sethomedata, with an explicit `endtime=None`), the same call the climate `Away` preset now also uses (see the "Fixed" entry below), so it has no side effect on the boiler quick-action mode
 - **Boiler mode sensor** - `sensor.migo_{home}_boiler_mode`, exposing the derived boiler quick-action mode (Normal / DHW only / Frost guard) as its own entity, independent of Away
 - **Scheduled DHW binary sensor** - `binary_sensor.migo_{home}_dhw_schedule`, resolving the currently active time slot of the selected DHW (`event`-type) schedule and reporting its `dhw_enabled` flag - data already returned by `homesdata` but previously read by no entity. Forced `off` while Away is active; reports `unavailable` rather than a guessed value when the schedule can't be resolved
@@ -63,15 +81,46 @@ community on the [HACF forum thread](https://forum.hacf.fr/t/developpement-dune-
   - **Correction:** `ignore: brands` stays on the HACS validation workflow - HACS validates brand assets against the external `home-assistant/brands` repository, not the integration's own `brand/` folder. This integration's submission there was already made and rejected on substance (wrong logo); the ignore can't come out until a corrected one merges. The local `brand/` folder remains correct for the running app itself, which resolves it directly since Home Assistant 2026.3, independently of HACS's own listing
 
 ### Changed
+- **Strict typing** - The integration reaches the Platinum `strict-typing` rule: mypy now runs with Home Assistant core's full strict profile, with no suppressions
+- **Daily boiler runtime** - The sensor now reports fractional seconds rather than truncating to whole seconds
+- **Thermostat RF signal and firmware sensors are now disabled by default**, matching the gateway's equivalents. Existing installations keep them enabled: the setting only applies when an entity is first created
 - **Reorganized the device page's Controls/Configuration/Diagnostic cards for coherence** - `DHW boost` and `Heating anticipation` were previously `Configuration` while the new `Away mode` switch was primary, so functionally identical switches ended up in different cards. All three operational toggles (plus the climate entity, the active-schedule select and the Refresh buttons - quick actions, not settings) now land in `Controls`; `Configuration` is left holding only genuine setpoints/tuning values (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset) and the button that resets one of them. The Away mode binary_sensor (a read-only companion to its switch, previously duplicating it in the Sensors card) moves to `Diagnostic`. See `docs/entities.md`'s new "Device Page Organization" section for the convention this follows going forward
   - **Upgrade note:** Home Assistant does not retroactively move already-registered entities between cards on update - `entity_category` is registry metadata it treats as sticky once an entity exists, precisely so a user's own manual override isn't silently clobbered. On an existing install, the 3 reclassified entities (`DHW boost`, `Heating anticipation`, the `Away mode` binary_sensor) keep their old card until you either adjust each one's Entity category by hand (entity's settings dialog → Advanced → Entity category) or remove and re-add the integration. New installs get the new layout immediately
-- **Removed the Gateway/Thermostat firmware sensors** - they duplicated Home Assistant's own "Device info" card, which already shows firmware version as `sw_version` for both devices. Removing an entity from the code does not delete it from an existing install's registry either; it shows as `unavailable` until manually removed (entity's settings dialog → Delete)
 - **Removed `button.migo_{home}_refresh` (Gateway and Thermostat)** - every write in this integration already refreshes itself (`MigoApiControlMixin`'s two helpers), so nothing depended on these for anything a user does from Home Assistant; their only remaining purpose was pulling in changes made outside HA (the MiGo app, the boiler itself) sooner than the next scheduled poll. That's already covered two ways that don't need dedicated entities: the poll interval is user-configurable (60s-3600s, integration options), and confirmed directly against Home Assistant's own source, `CoordinatorEntity.async_update()` - "Only used by the generic entity update service" - calls the exact same `coordinator.async_request_refresh()` these buttons did. Since every entity this integration exposes shares one coordinator, the built-in `homeassistant.update_entity` action (or the "Update" option in any migo_netatmo entity's more-info dialog) already does precisely what these buttons did, for free, on every entity, not just two. Same upgrade note as above: existing installs keep the two button entities as `unavailable` until manually removed
 - **Removed `button.migo_{home}_reset_away_until`**, at the user's explicit request. It had a real, distinct purpose from `switch.migo_{home}_away_mode` - clearing the return time while *staying* Away indefinitely, which turning the switch off cannot do (that exits Away entirely back to the schedule) - flagged before removing it. Accepted tradeoff: there is no longer a way to clear just the return time without also leaving Away; toggling `switch.migo_{home}_away_mode` off and back on is the only way now. Same upgrade note as above for existing installs
+
+### Removed
+- Unused internal helpers and one unreachable entity class, which inflated the test coverage figure without protecting anything reachable
 
 ### Documentation
 - Documented `event`-type (DHW) schedules, `linked_schedules`, and the timetable-resolution algorithm in `docs/api/reference.md`
 - Documented the legacy `getthermostatsdata` endpoint (a second Netatmo host accepting the same MiGo token) under "Known Limitations" - not wired into this release since `therm_mode`/`therm_setpoint_mode` already cover the boiler mode and Away state at no extra API cost, and the endpoint's own response envelope and behavior on `api.netatmo.com` haven't been verified against live traffic in this codebase
+
+## [0.41.0] - 2026-07-22 (never published)
+
+> [!NOTE]
+> No GitHub release was ever cut for this version, so nobody received it. The
+> work listed below reached users as part of the next published release.
+
+
+### Added
+- **Reconfigure flow** - Change credentials from the integration entry menu; reauth and reconfigure refuse account switching
+- **Diagnostics** - Downloadable config entry diagnostics with credentials and home location redacted
+- **Icon translations** - Icons served via `icons.json` instead of hardcoded attributes
+- **Stale device removal** - Devices no longer reported by the API can be deleted from the UI
+- **Reauth on polling failures** - An expired password now triggers the reauthentication repair instead of failing silently
+- **Translated error messages** - Failed actions raise visible, translated errors (all 5 languages)
+
+### Changed
+- **Minimum Home Assistant version is now 2025.8**
+- **Options dialog** only manages the polling interval; credentials move to Reconfigure/Reauthenticate
+- **Action failures are now visible** - Service calls that previously failed silently (missing home, API error) raise errors
+- Config flow uses proper email/password selectors and aborts duplicate accounts before any network call
+
+### Internal
+- Entity layer refactored: single-source DeviceInfo builders, native `EntityDescription` pattern, `PARALLEL_UPDATES` on all platforms. No unique_id or entity_id changed (pinned by a registry contract test)
+- Test suite runs against a real Home Assistant test instance (78 tests); CI runs on dev PRs with a latest-HA and a minimum-HA (2025.8) job
+- Deprecated patterns removed: options update listener, `FlowResult`, silent `AbortFlow` swallowing
 
 ## [0.40.2] - 2026-07-22
 

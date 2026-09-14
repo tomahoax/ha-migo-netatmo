@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY, MODE_SCHEDULE
-from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error, is_home_away
+from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity, register_dynamic_entities
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise, is_home_away
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Serialise write commands against the cloud API
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -30,49 +33,47 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[SwitchEntity] = []
+    # DHW switch for each gateway that supports DHW
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [MigoDHWSwitch(coordinator=coordinator, device_id=device_id, api=data.api)],
+    )
 
-    # Create DHW switch for each gateway that supports DHW
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoDHWSwitch(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
+    # Anticipation switch for each home
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.homes,
+        create_entities=lambda home_id: [
+            MigoAnticipationSwitch(coordinator=coordinator, home_id=home_id, api=data.api)
+        ],
+    )
 
-    # Create anticipation switch for each home
-    for home_id in coordinator.homes:
-        entities.append(
-            MigoAnticipationSwitch(
-                coordinator=coordinator,
-                home_id=home_id,
-                api=data.api,
-            )
-        )
+    # Away mode switch for each gateway
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [
+            MigoAwayModeSwitch(coordinator=coordinator, device_id=device_id, api=data.api)
+        ],
+    )
 
-    # Create away mode switch for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoAwayModeSwitch(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
-
-    # Create DHW always-on switch for each gateway that supports DHW
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoDHWAlwaysOnSwitch(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
-
-    async_add_entities(entities)
+    # DHW always-on switch for each gateway that supports DHW
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [
+            MigoDHWAlwaysOnSwitch(coordinator=coordinator, device_id=device_id, api=data.api)
+        ],
+    )
 
 
 class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
@@ -85,7 +86,6 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
     """
 
     _attr_translation_key = "dhw_boost"
-    _attr_icon = "mdi:water-boiler"
 
     def __init__(
         self,
@@ -103,6 +103,7 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
         return f"dhw_{self._device_id}"
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if DHW is enabled."""
         # Check optimistic cache first for immediate feedback
@@ -112,11 +113,10 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
         # Fallback to API data
         return self._device_data.get("dhw_enabled")
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on DHW."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Enabling DHW for device %s", self._device_id)
         await self._call_api_optimistically(
@@ -129,11 +129,10 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
         )
         _LOGGER.debug("DHW enabled for device %s", self._device_id)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off DHW."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Disabling DHW for device %s", self._device_id)
         await self._call_api_optimistically(
@@ -155,7 +154,6 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
     """
 
     _attr_translation_key = "anticipation"
-    _attr_icon = "mdi:clock-fast"
 
     def __init__(
         self,
@@ -173,15 +171,17 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
         return f"anticipation_{self._home_id}"
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if anticipation is enabled."""
         # Check optimistic cache first for immediate feedback
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            return bool(cached)
         # Fallback to API data
         return self._home_data.get("anticipation", False)
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable anticipation."""
         _LOGGER.debug("Enabling anticipation for home %s", self._home_id)
@@ -194,6 +194,7 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
         )
         _LOGGER.debug("Anticipation enabled for home %s", self._home_id)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable anticipation."""
         _LOGGER.debug("Disabling anticipation for home %s", self._home_id)
@@ -282,9 +283,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable away mode."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Enabling away mode for home %s", home_id)
         await self._call_api_optimistically(
@@ -300,9 +299,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable away mode (back to schedule)."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Disabling away mode for home %s", home_id)
         await self._call_api_optimistically(
@@ -362,9 +359,7 @@ class MigoDHWAlwaysOnSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable DHW always-on."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Enabling DHW always-on for device %s", self._device_id)
         await self._call_api_optimistically(
@@ -379,9 +374,7 @@ class MigoDHWAlwaysOnSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable DHW always-on."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug("Disabling DHW always-on for device %s", self._device_id)
         await self._call_api_optimistically(

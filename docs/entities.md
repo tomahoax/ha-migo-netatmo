@@ -105,15 +105,19 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 
 ## Sensors
 
+Four sensors are marked *disabled by default*: the two signal strengths and the two
+firmware versions. They are verbose diagnostics, so a fresh install creates them
+switched off to save recorder storage. Enable any of them from the device page or
+from **Settings** → **Devices & services** → **Entities**, filtering on
+**Disabled**. Your choice persists across integration updates.
+
 ### Gateway Sensors
 
 | Entity ID Pattern | Name | Unit | Description |
 |-------------------|------|------|-------------|
 | `sensor.migo_{home}_outdoor_temperature` | Outdoor Temperature | °C | Outdoor temperature from gateway |
-| `sensor.migo_{home}_wifi_signal` | WiFi Signal | % | Gateway WiFi signal strength |
-
-Gateway firmware is shown on the device's "Device info" card, not as a
-separate sensor - see "Device Page Organization" above.
+| `sensor.migo_{home}_wifi_signal` | WiFi Signal | % | Gateway WiFi signal strength (disabled by default) |
+| `sensor.migo_{home}_gateway_firmware` | Gateway Firmware | - | Gateway firmware version (disabled by default) |
 
 ### Thermostat Sensors
 
@@ -122,20 +126,39 @@ separate sensor - see "Device Page Organization" above.
 | `sensor.migo_{room}_temperature` | {Room} Temperature | °C | Room temperature |
 | `sensor.migo_{room}_humidity` | {Room} Humidity | % | Room humidity (if available) |
 | `sensor.migo_{home}_battery` | Battery | % | Thermostat battery level |
-| `sensor.migo_{home}_rf_signal` | RF Signal | % | Thermostat radio signal |
-
-Thermostat firmware is likewise shown on the device's "Device info" card.
+| `sensor.migo_{home}_rf_signal` | RF Signal | % | Thermostat radio signal (disabled by default) |
+| `sensor.migo_{home}_thermostat_firmware` | Thermostat Firmware | - | Thermostat firmware version (disabled by default) |
 
 ### Energy Consumption (Gateway)
 
 | Entity ID Pattern | Name | Unit | Description |
 |-------------------|------|------|-------------|
+| `sensor.migo_{gateway}_gas_for_heating` | Gas for heating | kWh | Measured gas burned for space heating, per day |
+| `sensor.migo_{gateway}_gas_for_hot_water` | Gas for hot water | kWh | Measured gas burned for domestic hot water, per day |
+| `sensor.migo_{gateway}_electricity_for_heating` | Electricity for heating | kWh | The boiler's own electricity use for heating |
+| `sensor.migo_{gateway}_electricity_for_hot_water` | Electricity for hot water | kWh | The boiler's own electricity use for hot water |
 | `sensor.migo_{gateway}_daily_boiler_runtime` | Daily Boiler Runtime | s | Daily boiler operation time |
 
-The daily boiler runtime sensor is compatible with the Home Assistant Energy Dashboard:
+The four energy sensors are `device_class: energy`, `state_class: total_increasing`,
+in kWh, so they can be added to the Energy dashboard directly. Values are read in Wh
+and divided by 1000; the API reports whole kWh, so nothing is lost.
+
+Note that the **gas** sensors also appear in the dashboard's *electricity* picker,
+and must not be added there. Home Assistant accepts `device_class: energy` for both
+source types, and a gas figure measured in kWh has no alternative device class:
+`device_class: gas` requires a volume unit. See
+[Energy Dashboard Integration](../README.md#energy-dashboard-integration).
+
+The daily boiler runtime sensor:
 - `device_class`: duration
-- `state_class`: total_increasing
+- `state_class`: total_increasing, so it gets long-term statistics
 - Resets daily
+
+It **cannot** be added to the Energy dashboard directly, because that dashboard
+requires `device_class: gas` (m³, ft³, L, CCF, MCF) or `device_class: energy`
+(kWh, MJ, ...) and this one measures time. Use the four energy sensors above
+instead; see
+[Energy Dashboard Integration](../README.md#energy-dashboard-integration).
 
 **Data Source:**
 - Retrieved via `/api/getmeasure` endpoint using gateway `device_id` and thermostat `module_id`

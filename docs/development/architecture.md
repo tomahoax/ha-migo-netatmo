@@ -71,12 +71,16 @@ Hierarchical entity classes for code reuse.
 
 ```
 MigoEntity (CoordinatorEntity)
-├── MigoRoomEntity          # Room-based entities
-│   └── MigoRoomControlEntity   # With API control
-├── MigoDeviceEntity        # Device-based entities
-│   └── MigoControlEntity       # With API control
-└── MigoHomeEntity          # Home-based entities
-    └── MigoHomeControlEntity   # With API control
+├── MigoRoomEntity                        # Room-based entities
+│   └── MigoRoomControlEntity             # + MigoApiControlMixin
+├── MigoDeviceEntity                      # Device-based entities
+│   ├── MigoGatewayEntity                 # Gateway (NAVaillant)
+│   │   └── MigoGatewayControlEntity      # + MigoApiControlMixin
+│   └── MigoThermostatEntity              # Thermostat (NAThermVaillant)
+├── MigoHomeEntity                        # Home-based entities
+│   └── MigoHomeControlEntity             # + MigoApiControlMixin
+└── MigoThermostatHomeEntity              # Home settings shown on the thermostat
+    └── MigoThermostatHomeControlEntity   # + MigoApiControlMixin
 ```
 
 ### MigoApiControlMixin

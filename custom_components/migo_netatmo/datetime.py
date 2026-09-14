@@ -14,7 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY
 from .entity import MigoGatewayControlEntity
-from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error, is_home_away
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise, is_home_away
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -112,7 +112,13 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         """
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            # Stored as an int Unix timestamp, not a datetime: dev's merge
+            # narrowed the coordinator's optimistic cache to
+            # `bool | int | float` (every write traced to justify that exact
+            # union), so this stores the same timestamp `async_set_value`
+            # already computes for the API call rather than widening that
+            # union for one entity.
+            return datetime.fromtimestamp(int(cached), tz=UTC)
 
         home_id = self._device_data.get("home_id")
         if not home_id:
@@ -131,9 +137,7 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
 
     async def async_set_value(self, value: datetime) -> None:
         """Activate Away with a return time."""
-        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
-        if not home_id:
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         # HA's datetime service schema normally supplies an aware value, but
         # guard against a naive one anyway rather than silently trusting the
@@ -169,7 +173,7 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         await self._call_api_optimistically(
             self._api.set_home_therm_mode,
             cache_key=self._cache_key,
-            optimistic_value=aware_value,
+            optimistic_value=endtime,
             home_id=home_id,
             mode=MODE_AWAY,
             endtime=endtime,

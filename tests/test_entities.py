@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from homeassistant.components.climate import PRESET_AWAY, PRESET_BOOST, HVACAction, HVACMode
 from homeassistant.const import EntityCategory
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from custom_components.migo_netatmo.api import MigoApi
+from custom_components.migo_netatmo.api import MigoApi, MigoApiError, MigoAuthError
 from custom_components.migo_netatmo.binary_sensor import (
     MigoAwayModeBinarySensor,
     MigoDHWScheduleBinarySensor,
@@ -53,51 +53,7 @@ from custom_components.migo_netatmo.switch import (
     MigoDHWSwitch,
 )
 
-
-@pytest.fixture
-def mock_coordinator(homes_data_response, home_status_response):
-    """Create a mock coordinator with data."""
-    coordinator = MagicMock()
-    coordinator.rooms = {
-        "room_456": {
-            "id": "room_456",
-            "name": "Living Room",
-            "home_id": "home_123",
-            "home_name": "My Home",
-            "therm_measured_temperature": 21.5,
-            "therm_setpoint_temperature": 20.0,
-            "therm_setpoint_mode": "schedule",
-            "reachable": True,
-            "anticipating": False,
-        }
-    }
-    coordinator.devices = {
-        "gateway_001": {
-            "id": "gateway_001",
-            "type": "NAVaillant",
-            "home_id": "home_123",
-            "wifi_strength": 70,
-            "dhw_enabled": True,
-        },
-        "module_789": {
-            "id": "module_789",
-            "type": "NAThermVaillant",
-            "home_id": "home_123",
-            "battery_percent": 85,
-            "boiler_status": True,
-        },
-    }
-    coordinator.homes = {
-        "home_123": {
-            "id": "home_123",
-            "name": "My Home",
-            "therm_mode": "schedule",
-        }
-    }
-    coordinator.get_cached_value = MagicMock(return_value=None)
-    coordinator.set_cached_value = MagicMock()
-    coordinator.async_request_refresh = AsyncMock()
-    return coordinator
+# mock_coordinator fixture lives in conftest.py, shared across test modules.
 
 
 class TestMigoClimate:
@@ -726,8 +682,15 @@ class TestMigoDHWScheduleBinarySensor:
         return MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
 
     def test_resolves_off_slot(self, binary_sensor, freezer):
-        """Monday 08:00 is within the 'Matin' slot (dhw off)."""
-        freezer.move_to("2026-01-05 08:00:00")  # a Monday
+        """Monday 08:00 is within the 'Matin' slot (dhw off).
+
+        The offset is explicit (-08:00) rather than bare UTC: the real
+        `hass` fixture behind `enable_custom_integrations` (autouse for
+        every test, conftest.py) pins `dt_util`'s default timezone to
+        US/Pacific for the test's duration, so `current_week_minutes()`'s
+        `dt_util.now()` reads the frozen instant back in that zone, not UTC.
+        """
+        freezer.move_to("2026-01-05 08:00:00-08:00")  # a Monday, US/Pacific wall-clock
         assert binary_sensor.is_on is False
         assert binary_sensor.extra_state_attributes["zone_id"] == 7
         assert binary_sensor.extra_state_attributes["zone_name"] == "Matin"
@@ -735,13 +698,13 @@ class TestMigoDHWScheduleBinarySensor:
 
     def test_resolves_on_slot(self, binary_sensor, freezer):
         """Monday 10:00 is within the last slot (dhw on)."""
-        freezer.move_to("2026-01-05 10:00:00")  # a Monday
+        freezer.move_to("2026-01-05 10:00:00-08:00")  # a Monday
         assert binary_sensor.is_on is True
         assert binary_sensor.extra_state_attributes["zone_id"] == 0
 
     def test_forced_off_when_away(self, binary_sensor, mock_coordinator, freezer):
         """Away mode forces the sensor off even if the resolved slot has DHW on."""
-        freezer.move_to("2026-01-05 10:00:00")  # resolves to the "on" slot
+        freezer.move_to("2026-01-05 10:00:00-08:00")  # resolves to the "on" slot
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
 
         assert binary_sensor.is_on is False
@@ -752,7 +715,7 @@ class TestMigoDHWScheduleBinarySensor:
         mock_coordinator.homes["home_123"]["schedules"] = []
         sensor = MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
 
-        freezer.move_to("2026-01-05 10:00:00")
+        freezer.move_to("2026-01-05 10:00:00-08:00")
         assert sensor.is_on is None
 
     def test_uses_single_module_when_id_absent(self, mock_coordinator, freezer):
@@ -768,7 +731,7 @@ class TestMigoDHWScheduleBinarySensor:
         mock_coordinator.homes["home_123"]["schedules"] = [schedule]
         sensor = MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
 
-        freezer.move_to("2026-01-05 10:00:00")
+        freezer.move_to("2026-01-05 10:00:00-08:00")
         assert sensor.is_on is True
 
     def test_forced_off_when_away_without_event_schedule(self, mock_coordinator, freezer):
@@ -782,7 +745,7 @@ class TestMigoDHWScheduleBinarySensor:
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
         sensor = MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
 
-        freezer.move_to("2026-01-05 10:00:00")
+        freezer.move_to("2026-01-05 10:00:00-08:00")
         assert sensor.is_on is False
         assert sensor.extra_state_attributes["overridden_by_away"] is True
 
@@ -793,7 +756,7 @@ class TestMigoDHWScheduleBinarySensor:
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
         sensor = MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
 
-        freezer.move_to("2026-01-05 10:00:00")
+        freezer.move_to("2026-01-05 10:00:00-08:00")
         assert sensor.is_on is False
         assert sensor.extra_state_attributes["overridden_by_away"] is True
 
@@ -804,7 +767,7 @@ class TestMigoDHWScheduleBinarySensor:
         timetable sort) on every property access - once from is_on, once
         from extra_state_attributes.
         """
-        freezer.move_to("2026-01-05 08:00:00")
+        freezer.move_to("2026-01-05 08:00:00-08:00")
 
         first = binary_sensor.is_on
         attrs = binary_sensor.extra_state_attributes
@@ -1114,9 +1077,15 @@ class TestMigoAwayReturnDateTime:
 
     @pytest.mark.asyncio
     async def test_set_value_restores_previous_on_failure(self, entity, cache):
-        """A failed call restores whatever return time was cached before it."""
+        """A failed call restores whatever return time was cached before it.
+
+        Cached as an int Unix timestamp, not a datetime object: dev's merge
+        narrowed the coordinator's optimistic-cache type to
+        `bool | int | float`, and `native_value` converts it back to a
+        datetime on read (see `datetime.py`'s own comment on this).
+        """
         previous = datetime(2026, 12, 20, 9, 0, tzinfo=UTC)
-        cache["away_until_gateway_001"] = previous
+        cache["away_until_gateway_001"] = int(previous.timestamp())
         entity._api.set_home_therm_mode.side_effect = RuntimeError("boom")
 
         with pytest.raises(RuntimeError):
@@ -1218,3 +1187,48 @@ class TestThermostatEntityDeviceInfo:
             info = entity.device_info
 
         assert info["via_device_id"] == "internal_gateway_id"
+
+
+class TestClimateErrorSurfacing:
+    """Tests for API errors surfacing as UI-visible exceptions."""
+
+    @pytest.fixture
+    def climate(self, mock_coordinator):
+        """Create a climate entity with an autospecced API mock."""
+        api = create_autospec(MigoApi, instance=True)
+        api.set_temperature.return_value = {"status": "ok"}
+        api.set_mode.return_value = {"status": "ok"}
+        return MigoClimate(mock_coordinator, "room_456", api)
+
+    @pytest.mark.asyncio
+    async def test_api_error_raises_home_assistant_error(self, climate):
+        """Test a generic API failure raises a translated HomeAssistantError."""
+        climate._api.set_temperature.side_effect = MigoApiError("boom")
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await climate.async_set_temperature(temperature=21.0)
+
+        assert exc_info.value.translation_key == "api_error"
+        # No refresh on failure
+        climate.coordinator.async_request_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auth_error_raises_home_assistant_error(self, climate):
+        """Test an auth failure raises a translated HomeAssistantError."""
+        climate._api.set_mode.side_effect = MigoAuthError("expired")
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await climate.async_set_hvac_mode(HVACMode.AUTO)
+
+        assert exc_info.value.translation_key == "auth_failed"
+
+    @pytest.mark.asyncio
+    async def test_missing_home_id_raises(self, climate, mock_coordinator):
+        """Test a room without home_id raises instead of silently returning."""
+        del mock_coordinator.rooms["room_456"]["home_id"]
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await climate.async_set_temperature(temperature=21.0)
+
+        assert exc_info.value.translation_key == "missing_home_id"
+        climate._api.set_temperature.assert_not_called()

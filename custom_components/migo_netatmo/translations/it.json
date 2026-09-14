@@ -18,8 +18,16 @@
         }
       },
       "reauth_confirm": {
-        "title": "Riautenticazione MiGO",
-        "description": "Inserisci nuovamente le credenziali MiGO",
+        "title": "Riautentica MiGO",
+        "description": "Inserisci di nuovo le credenziali dell'app MiGO",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Riconfigura MiGO",
+        "description": "Aggiorna le credenziali dell'app MiGO.\n\n**Nota:** NON funziona con MiGO Link.",
         "data": {
           "username": "Email",
           "password": "Password",
@@ -37,37 +45,45 @@
     "error": {
       "invalid_auth": "Email o password non validi",
       "no_homes": "Nessuna abitazione trovata nel tuo account MiGO",
-      "unknown": "Si è verificato un errore sconosciuto"
+      "unknown": "Si è verificato un errore sconosciuto",
+      "cannot_connect": "Impossibile connettersi all'API MiGO"
     },
     "abort": {
       "already_configured": "Questo account è già configurato",
-      "reauth_successful": "Riautenticazione completata"
+      "reauth_successful": "Riautenticazione completata",
+      "reconfigure_successful": "Riconfigurazione riuscita",
+      "unique_id_mismatch": "Questo flusso può aggiornare solo l'account per cui è stato avviato"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opzioni MiGO",
-        "description": "Configura credenziali e intervallo di aggiornamento",
+        "description": "Configura l'intervallo di aggiornamento. Le credenziali si modificano tramite Riconfigura sull'integrazione.",
         "data": {
-          "username": "Email",
-          "password": "Password",
-          "client_id": "Client ID (opzionale)",
-          "client_secret": "Client Secret (opzionale)",
-          "user_prefix": "Prefisso utente (opzionale)",
           "update_interval": "Intervallo di aggiornamento (secondi)"
         },
         "data_description": {
-          "client_id": "Lasciare vuoto per usare le credenziali predefinite dell'app MiGO",
-          "client_secret": "Lasciare vuoto per usare le credenziali predefinite dell'app MiGO",
-          "user_prefix": "Lasciare vuoto per usare il prefisso predefinito (sdbg)",
-          "update_interval": "Frequenza di aggiornamento dei dati (60-3600 secondi)"
+          "update_interval": "Frequenza di interrogazione dell'API (60-3600 secondi)"
         }
       }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Autenticazione con l'API MiGO non riuscita: {error}"
     },
-    "error": {
-      "invalid_auth": "Email o password non validi",
-      "unknown": "Si è verificato un errore sconosciuto"
+    "cannot_connect": {
+      "message": "Impossibile connettersi all'API MiGO: {error}"
+    },
+    "api_error": {
+      "message": "L'API MiGO ha restituito un errore: {error}"
+    },
+    "missing_home_id": {
+      "message": "Nessuna casa associata a {entity_type} {entity_id}"
+    },
+    "schedule_not_found": {
+      "message": "Programma {schedule} non trovato"
     }
   },
   "entity": {
@@ -139,26 +155,23 @@
       }
     },
     "sensor": {
-      "room_temperature": {
-        "name": "Temperatura {room_name}"
-      },
-      "room_humidity": {
-        "name": "Umidità {room_name}"
-      },
       "battery": {
         "name": "Batteria"
       },
-      "wifi_strength": {
-        "name": "Segnale WiFi"
-      },
-      "rf_strength": {
-        "name": "Segnale RF"
-      },
-      "outdoor_temperature": {
-        "name": "Temperatura esterna"
-      },
       "daily_boiler_runtime": {
         "name": "Tempo di funzionamento giornaliero della caldaia"
+      },
+      "energy_elec_heating": {
+        "name": "Elettricità per il riscaldamento"
+      },
+      "energy_elec_hot_water": {
+        "name": "Elettricità per l'acqua calda"
+      },
+      "energy_gas_heating": {
+        "name": "Gas per il riscaldamento"
+      },
+      "energy_gas_hot_water": {
+        "name": "Gas per l'acqua calda"
       },
       "boiler_mode": {
         "name": "Modalità caldaia",
@@ -167,6 +180,27 @@
           "dhw_only": "Solo acqua calda",
           "frost_guard": "Antigelo"
         }
+      },
+      "gateway_firmware": {
+        "name": "Firmware gateway"
+      },
+      "outdoor_temperature": {
+        "name": "Temperatura esterna"
+      },
+      "rf_strength": {
+        "name": "Segnale RF"
+      },
+      "room_humidity": {
+        "name": "Umidità {room_name}"
+      },
+      "room_temperature": {
+        "name": "Temperatura {room_name}"
+      },
+      "thermostat_firmware": {
+        "name": "Firmware termostato"
+      },
+      "wifi_strength": {
+        "name": "Segnale WiFi"
       }
     },
     "switch": {

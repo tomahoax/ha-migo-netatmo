@@ -9,7 +9,7 @@ This guide covers how to run and write tests for the MiGo integration.
 Install development dependencies:
 
 ```bash
-pip install -r requirements_dev.txt
+pip install -e ".[dev]"
 ```
 
 ### Run All Tests

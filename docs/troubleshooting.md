@@ -115,6 +115,38 @@ logger:
     custom_components.migo_netatmo: debug
 ```
 
+Debug logs show the full structure of what the API returns, with personal data
+replaced by `**REDACTED**`. What gets replaced: your account email, your home's
+GPS coordinates, city and country, the home invitation code, hardware serial
+numbers, and the names of your homes, rooms and schedules. What is kept, because
+it is what makes a bug report actionable and it identifies neither you nor your
+home: device, home, room and module IDs, device types, and every measurement.
+
+Credentials are never logged at any level, redacted or otherwise.
+
+### Raw, unredacted payloads
+
+Only needed to diagnose a field the integration does not yet understand, which on
+this undocumented backend does happen. It is a separate logger, so turning the
+integration to `debug` does **not** enable it:
+
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.migo_netatmo: debug
+    # Personal data included. Read the warning below.
+    custom_components.migo_netatmo.api.raw: debug
+```
+
+> [!WARNING]
+> With this enabled, your log contains your account email, your home's exact GPS
+> coordinates and your home invitation code, repeated on every polling cycle.
+> Never attach such a log to a GitHub issue or paste it into a forum. Turn it back
+> off once you have what you need, and delete the log afterwards: Home Assistant
+> logs are included in full backups and are readable by any add-on with
+> configuration access.
+
 ### Reading Logs
 
 Look for these patterns:
@@ -135,5 +167,7 @@ If you can't resolve the issue:
 3. [Open a new issue](https://github.com/tomahoax/ha-migo-netatmo/issues/new/choose) with:
    - Home Assistant version
    - Integration version
-   - Relevant logs (redact credentials)
+   - Relevant logs. Standard debug logs are already redacted and safe to share.
+     If you enabled the raw logger above, do not share those lines
+   - A downloaded diagnostics file, which is also redacted
    - Steps to reproduce

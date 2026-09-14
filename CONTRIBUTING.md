@@ -28,6 +28,11 @@ Thank you for your interest in contributing to this Home Assistant integration!
    ```bash
    pip install -e ".[dev]"
    ```
+   `pyproject.toml` is the source of truth for dependency constraints; CI and
+   Dependabot both read it. If you use [uv](https://docs.astral.sh/uv/) locally
+   (`uv run pytest`, etc.), refresh `uv.lock` after changing a dependency with
+   `uv lock`. The lockfile pins exact versions for local reproducibility only,
+   it is not read by CI or Dependabot.
 
 4. **Install pre-commit hooks**
    ```bash
@@ -48,6 +53,28 @@ This project follows Home Assistant coding standards:
 - **Type Hints**: All functions must have type annotations
 - **Docstrings**: Use Google-style docstrings for all public functions and classes
 
+### File Organization
+
+```
+custom_components/migo_netatmo/
+├── __init__.py          # Integration setup
+├── api.py               # API client
+├── climate.py           # Climate entity
+├── config_flow.py       # Configuration flow
+├── const.py             # Constants
+├── coordinator.py       # Data coordinator
+├── entity.py            # Base entities
+├── helpers.py           # Utility functions
+├── models.py            # TypedDicts for API/coordinator data
+├── sensor.py            # Sensor entities
+├── switch.py            # Switch entities
+├── select.py            # Select entities
+├── number.py            # Number entities
+├── binary_sensor.py     # Binary sensor entities
+├── button.py            # Button entities
+└── translations/        # Translation files
+```
+
 ### Pre-commit Hooks
 
 We use pre-commit hooks to ensure code quality. They run automatically on `git commit`:
@@ -60,6 +87,14 @@ To run hooks manually:
 ```bash
 pre-commit run --all-files
 ```
+
+The mypy hook is a local hook that runs `uv run --frozen mypy` from the project
+environment, so it needs `uv sync --extra dev` to have been run first. This is
+deliberate: mypy needs Home Assistant importable to check anything meaningful.
+In an isolated hook environment every HA symbol resolves to `Any` and most of
+the strict checks silently pass. The mypy configuration in `pyproject.toml`
+mirrors the one Home Assistant core generates for integrations listed in its
+`.strict-typing` file, and mypy is pinned so the hook and CI agree.
 
 ## Testing
 
@@ -117,6 +152,54 @@ This project follows [GitHub Flow](https://docs.github.com/en/get-started/using-
 5. **After review, merge to `dev`**
 
 6. **Releases**: When `dev` is stable, it gets merged to `main` and tagged
+
+### Releasing
+
+Both stable and pre-release tags are handled by the same workflow
+(`.github/workflows/release.yaml`), which triggers on `release: published`. It
+re-stamps the version in `manifest.json` and `pyproject.toml` from the tag, builds
+`migo_netatmo.zip` and uploads it as a release asset.
+
+**Stable release**, tagged on `main` after the merge:
+
+```bash
+gh release create v0.42.0 --target main --title v0.42.0 --notes-from-tag
+```
+
+**Pre-release from `dev`**, so testers can run development code through HACS without
+waiting for a stable version:
+
+```bash
+gh release create v0.42.0-beta.1 --target dev --prerelease --title v0.42.0-beta.1
+```
+
+Three things make this safe, and all three matter:
+
+- `--prerelease` is what keeps existing users on stable. HACS records a pre-release
+  separately from the latest version, so it is never offered to anyone who has not
+  explicitly enabled beta versions on the repository.
+- The tag must be a valid pre-release version for both PEP 440 and HACS's
+  `AwesomeVersion`. `v0.42.0-beta.1` and `v0.42.0-rc.1` both are, and both sort
+  below `0.42.0`. A bare suffix like `v0.42.0-dev` does not sort predictably, so
+  always number the pre-release.
+- `--target dev` is what points the tag at the development branch. Without it the
+  tag lands on the default branch and the release contains `main`'s code.
+
+The user-facing side of this is documented under
+[Switching to a pre-release (dev) build](README.md#switching-to-a-pre-release-dev-build).
+
+> [!IMPORTANT]
+> HACS cannot install a git branch, only a published version. `hacs.json` sets
+> `zip_release: true` and `hide_default_branch: true`, so the version list contains
+> release tags only. That is why testing `dev` goes through a pre-release tag rather
+> than a branch selector.
+
+> [!WARNING]
+> The release archive must have the integration's files at its **root**, not nested
+> in a `migo_netatmo/` folder. HACS extracts a `zip_release` asset straight into
+> `config/custom_components/<domain>/`, so an extra level of nesting stops the
+> integration from loading. This is why the workflow zips from inside the component
+> directory. Do not "tidy" that step.
 
 ### Commit Message Convention
 

@@ -4,11 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ha-migo-netatmo"
-version = "0.1.0"
+# Kept in sync with custom_components/migo_netatmo/manifest.json (source of
+# truth) at every "chore: prepare release" commit and re-stamped by
+# .github/workflows/release.yaml when a release is published.
+version = "0.41.0"
 description = "Home Assistant integration for MiGO Netatmo thermostats"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.12"
+requires-python = ">=3.13.2"
 authors = [
     {name = "tomahoax"}
 ]
@@ -17,8 +20,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "aiohttp>=3.8.0",
@@ -26,13 +29,18 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "homeassistant>=2024.11.0",
+    "homeassistant>=2025.8.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
     "pytest-homeassistant-custom-component>=0.13.0",
     "ruff>=0.4.0",
     "pre-commit>=3.7.0",
+    # Pinned, not floored: the mypy config mirrors Home Assistant core's and
+    # uses keys such as strict_bytes that only exist in mypy 2.x, and mypy
+    # hard-fails on an unrecognised config key. Pinning also keeps the
+    # pre-commit hook and the CI job on the same checker.
+    "mypy==2.3.0",
 ]
 
 [project.urls]
@@ -46,7 +54,7 @@ where = ["."]
 include = ["custom_components*"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 120
 
 [tool.ruff.lint]
@@ -66,6 +74,7 @@ select = [
 ]
 ignore = [
     "PLR0913",  # Too many arguments
+    "PLR0917",  # Too many positional arguments
     "PLR2004",  # Magic value in comparison
     "PLR0911",  # Too many return statements
     "PLR0912",  # Too many branches
@@ -80,25 +89,59 @@ ignore = [
 known-first-party = ["custom_components.migo_netatmo"]
 
 [tool.mypy]
-python_version = "3.11"
-warn_unused_configs = true
-check_untyped_defs = true
+# Mirrors the mypy.ini that Home Assistant core generates for an integration
+# listed in .strict-typing. The first group is core's GENERAL_SETTINGS, the
+# second its STRICT_SETTINGS, both from script/hassfest/mypy_config.py.
+# Deliberate divergences:
+#   - "plugins" is omitted (pydantic.mypy and mypy_plugins/
+#     enum_identity_compare.py are not reproducible outside the core repo, and
+#     neither applies here: no pydantic models, no enum identity comparisons).
+#   - "native_parser" and "num_workers" are omitted: performance only.
+# Note there is deliberately no ignore_missing_imports and no per-module
+# override: homeassistant, aiohttp and voluptuous all ship py.typed, and
+# disable_error_code below is core's own safety net for untyped dependencies.
+python_version = "3.13"
+platform = "linux"
+show_error_codes = true
+follow_imports = "normal"
+local_partial_types = true
+strict_equality = true
+strict_bytes = true
 no_implicit_optional = true
-follow_imports = "silent"
-ignore_missing_imports = true
-# Relaxed settings for HA integrations
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_decorators = false
-warn_return_any = false
-
-[[tool.mypy.overrides]]
-module = [
-    "homeassistant.*",
-    "voluptuous.*",
-    "aiohttp.*",
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+extra_checks = false
+enable_error_code = [
+    "deprecated",
+    "explicit-override",
+    "ignore-without-code",
+    "redundant-self",
+    "truthy-iterable",
 ]
-ignore_missing_imports = true
+disable_error_code = [
+    "annotation-unchecked",
+    "import-not-found",
+    "import-untyped",
+]
+
+# STRICT_SETTINGS: core applies these per-module to integrations listed in
+# .strict-typing. This repository holds a single integration, so they are
+# global. All eight are on.
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unreachable = true
+
+# Exceeds core's integration profile: disallow_any_generics is in core's
+# STRICT_SETTINGS_CORE, applied to homeassistant.* rather than to integrations.
+# Enabled here because it costs nothing once the read path is narrowed.
+disallow_any_generics = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -110,6 +153,12 @@ source = ["custom_components/migo_netatmo"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
+# Floor set below the coverage actually measured on 2026-07-24 (94.7%,
+# essentially at the Silver test-coverage target of >95% in
+# quality_scale.yaml), leaving headroom for normal fluctuation while still
+# blocking real regressions. Raise this value as coverage improves further;
+# do not lower it to make a failing PR pass.
+fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

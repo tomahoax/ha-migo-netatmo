@@ -4,12 +4,25 @@ on:
   push:
     branches:
       - main
+      - dev
   pull_request:
     branches:
       - main
+      - dev
+  # hacs/action and hassfest both track a moving branch, so their rules can
+  # change without a commit here. A weekly run surfaces that before it blocks a
+  # release or a default-store submission.
+  schedule:
+    - cron: "0 6 * * 1"
+
+# Declared explicitly rather than relying on the repository-wide default:
+# this workflow runs third-party actions and, on pull requests, arbitrary
+# contributor code. Neither should ever sit next to a write token.
+permissions:
+  contents: read
 
 env:
-  DEFAULT_PYTHON: "3.12"
+  DEFAULT_PYTHON: "3.14"
 
 jobs:
   validate-hacs:
@@ -19,6 +32,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # `ignore: brands` must be REMOVED before submitting to the HACS default
+      # store: inclusion requires this action to pass "without any errors or
+      # ignores". It cannot be removed yet, because the check needs an
+      # icon.png under custom_integrations/migo_netatmo/ in
+      # home-assistant/brands, and that entry does not exist. See
+      # docs/development/publishing.md for the ordering.
       - name: HACS validation
         uses: hacs/action@main
         with:
@@ -58,7 +77,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          pip install "ruff==0.16.0"
 
       - name: Run Ruff linter
         run: ruff check custom_components/migo_netatmo
@@ -66,37 +85,75 @@ jobs:
       - name: Run Ruff formatter check
         run: ruff format --check custom_components/migo_netatmo
 
-  test:
-    name: Test (Python ${{ matrix.python-version }})
+  mypy:
+    name: Type check (mypy)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      # uv rather than pip so the job resolves from uv.lock, exactly like the
+      # pre-commit hook, instead of doing a fresh resolve on every run.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run mypy
+        run: uv run --frozen mypy custom_components/migo_netatmo
+
+  test:
+    name: Test (Python ${{ matrix.python-version }}, HA ${{ matrix.ha }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Latest HA on the newest supported Python
+          - python-version: "3.14"
+            ha: "latest"
+          # Minimum supported HA (matches hacs.json), pinned via the
+          # pytest-homeassistant-custom-component release for HA 2025.8
+          - python-version: "3.13"
+            ha: "2025.8"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      # --frozen resolves from uv.lock, which pins every package with a sha256.
+      # The previous `pip install -e ".[dev]"` did a fresh unhashed resolve of
+      # floored constraints on every run, which is the largest dependency
+      # install in the repo and had no integrity guarantee at all.
+      - name: Install dependencies from the lockfile
+        run: uv sync --frozen --extra dev
+
+      - name: Pin Home Assistant to minimum supported version
+        if: matrix.ha == '2025.8'
+        # This leg deliberately steps below the lockfile: pinning HA down is its
+        # entire purpose, so it cannot itself be locked. Everything else still
+        # comes from uv.lock.
+        # pycares<5: pycares 5.0 (2025-12) drops the API used by the
+        # aiodns 3.5.0 release that HA 2025.8 pins
+        run: uv pip install "pytest-homeassistant-custom-component==0.13.270" "pycares<5"
 
       - name: Run tests with pytest
         run: |
-          pytest tests/ \
+          uv run --no-sync pytest tests/ \
             -v \
             --cov=custom_components/migo_netatmo \
             --cov-report=xml \
             --cov-report=term-missing
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
+        if: matrix.ha == 'latest'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml

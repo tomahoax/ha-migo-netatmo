@@ -1,0 +1,236 @@
+# Internal quality-scale tracking for this custom integration.
+# Not referenced from manifest.json (the quality_scale manifest key is
+# reserved for Home Assistant core integrations).
+rules:
+  # Bronze
+  action-setup: exempt  # no custom service actions
+  appropriate-polling: done  # configurable interval, default 300s
+  brands: exempt  # custom integration (HACS)
+  common-modules: done  # coordinator.py, entity.py, helpers.py, models.py
+  config-flow-test-coverage: done
+  config-flow: done
+  dependency-transparency: done  # aiohttp only, in-package API client
+  docs-actions: exempt
+  docs-triggers: exempt
+  docs-conditions: exempt
+  docs-high-level-description: done  # README + docs/
+  docs-installation-instructions: done  # docs/installation.md
+  docs-removal-instructions:
+    status: done
+    comment: >
+      2026-07-24: "Removing the Integration" section added to README.md
+      (Settings > Devices & services > Delete; no physical pairing to undo;
+      MiGO account credentials are unaffected).
+  entity-event-setup: done  # coordinator entities only
+  entity-unique-id: done  # pinned by tests/test_unique_ids.py
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done  # authenticate + first refresh
+  unique-config-entry: done  # unique_id = account email
+
+  # Silver
+  action-exceptions: done  # HomeAssistantError/ServiceValidationError
+  config-entry-unloading: done
+  docs-configuration-parameters: done  # docs/configuration.md
+  docs-installation-parameters: done
+  entity-unavailable: done  # CoordinatorEntity availability
+  integration-owner: done  # codeowners @tomahoax
+  log-when-unavailable:
+    status: done
+    comment: >
+      2026-07-25: DataUpdateCoordinator's own log-once is now the only
+      availability logging. _async_update_data used to emit an explicit
+      _LOGGER.error on every failed refresh, duplicating it, so a sustained
+      outage produced several ERROR lines every 300s. Both explicit logs are
+      gone and the four per-request ERROR logs in api.py dropped to DEBUG (they
+      are the normal "cloud unreachable" path and each terminates in a
+      MigoApiError that reaches either the coordinator or a translated
+      HomeAssistantError). A sustained outage now yields one ERROR at onset and
+      one INFO ("Fetching migo_netatmo data recovered") on recovery.
+  parallel-updates: done
+  reauthentication-flow: done  # + triggered by polling auth failures
+  test-coverage:
+    status: done
+    comment: >
+      95.04% measured on 2026-07-25 (177 tests), against fail_under=90 in
+      pyproject.toml. The previous 94.99% figure was flattered by fully tested
+      but unreachable code: five helpers.py functions, three coordinator
+      getters, and MigoRoomBinarySensor behind an empty ROOM_BINARY_SENSORS
+      tuple. All of it is now deleted, so the number reflects code a user can
+      actually reach. Remaining gaps are edge branches in api.py and
+      coordinator.py (get_configs/get_measure error paths, consumption-fetching
+      branches) and entity.py mixins.
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery-update-info: exempt  # cloud account API, no discovery
+  discovery: exempt
+  docs-data-update:
+    status: done
+    comment: >
+      2026-07-24: "Data Updates" section added to README.md, consolidating the
+      previously scattered mentions (cloud polling, 300s default/60-3600s
+      configurable, what's fetched each cycle, manual refresh button, no push).
+  docs-examples:
+    status: done
+    comment: >
+      2026-07-24: "Automation Examples" section added to README.md with 4 YAML
+      examples (low battery, boiler error, eBus error, away-mode on departure).
+      Deviation from the HA guideline of linking to the community blueprint
+      exchange: this HACS integration has no blueprint-exchange presence yet,
+      so examples are inline in the docs instead.
+  docs-known-limitations: done  # MiGO Link / myVAILLANT exclusions
+  docs-supported-devices: done
+  docs-supported-functions: done  # docs/entities.md
+  docs-troubleshooting: done  # docs/troubleshooting.md
+  docs-use-cases:
+    status: done
+    comment: >
+      2026-07-24: "Use Cases" section added to README.md (energy tracking,
+      remote control, sensor recalibration, fault alerting, presence-based
+      heating, battery monitoring).
+  dynamic-devices:
+    status: done
+    comment: >
+      2026-07-24: register_dynamic_entities() helper added to entity.py
+      (coordinator.async_add_listener + known-ids diffing, per the official
+      HA pattern). All 7 platforms refactored to use it instead of a one-shot
+      loop; new rooms/devices now get live entities without a config entry
+      reload. Verified end-to-end in tests/test_dynamic_devices.py. Data-content
+      gated sub-entities (room humidity sensor, schedule select) are not added
+      retroactively on an already-known id, by design.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default:
+    status: done
+    comment: >
+      entity_registry_enabled_default=False on all 4 verbose diagnostic sensor.py
+      descriptions: wifi_strength and gateway_firmware on the gateway, rf_strength
+      and thermostat_firmware on the thermostat. Completed 2026-07-25; the two
+      thermostat ones were missing, so the gateway and thermostat behaved
+      inconsistently for the same kind of measurement.
+
+      Signal strengths are noisy and firmware versions almost never change, so
+      neither is useful to most users, which is exactly the rule's own
+      signal-strength example. Deliberately left enabled: battery, boiler_error
+      and ebus_error, because the README's automation examples build on them, and
+      reachable, which is the connectivity diagnostic that stays available while a
+      module is unreachable.
+
+      No effect on existing installs: the flag is read only when an entity is
+      first written to the registry, so a user's prior enable/disable choice
+      persists. The exact set is pinned in both directions by
+      tests/test_unique_ids.py::test_disabled_by_default_contract, and documented
+      for users in README.md and docs/entities.md.
+  entity-translations: done  # en/es/fr/it/ru
+  exception-translations: done
+  icon-translations:
+    status: done
+    comment: >
+      All icons come from icons.json; there are zero hardcoded _attr_icon or
+      icon= assignments in the integration (verified 2026-07-25 by scanning
+      every module). Entities whose icon is supplied by their device_class carry
+      no entry on purpose: the rule explicitly says not to overwrite a
+      device-class icon when the entity's context matches it, which covers all
+      four binary sensors (problem, running, connectivity), the temperature,
+      humidity and battery sensors, and the climate entity's domain default.
+
+      Corrected on 2026-07-25 from a "todo" set earlier the same day. That
+      downgrade was based on a misreading: the rule governs how icons are
+      provided, not whether every entity has one, so the absence of climate and
+      binary_sensor sections is compliant rather than a gap. The three entities
+      that had neither a device_class nor an entry, and so fell back to a
+      generic icon, now have one anyway (sensor.gateway_firmware,
+      sensor.thermostat_firmware, select.schedule) as polish rather than to
+      satisfy the rule.
+  reconfiguration-flow: done
+  repair-issues: exempt  # no user-fixable server-side issues yet
+  stale-devices:
+    status: done
+    comment: >
+      Automatic, as the rule prefers. Completed 2026-07-25; it was manual-only
+      before. _register_stale_device_removal in __init__.py registers a
+      coordinator listener that compares the device registry entries for this
+      entry against coordinator.devices | coordinator.homes after every
+      successful refresh, and calls async_update_device(
+      remove_config_entry_id=...) for the rest. homesdata is a full snapshot of
+      the account, so a device missing from it is genuinely gone. It also runs
+      once eagerly at setup, since the first refresh happens before the listener
+      exists and a device that vanished while the entry was unloaded would
+      otherwise linger for a polling cycle.
+
+      Lives in __init__.py rather than the coordinator on purpose: a coordinator
+      should not mutate the device registry mid-fetch, and a listener only runs
+      after a refresh the coordinator already considered successful.
+
+      Two guards against deleting everything, both covered by tests:
+      last_update_success (an outage clears the stores before repopulating them,
+      so without this it looks like "the API reports nothing") and a non-empty
+      known-id set (a syntactically valid but empty homes list succeeds, so the
+      first guard does not catch it).
+
+      async_remove_config_entry_device is kept for the other case: a device the
+      API still reports but the user no longer wants. It refuses while the caches
+      cannot be trusted, for the same reason.
+
+  # Platinum
+  async-dependency: done  # aiohttp
+  inject-websession:
+    status: done
+    comment: >
+      2026-07-25: async_get_clientsession(hass) is injected in both places
+      MigoApi is constructed. __init__.py always did; config_flow's
+      _async_validate_input did not, so every validation (initial setup, reauth
+      and reconfigure alike) built a private aiohttp.ClientSession outside Home
+      Assistant's pool. The flow no longer calls api.close() either, since it
+      does not own the session. MigoApi's self-created-session fallback
+      (_own_session) is kept for standalone and test use, and is what close()
+      guards on. Pinned by test_shared_session_is_injected.
+  strict-typing:
+    status: done
+    comment: >
+      2026-07-25. [tool.mypy] in pyproject.toml reproduces the mypy.ini that
+      Home Assistant core generates for an integration listed in .strict-typing:
+      core's GENERAL_SETTINGS plus all eight STRICT_SETTINGS from
+      script/hassfest/mypy_config.py (check_untyped_defs,
+      disallow_incomplete_defs, disallow_subclassing_any,
+      disallow_untyped_calls, disallow_untyped_decorators,
+      disallow_untyped_defs, warn_return_any, warn_unreachable). It also enables
+      disallow_any_generics, which core scopes to homeassistant.* rather than to
+      integrations, since it costs nothing here.
+
+      Evidence, measured with mypy 2.3.0 against homeassistant 2026.1.0 on
+      Python 3.14.6: 0 errors in 16 source files, 0 "type: ignore", 0 Any
+      suppressions. cast() appears at 6 sites, all in api.py, each one line from
+      the await that produced the untrusted JSON payload. models.py now types
+      coordinator.homes/rooms/devices as
+      dict[str, HomeConfig | RoomData | ModuleData] and the whole entity read
+      path is narrowed accordingly. helpers.safe_get is gone; it could not be
+      typed better than `object` and its overloads were laundering Any.
+
+      Two deliberate divergences from core, both stated rather than hidden. The
+      "plugins" key (pydantic.mypy, mypy_plugins/enum_identity_compare.py) is
+      omitted: neither is reproducible outside the core repo and neither applies
+      here. Scope is custom_components/migo_netatmo, excluding tests/, matching
+      core's .strict-typing, which lists homeassistant.components.<domain>.*
+      entries only.
+
+      The PEP 561 py.typed half of the rule does not apply: there is no separate
+      library. The API client is api.py, inside the integration and inside mypy's
+      scope, and manifest.json has an empty requirements list.
+
+      Correcting the previous comment, which was wrong on its central claim:
+      dynamic data_key lookup is NOT incompatible with TypedDict access.
+      TypedDict.get() accepts a non-literal str key and returns object; only
+      subscript requires a literal, and nothing here uses subscript. Narrowing
+      the coordinator dicts cost two bool() coercions in binary_sensor.py, not a
+      redesign. data_key stays a plain str, and typo protection lives in
+      tests/test_data_keys.py, which checks every entity description against the
+      real model annotations rather than duplicating them into a Literal union.
+
+      mypy is pinned to 2.3.0 in the dev extra so the pre-commit hook and the CI
+      job run an identical checker, and the hook runs from the project venv:
+      mirrors-mypy built an isolated environment without homeassistant, where
+      every HA symbol resolved to Any and most strict checks were vacuous.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
@@ -33,8 +33,14 @@ from .const import (
     TEMP_OFFSET_MIN,
     TEMP_OFFSET_STEP,
 )
-from .entity import MigoGatewayControlEntity, MigoRoomControlEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type
+from .entity import (
+    MigoGatewayControlEntity,
+    MigoRoomControlEntity,
+    MigoThermostatHomeControlEntity,
+    register_dynamic_entities,
+)
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
+from .models import ModuleData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -42,6 +48,9 @@ if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Serialise write commands against the cloud API
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -53,64 +62,54 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[NumberEntity] = []
+    # Manual setpoint duration entity for each home
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.homes,
+        create_entities=lambda home_id: [
+            MigoManualSetpointDurationNumber(coordinator=coordinator, home_id=home_id, api=data.api)
+        ],
+    )
 
-    # Create manual setpoint duration entity for each home
-    for home_id in coordinator.homes:
-        entities.append(
-            MigoManualSetpointDurationNumber(
-                coordinator=coordinator,
-                home_id=home_id,
-                api=data.api,
-            )
-        )
-
-    # Create DHW temperature entities for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoDHWTemperatureNumber(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
-        # Create hysteresis entity (assigned to Thermostat device)
-        device_data = coordinator.devices.get(device_id, {})
-        home_id = device_data.get("home_id")
+    def _gateway_numbers(device_id: str) -> list[NumberEntity]:
+        numbers: list[NumberEntity] = [
+            MigoDHWTemperatureNumber(coordinator=coordinator, device_id=device_id, api=data.api)
+        ]
+        # Hysteresis and heating curve are gateway parameters, assigned to the
+        # Thermostat device, hence the extra home_id lookup.
+        home_id = coordinator.devices.get(device_id, {}).get("home_id")
         if home_id:
-            entities.append(
-                MigoHysteresisNumber(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    device_id=device_id,
-                    api=data.api,
-                )
+            numbers.append(
+                MigoHysteresisNumber(coordinator=coordinator, home_id=home_id, device_id=device_id, api=data.api)
             )
-            # Create heating curve entity
-            entities.append(
-                MigoHeatingCurveNumber(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    device_id=device_id,
-                    api=data.api,
-                )
+            numbers.append(
+                MigoHeatingCurveNumber(coordinator=coordinator, home_id=home_id, device_id=device_id, api=data.api)
             )
+        return numbers
 
-    # Create temperature offset entities for each room
-    for room_id in coordinator.rooms:
-        room_data = coordinator.rooms[room_id]
-        home_id = room_data.get("home_id")
-        if home_id:
-            entities.append(
-                MigoTemperatureOffsetNumber(
-                    coordinator=coordinator,
-                    room_id=room_id,
-                    home_id=home_id,
-                    api=data.api,
-                )
-            )
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=_gateway_numbers,
+    )
 
-    async_add_entities(entities)
+    def _room_numbers(room_id: str) -> list[NumberEntity]:
+        home_id = coordinator.rooms.get(room_id, {}).get("home_id")
+        if not home_id:
+            return []
+        return [MigoTemperatureOffsetNumber(coordinator=coordinator, room_id=room_id, home_id=home_id, api=data.api)]
+
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: coordinator.rooms,
+        create_entities=_room_numbers,
+    )
 
 
 class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEntity):
@@ -123,7 +122,6 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
     _attr_native_step = MANUAL_SETPOINT_DURATION_STEP  # 5 minutes
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:timer-cog-outline"
 
     def __init__(
         self,
@@ -141,12 +139,13 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         return f"manual_setpoint_duration_{self._home_id}"
 
     @property
+    @override
     def native_value(self) -> int | None:
         """Return the current manual setpoint duration in minutes."""
         # Check optimistic cache first
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            return int(cached)
         # Fallback to API data (therm_setpoint_default_duration is in minutes)
         home_data = self.coordinator.homes.get(self._home_id, {})
         duration_minutes = home_data.get("therm_setpoint_default_duration")
@@ -155,6 +154,7 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         # Default to 3 hours (180 minutes) as shown in the app
         return DEFAULT_MANUAL_SETPOINT_DURATION
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the manual setpoint duration."""
         minutes = int(value)
@@ -184,7 +184,6 @@ class MigoTemperatureOffsetNumber(MigoRoomControlEntity, NumberEntity):
     _attr_native_step = TEMP_OFFSET_STEP  # 0.5
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:thermometer-plus"
 
     def __init__(
         self,
@@ -204,21 +203,37 @@ class MigoTemperatureOffsetNumber(MigoRoomControlEntity, NumberEntity):
         return f"temp_offset_{self._room_id}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current temperature offset."""
-        # Check optimistic cache first (API doesn't return this value)
+        # Check optimistic cache first (API doesn't always return this value)
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
+            _LOGGER.debug(
+                "Temperature offset for room %s: using cached value %s",
+                self._room_id,
+                cached,
+            )
             return cached
-        # Fallback to API data (if ever returned)
-        # Key can be "measure_offset_NAVaillant_temperature" or "therm_setpoint_offset"
-        offset = self._room_data.get("measure_offset_NAVaillant_temperature")
-        if offset is None:
-            offset = self._room_data.get("therm_setpoint_offset")
+        # Fallback to API data - only use therm_setpoint_offset (user-configured value)
+        # Note: measure_offset_NAVaillant_temperature is hardware sensor calibration,
+        # not the user-configurable offset, so we don't read it here.
+        offset = self._room_data.get("therm_setpoint_offset")
         if offset is not None:
+            _LOGGER.debug(
+                "Temperature offset for room %s: using API value %s",
+                self._room_id,
+                offset,
+            )
             return float(offset)
+        _LOGGER.debug(
+            "Temperature offset for room %s: no value found, using default %s",
+            self._room_id,
+            DEFAULT_TEMP_OFFSET,
+        )
         return DEFAULT_TEMP_OFFSET
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the temperature offset."""
         _LOGGER.debug("Setting temperature offset to %s°C for room %s", value, self._room_id)
@@ -243,7 +258,6 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
     _attr_native_step = DHW_TEMP_STEP  # 1°C
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:water-thermometer"
 
     def __init__(
         self,
@@ -261,12 +275,13 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         return f"dhw_temperature_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> int | None:
         """Return the current DHW temperature."""
         # Check optimistic cache first
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
-            return cached
+            return int(cached)
         # Fallback to API data
         temp = self._device_data.get("dhw_setpoint_temperature")
         if temp is not None:
@@ -274,14 +289,11 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         # Default to 60°C as shown in the screenshot
         return DEFAULT_DHW_TEMPERATURE
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHW temperature."""
         temperature = int(value)
-        home_id = self._device_data.get("home_id")
-
-        if not home_id:
-            _LOGGER.error("Cannot set DHW temperature: home_id not found for device %s", self._device_id)
-            return
+        home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
 
         _LOGGER.debug(
             "Setting DHW temperature to %s°C for device %s",
@@ -313,7 +325,6 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
     _attr_native_step = HYSTERESIS_STEP  # 0.1°C
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:thermometer-lines"
 
     def __init__(
         self,
@@ -328,7 +339,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         self._attr_unique_id = generate_unique_id("hysteresis", device_id)
 
     @property
-    def _device_data(self) -> dict:
+    def _device_data(self) -> ModuleData:
         """Get current gateway device data."""
         return self.coordinator.devices.get(self._device_id, {})
 
@@ -338,6 +349,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         return f"hysteresis_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current hysteresis threshold."""
         # Check optimistic cache first
@@ -351,6 +363,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         # Default to 1.6°C (deadband=15) as seen in typical configuration
         return DEFAULT_HYSTERESIS
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the hysteresis threshold."""
         hysteresis = round(value, 1)
@@ -383,7 +396,6 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
     _attr_native_max_value = HEATING_CURVE_MAX  # 5.0
     _attr_native_step = HEATING_CURVE_STEP  # 0.1
     _attr_mode = NumberMode.SLIDER
-    _attr_icon = "mdi:chart-bell-curve-cumulative"
 
     def __init__(
         self,
@@ -398,7 +410,7 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         self._attr_unique_id = generate_unique_id("heating_curve", device_id)
 
     @property
-    def _device_data(self) -> dict:
+    def _device_data(self) -> ModuleData:
         """Get current gateway device data."""
         return self.coordinator.devices.get(self._device_id, {})
 
@@ -408,6 +420,7 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         return f"heating_curve_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current heating curve slope.
 
@@ -431,6 +444,7 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
             return round(api_slope / 10, 1)
         return DEFAULT_HEATING_CURVE
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the heating curve slope."""
         slope = round(value, 1)

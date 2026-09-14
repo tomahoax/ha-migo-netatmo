@@ -19,7 +19,15 @@
       },
       "reauth_confirm": {
         "title": "Повторная аутентификация MiGO",
-        "description": "Пожалуйста, введите учетные данные MiGO повторно",
+        "description": "Введите учётные данные приложения MiGO ещё раз",
+        "data": {
+          "username": "Email",
+          "password": "Пароль"
+        }
+      },
+      "reconfigure": {
+        "title": "Перенастроить MiGO",
+        "description": "Обновите учётные данные приложения MiGO.\n\n**Примечание:** НЕ работает с MiGO Link.",
         "data": {
           "username": "Email",
           "password": "Пароль",
@@ -28,46 +36,54 @@
           "user_prefix": "Префикс пользователя (необязательно)"
         },
         "data_description": {
-          "client_id": "Оставьте пустым для использования учетных данных по умолчанию приложения MiGO",
-          "client_secret": "Оставьте пустым для использования учетных данных по умолчанию приложения MiGO",
-          "user_prefix": "Оставьте пустым для использования префикса по умолчанию (sdbg)"
+          "client_id": "Оставьте пустым, чтобы использовать учётные данные приложения MiGO по умолчанию",
+          "client_secret": "Оставьте пустым, чтобы использовать учётные данные приложения MiGO по умолчанию",
+          "user_prefix": "Оставьте пустым, чтобы использовать префикс по умолчанию (sdbg)"
         }
       }
     },
     "error": {
       "invalid_auth": "Неверный email или пароль",
       "no_homes": "В вашем аккаунте MiGO не найдено домов",
-      "unknown": "Произошла неизвестная ошибка"
+      "unknown": "Произошла неизвестная ошибка",
+      "cannot_connect": "Не удалось подключиться к API MiGO"
     },
     "abort": {
       "already_configured": "Этот аккаунт уже настроен",
-      "reauth_successful": "Повторная аутентификация успешна"
+      "reauth_successful": "Повторная аутентификация успешна",
+      "reconfigure_successful": "Перенастройка выполнена успешно",
+      "unique_id_mismatch": "Этот процесс может обновить только ту учётную запись, для которой он был запущен"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Настройки MiGO",
-        "description": "Настройка учетных данных и интервала обновления",
+        "description": "Настройте интервал опроса. Учётные данные меняются через «Перенастроить» на записи интеграции.",
         "data": {
-          "username": "Email",
-          "password": "Пароль",
-          "client_id": "Client ID (необязательно)",
-          "client_secret": "Client Secret (необязательно)",
-          "user_prefix": "Префикс пользователя (необязательно)",
           "update_interval": "Интервал обновления (секунды)"
         },
         "data_description": {
-          "client_id": "Оставьте пустым для использования учетных данных по умолчанию приложения MiGO",
-          "client_secret": "Оставьте пустым для использования учетных данных по умолчанию приложения MiGO",
-          "user_prefix": "Оставьте пустым для использования префикса по умолчанию (sdbg)",
-          "update_interval": "Частота обновления данных (60-3600 секунд)"
+          "update_interval": "Как часто опрашивать API (60-3600 секунд)"
         }
       }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Ошибка аутентификации в API MiGO: {error}"
     },
-    "error": {
-      "invalid_auth": "Неверный email или пароль",
-      "unknown": "Произошла неизвестная ошибка"
+    "cannot_connect": {
+      "message": "Не удалось подключиться к API MiGO: {error}"
+    },
+    "api_error": {
+      "message": "API MiGO вернул ошибку: {error}"
+    },
+    "missing_home_id": {
+      "message": "С {entity_type} {entity_id} не связан ни один дом"
+    },
+    "schedule_not_found": {
+      "message": "Расписание {schedule} не найдено"
     }
   },
   "entity": {
@@ -139,26 +155,23 @@
       }
     },
     "sensor": {
-      "room_temperature": {
-        "name": "Температура {room_name}"
-      },
-      "room_humidity": {
-        "name": "Влажность {room_name}"
-      },
       "battery": {
         "name": "Батарея"
       },
-      "wifi_strength": {
-        "name": "Сигнал WiFi"
-      },
-      "rf_strength": {
-        "name": "Сигнал RF"
-      },
-      "outdoor_temperature": {
-        "name": "Температура на улице"
-      },
       "daily_boiler_runtime": {
         "name": "Ежедневное время работы котла"
+      },
+      "energy_elec_heating": {
+        "name": "Электричество на отопление"
+      },
+      "energy_elec_hot_water": {
+        "name": "Электричество на горячую воду"
+      },
+      "energy_gas_heating": {
+        "name": "Газ на отопление"
+      },
+      "energy_gas_hot_water": {
+        "name": "Газ на горячую воду"
       },
       "boiler_mode": {
         "name": "Режим котла",
@@ -167,6 +180,27 @@
           "dhw_only": "Только ГВС",
           "frost_guard": "Защита от замерзания"
         }
+      },
+      "gateway_firmware": {
+        "name": "Прошивка шлюза"
+      },
+      "outdoor_temperature": {
+        "name": "Температура на улице"
+      },
+      "rf_strength": {
+        "name": "Сигнал RF"
+      },
+      "room_humidity": {
+        "name": "Влажность {room_name}"
+      },
+      "room_temperature": {
+        "name": "Температура {room_name}"
+      },
+      "thermostat_firmware": {
+        "name": "Прошивка термостата"
+      },
+      "wifi_strength": {
+        "name": "Сигнал WiFi"
       }
     },
     "switch": {

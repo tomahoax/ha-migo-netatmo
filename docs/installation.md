@@ -4,7 +4,7 @@ This guide walks you through installing the MiGo integration for Home Assistant.
 
 ## Prerequisites
 
-- Home Assistant 2024.1.0 or later
+- Home Assistant 2025.8.0 or later (the floor declared in `hacs.json`)
 - HACS (recommended) or manual installation
 - MiGO app credentials (email and password)
 

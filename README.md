@@ -18,6 +18,15 @@ The reason? **The MiGo app uses a completely different API than myVAILLANT**. Mi
 
 This integration was created to fill that gap by reverse-engineering the Netatmo API used by the MiGo iOS app.
 
+## Use Cases
+
+- **Energy tracking**: feed the boiler's measured gas and electricity consumption straight into the Home Assistant Energy Dashboard, split between heating and hot water (see [Energy Dashboard Integration](#energy-dashboard-integration)).
+- **Remote control**: change the target temperature, switch modes (Auto/Heat/Off), or trigger a DHW boost from the Home Assistant app while away from home, instead of opening the MiGo app.
+- **Fixing a miscalibrated room sensor**: use the per-room *Temperature offset* number entity to correct a thermostat that reads a few degrees off, without touching the physical device.
+- **Fault alerting**: automate on the *Boiler error* or *eBus error* binary sensors to get a notification the moment something goes wrong, instead of noticing a cold house hours later (see [Automation Examples](#automation-examples)).
+- **Presence-based heating**: combine the climate entity's preset modes (Away, Boost) with a Home Assistant presence automation to heat only when someone is actually home.
+- **Battery monitoring**: get notified before a thermostat's battery runs out, rather than discovering it stopped reporting.
+
 ## Compatibility
 
 > [!IMPORTANT]
@@ -73,19 +82,32 @@ This integration creates **two separate devices** in Home Assistant:
 
 #### Gateway Sensors
 - Outdoor temperature
-- WiFi signal strength
+- WiFi signal strength *(disabled by default)*
+- Gateway firmware version *(disabled by default)*
 - **Boiler mode** - Normal / DHW only / Frost guard quick-action mode (derived)
 
 #### Thermostat Sensors
 - Temperature sensor per room
 - Humidity sensor per room (if available)
 - Battery level
-- RF signal strength
+- RF signal strength *(disabled by default)*
+- Thermostat firmware version *(disabled by default)*
 
-Firmware version is shown on each device's info card, not as a separate sensor.
+> [!NOTE]
+> The four sensors marked *disabled by default* are verbose diagnostics: signal
+> strengths change constantly and firmware versions almost never do, so neither is
+> useful to most users and both cost recorder storage. They are still created, just
+> switched off. To turn one on, open it from the device page and use **Enable**, or
+> go to **Settings** → **Devices & services** → **Entities**, filter on
+> **Disabled**, and enable it there. Your choice is remembered and is not undone by
+> integration updates.
 
 #### Energy Consumption
-- **Daily boiler runtime** - Tracks boiler operation time in seconds (compatible with Energy Dashboard via `state_class: total_increasing`)
+- **Gas for heating** / **Gas for hot water** - Measured gas consumption in kWh, per day
+- **Electricity for heating** / **Electricity for hot water** - The boiler's own electricity use in kWh, per day
+- **Daily boiler runtime** - Boiler operation time in seconds
+
+The four energy sensors are `device_class: energy` in kWh and go directly into the Energy Dashboard. The runtime sensor cannot: see [Energy Dashboard Integration](#energy-dashboard-integration)
 
 ### Switches
 
@@ -144,6 +166,27 @@ After installation, you can configure the integration options:
 
 > [!TIP]
 > Lower polling intervals provide more responsive updates but may increase API load. A 5-minute interval is recommended for normal use.
+
+### Changing credentials
+
+Credentials are no longer edited in the options dialog. To change your email, password or OAuth settings:
+
+1. Go to **Settings** → **Devices & services** → **MiGo (Netatmo)**
+2. Open the entry menu (three dots) and select **Reconfigure**
+
+If your password expired, Home Assistant shows a **Reauthenticate** repair instead; follow it to re-enter the password.
+
+## Data Updates
+
+This integration is **cloud polling**: it periodically calls the Netatmo API used by the MiGo app, there is no push/webhook mechanism. Each refresh cycle:
+
+1. Fetches real-time status (`/api/homestatus`) - room temperatures, setpoints, connectivity, boiler status.
+2. Fetches module configuration (`/syncapi/v1/getconfigs`) - DHW setpoint temperature and similar settings not present in the status response.
+3. Fetches consumption history (`/api/getmeasure`) - boiler runtime plus measured gas and electricity energy, all six measures in a single request.
+
+The default interval is **5 minutes (300 seconds)**, configurable between 60 and 3600 seconds (see [Configuration Options](#configuration-options)). A shorter interval gives more responsive updates at the cost of more API calls; a longer interval reduces load on the (unofficial, reverse-engineered) API.
+
+Between scheduled refreshes, Home Assistant's built-in **Update** action (`homeassistant.update_entity`, also available from any migo_netatmo entity's more-info dialog) forces an immediate update - useful right after changing something in the MiGo app itself. There is no dedicated refresh button entity: every entity shares one coordinator, so the built-in action already does the same thing for free. If a refresh fails (network issue, expired token), affected entities go `unavailable` and the failure is logged once; they recover automatically on the next successful refresh.
 
 ## Installation
 
@@ -208,39 +251,228 @@ You can optionally provide custom OAuth credentials:
 
 Leave these empty to use the default MiGO app credentials.
 
+> [!NOTE]
+> The default client ID/secret are the MiGO iOS app's own OAuth credentials
+> (extracted through reverse engineering, see [Technical Details](#technical-details)),
+> not per-user secrets. They are committed in `const.py` and world-readable, and are
+> required for this unofficial integration to authenticate at all. They do not grant
+> access to any account by themselves: authentication still requires your own MiGO
+> username and password. Use the advanced fields above only if you have your own
+> client credentials and prefer not to rely on the bundled ones.
+
+### Switching to a pre-release (dev) build
+
+Development happens on the `dev` branch, and pre-releases are published from it so
+you can try changes before they reach a stable version. HACS cannot install a git
+branch directly, only published versions, so `dev` reaches you as a pre-release tag
+such as `v0.42.0-beta.1`.
+
+Pre-releases are hidden by default, so nothing changes unless you opt in.
+
+**To switch to a pre-release:**
+
+1. Go to **HACS** → **Integrations** and click **MiGo (Netatmo)**
+2. Open the **⋮** menu (top right) and enable the option to show beta or
+   pre-release versions
+3. Open the **⋮** menu again and choose **Redownload**
+4. Pick the pre-release version (the one with a `-beta` suffix) and confirm
+5. **Restart Home Assistant**
+
+**To go back to a stable build**, repeat the same steps and pick the highest version
+without a `-beta` suffix. Turning the beta option back off stops new pre-releases
+from being offered, but does not by itself downgrade what you already installed.
+
+> [!NOTE]
+> Your configuration, entities and history are untouched by switching versions: only
+> the integration's files are replaced. Downgrading is safe as long as the stable
+> version you return to is one you ran before.
+
+> [!WARNING]
+> Pre-releases are for testing. They are expected to work, but they have not been
+> through a stable release cycle. If you hit a problem, please
+> [open an issue](https://github.com/tomahoax/ha-migo-netatmo/issues) mentioning the
+> exact version, then switch back to the latest stable build.
+
 ### Manual Installation
 
-If you prefer not to use HACS:
+If you prefer not to use HACS, note that each release publishes two different
+archives and they have different layouts:
 
-1. Download the [latest release](https://github.com/tomahoax/ha-migo-netatmo/releases) (zip file)
-2. Extract the archive
-3. Copy the `custom_components/migo_netatmo` folder to your Home Assistant `config/custom_components/` directory
+- **`migo_netatmo.zip`** (release asset) - the integration's files at the archive
+  root, which is the layout HACS requires
+- **`Source code (zip)`** (generated by GitHub) - the whole repository, including
+  the `custom_components/migo_netatmo/` folder
+
+Using the release asset:
+
+1. Download `migo_netatmo.zip` from the [latest release](https://github.com/tomahoax/ha-migo-netatmo/releases)
+2. Create a `migo_netatmo` folder inside your Home Assistant `config/custom_components/` directory
+3. Extract the archive's contents into that folder, so that `manifest.json` sits directly in it
 4. Restart Home Assistant
 5. Configure the integration via Settings → Devices & services → Add Integration
 
+Using the source archive instead, extract it and copy its
+`custom_components/migo_netatmo` folder into your `config/custom_components/`
+directory, then restart and configure as above.
+
+## Removing the Integration
+
+1. Go to **Settings** → **Devices & services**
+2. Find **MiGo (Netatmo)** and open the entry menu (three dots)
+3. Select **Delete**
+
+This removes the config entry along with its devices and entities from Home Assistant. There is nothing to unpair physically: this integration connects to your MiGO account over the cloud API, it does not hold a device pairing.
+
+If you installed via HACS and want to remove the integration files too, remove it from HACS → Integrations after deleting the config entry. If you installed manually, delete the `custom_components/migo_netatmo` folder and restart Home Assistant.
+
+Deleting the Home Assistant integration does **not** revoke access on the MiGO side; your account credentials remain valid for the MiGO app itself. There is no per-integration access token to revoke separately since authentication uses your regular MiGO username and password.
+
 ## Energy Dashboard Integration
 
-The **Daily boiler runtime** sensor can be used to track heating usage in the Home Assistant Energy Dashboard:
+The boiler reports what it actually consumed, so four sensors go straight into the
+Energy dashboard with no template and no estimation:
+
+| Sensor | What it measures |
+|--------|------------------|
+| **Gas for heating** | Gas burned for space heating, per day |
+| **Gas for hot water** | Gas burned for domestic hot water, per day |
+| **Electricity for heating** | The boiler's own electricity use for heating |
+| **Electricity for hot water** | The boiler's own electricity use for hot water |
+
+All four are `device_class: energy` in kWh, which is what the dashboard accepts.
 
 1. Go to **Settings** → **Dashboards** → **Energy**
-2. Under **Gas consumption** or **Individual devices**, add the boiler runtime sensor
-3. The sensor uses `state_class: total_increasing` for proper energy tracking
+2. Under **Gas consumption**, add **Gas for heating**, then add **Gas for hot
+   water** as a second source. Home Assistant allows several, so you keep the
+   split the MiGO app shows rather than one merged figure
+3. Under **Individual devices**, add the two electricity sensors
+
+> [!CAUTION]
+> **The two gas sensors also appear in the electricity picker. Do not add them
+> there.** Doing so would count your gas as electricity.
+>
+> This is unavoidable rather than a mistake in this integration. Home Assistant
+> accepts `device_class: energy` for both its electricity and its gas sources
+> (`GAS_USAGE_DEVICE_CLASSES` includes `ENERGY`), and a gas source measured in kWh
+> has no other device class available: `device_class: gas` requires a **volume**
+> unit such as m³. Your boiler reports energy, not volume, and converting would
+> mean guessing a calorific value, which is exactly the estimate these sensors
+> exist to avoid. So Home Assistant cannot tell that this particular energy is
+> gas. Only you can.
+>
+> If you already added one under electricity, remove it there: past statistics
+> stay attributed to electricity until you do.
 
 > [!NOTE]
-> The sensor reports boiler runtime in seconds. To estimate energy consumption, you can create a template sensor that multiplies runtime by your boiler's power rating.
+> They will not appear in either picker immediately. It is populated from
+> long-term statistics rather than from live entities, which is why entities marked
+> *"Entity without state"* can show up in it while a brand-new sensor does not.
+> Statistics are compiled hourly, so give it an hour before concluding something is
+> wrong.
 
-Example template sensor for estimated gas consumption:
+> [!TIP]
+> Entity IDs are generated from the **translated** sensor name, so they follow your
+> Home Assistant language. On a French instance the gas heating sensor is
+> `sensor.migo_gateway_gaz_pour_le_chauffage`, not the English form used in examples
+> here. Check yours in **Developer tools** → **States**.
+
+### What about the boiler runtime sensor?
+
+**Daily boiler runtime** measures *time*, in seconds, so it can never be an Energy
+dashboard source: the dashboard requires `device_class: gas` (m³, ft³, L) or
+`device_class: energy` (kWh). It is still useful on its own, for seeing how hard the
+boiler is working, and `state_class: total_increasing` gives it long-term
+statistics. Use the four energy sensors above for the Energy dashboard.
+
+If your boiler reports no energy data, the four sensors stay *unknown*. In that case
+you can fall back to estimating from runtime, though it assumes the boiler draws its
+full rated output whenever it fires, which a modulating boiler does not:
+
 ```yaml
 template:
   - sensor:
       - name: "Estimated Gas Consumption"
+        unique_id: migo_estimated_gas_consumption
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         state: >
-          {% set runtime_seconds = states('sensor.migo_thermostat_daily_boiler_runtime') | float(0) %}
-          {% set boiler_power_kw = 25 %}  {# Adjust to your boiler's power #}
+          {% set runtime_seconds = states('sensor.my_home_gateway_daily_boiler_runtime') | float(0) %}
+          {% set boiler_power_kw = 25 %}  {# Adjust to your boiler's rated output #}
           {{ (runtime_seconds / 3600 * boiler_power_kw) | round(2) }}
+```
+
+Adjust the entity ID: the example uses this integration's default naming,
+`<home>_<device>_...`, and yours will differ if your home or gateway is named
+differently. Check it in **Developer tools** → **States**.
+
+## Automation Examples
+
+Entity IDs below follow this integration's default naming (`<home>_<device>_<sensor>`); adjust them to match your own home and device names.
+
+### Notify on low thermostat battery
+
+```yaml
+automation:
+  - alias: "MiGo: low thermostat battery"
+    trigger:
+      - trigger: numeric_state
+        entity_id: sensor.my_home_thermostat_battery
+        below: 15
+    action:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "Thermostat battery low"
+          message: "{{ trigger.to_state.name }} is at {{ trigger.to_state.state }}%."
+```
+
+### Notify on boiler error
+
+```yaml
+automation:
+  - alias: "MiGo: boiler error"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.my_home_gateway_boiler_error
+        to: "on"
+    action:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "Boiler error"
+          message: "The MiGo gateway reported a boiler error."
+```
+
+### Notify on eBus communication error
+
+```yaml
+automation:
+  - alias: "MiGo: eBus error"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.my_home_gateway_ebus_error
+        to: "on"
+    action:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "MiGo communication error"
+          message: "The gateway lost communication with the boiler over eBus."
+```
+
+### Switch to Away mode when everyone leaves
+
+```yaml
+automation:
+  - alias: "MiGo: away mode when nobody home"
+    trigger:
+      - trigger: state
+        entity_id: zone.home
+        to: "0"
+    action:
+      - action: climate.set_preset_mode
+        target:
+          entity_id: climate.my_home_thermostat_thermostat
+        data:
+          preset_mode: away
 ```
 
 ## Troubleshooting

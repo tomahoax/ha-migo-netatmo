@@ -2,70 +2,39 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from collections.abc import AsyncGenerator, Generator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, create_autospec
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.const import DOMAIN
-
-# Path to test fixtures
-FIXTURES_PATH = Path(__file__).parent / "fixtures"
+from custom_components.migo_netatmo.coordinator import MigoDataUpdateCoordinator
 
 
-def load_fixture(filename: str) -> dict[str, Any]:
-    """Load a fixture file.
-
-    Args:
-        filename: Name of the fixture file.
-
-    Returns:
-        The parsed JSON data.
-    """
-    with (FIXTURES_PATH / filename).open(encoding="utf-8") as f:
-        return json.load(f)
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
+    """Enable loading custom integrations in all tests."""
+    return
 
 
 @pytest.fixture
-def hass() -> HomeAssistant:
-    """Create a Home Assistant instance for testing."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config_entries = MagicMock()
-    hass.config_entries.flow = MagicMock()
-    hass.config_entries.flow.async_init = AsyncMock()
-    hass.config_entries.flow.async_configure = AsyncMock()
-    hass.config_entries.async_reload = AsyncMock()
-    hass.config_entries.async_update_entry = MagicMock()
-    return hass
-
-
-@pytest.fixture
-def mock_config_entry() -> MagicMock:
+def mock_config_entry() -> MockConfigEntry:
     """Create a mock config entry."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.entry_id = "test_entry_id"
-    entry.domain = DOMAIN
-    entry.unique_id = None
-    entry.data = {
-        CONF_USERNAME: "test@example.com",
-        CONF_PASSWORD: "test_password",
-    }
-    entry.options = {}  # Add empty options dict for coordinator tests
-    entry.title = "MiGo (Netatmo)"
-
-    def add_to_hass(hass):
-        """Add entry to hass."""
-        entry.unique_id = "test@example.com"
-        hass.config_entries._entries = {entry.entry_id: entry}
-
-    entry.add_to_hass = add_to_hass
-    return entry
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="MiGo (Netatmo)",
+        unique_id="test@example.com",
+        data={
+            CONF_USERNAME: "test@example.com",
+            CONF_PASSWORD: "test_password",
+        },
+        options={},
+    )
 
 
 @pytest.fixture
@@ -73,11 +42,21 @@ def homes_data_response() -> dict[str, Any]:
     """Return mock homes data response."""
     return {
         "body": {
+            "user": {"email": "test@example.com", "country": "FR"},
             "homes": [
                 {
                     "id": "home_123",
                     "name": "My Home",
                     "therm_mode": "schedule",
+                    # Personal data the real API returns. Present so the
+                    # redaction tests fail for the right reason: without these,
+                    # a broken redactor would still pass.
+                    "coordinates": [49.123456, 2.654321],
+                    "city": "Somewhere",
+                    "country": "FR",
+                    "altitude": 120,
+                    "timezone": "Europe/Paris",
+                    "invitation_code": ["ZsdApbpjOstMdOn1"],
                     "rooms": [
                         {
                             "id": "room_456",
@@ -91,6 +70,7 @@ def homes_data_response() -> dict[str, Any]:
                             "id": "gateway_001",
                             "type": "NAVaillant",
                             "subtype": "NAEbusSdbg",
+                            "oem_serial": "SN123456",
                         },
                         {
                             "id": "module_789",
@@ -109,7 +89,7 @@ def homes_data_response() -> dict[str, Any]:
                         }
                     ],
                 }
-            ]
+            ],
         },
         "status": "ok",
     }
@@ -160,17 +140,39 @@ def home_status_response() -> dict[str, Any]:
 
 
 @pytest.fixture
+def configs_response() -> dict[str, Any]:
+    """Return mock getconfigs response."""
+    return {
+        "body": {
+            "home": {
+                "id": "home_123",
+                "modules": [
+                    {
+                        "id": "gateway_001",
+                        "dhw_setpoint_temperature": 55,
+                    }
+                ],
+            }
+        },
+        "status": "ok",
+    }
+
+
+@pytest.fixture
 def consumption_response() -> dict[str, Any]:
     """Return mock consumption data response from /api/getmeasure.
 
-    The response format is a dict with timestamps as keys and
-    [sum_boiler_on, sum_boiler_off] arrays as values.
+    A dict keyed by timestamp, each value one row in const.MEASURE_TYPES order:
+    [boiler_on, boiler_off, gas_heating, gas_hot_water, elec_heating,
+     elec_hot_water]. Boiler times are seconds; energy is Wh at whole-kWh
+    resolution, which is what the real API returns.
     """
     return {
         "body": {
-            "1704067200": [3600, 82800],  # 1 hour on, 23 hours off
-            "1704153600": [7200, 79200],  # 2 hours on, 22 hours off
-            "1704240000": [5400, 81000],  # 1.5 hours on, 22.5 hours off
+            # 1 h on / 23 h off, 12 kWh gas heating, 3 kWh gas DHW, 0.1/0.05 elec
+            "1704067200": [3600, 82800, 12000, 3000, 100, 50],
+            "1704153600": [7200, 79200, 24000, 4000, 200, 100],
+            "1704240000": [5400, 81000, 18000, 2000, 150, 75],
         },
         "status": "ok",
         "time_exec": 0.05,
@@ -182,6 +184,7 @@ def consumption_response() -> dict[str, Any]:
 def mock_api(
     homes_data_response: dict[str, Any],
     home_status_response: dict[str, Any],
+    configs_response: dict[str, Any],
     consumption_response: dict[str, Any],
 ) -> MagicMock:
     """Create a mock MiGO API client.
@@ -193,6 +196,7 @@ def mock_api(
     api.authenticate.return_value = True
     api.get_homes_data.return_value = homes_data_response
     api.get_home_status.return_value = home_status_response
+    api.get_configs.return_value = configs_response
     api.get_measure.return_value = consumption_response
     api.set_temperature.return_value = {"status": "ok"}
     api.set_mode.return_value = {"status": "ok"}
@@ -205,6 +209,46 @@ def mock_api(
 
 
 @pytest.fixture
+def coordinator(
+    hass: HomeAssistant,
+    mock_api: MagicMock,
+    mock_config_entry: MockConfigEntry,
+) -> MigoDataUpdateCoordinator:
+    """Create a coordinator bound to a real Home Assistant test instance."""
+    mock_config_entry.add_to_hass(hass)
+    return MigoDataUpdateCoordinator(
+        hass=hass,
+        api=mock_api,
+        config_entry=mock_config_entry,
+    )
+
+
+@pytest.fixture
+def patch_migo_api(mock_api: MagicMock) -> Generator[MagicMock]:
+    """Patch the MigoApi class everywhere it is instantiated."""
+    with (
+        patch("custom_components.migo_netatmo.MigoApi", return_value=mock_api),
+        patch("custom_components.migo_netatmo.config_flow.MigoApi", return_value=mock_api),
+    ):
+        yield mock_api
+
+
+@pytest.fixture
+async def init_integration(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    patch_migo_api: MagicMock,
+) -> AsyncGenerator[MockConfigEntry]:
+    """Set up the integration against a real Home Assistant test instance."""
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    yield mock_config_entry
+
+
+@pytest.fixture
 def token_response() -> dict[str, Any]:
     """Return mock token response."""
     return {
@@ -213,3 +257,54 @@ def token_response() -> dict[str, Any]:
         "expires_in": 10800,
         "scope": ["all_scopes"],
     }
+
+
+@pytest.fixture
+def mock_coordinator() -> MagicMock:
+    """Create a mock coordinator with data, shared across entity-level unit tests."""
+    coordinator = MagicMock()
+    coordinator.rooms = {
+        "room_456": {
+            "id": "room_456",
+            "name": "Living Room",
+            "home_id": "home_123",
+            "home_name": "My Home",
+            "therm_measured_temperature": 21.5,
+            "therm_setpoint_temperature": 20.0,
+            "therm_setpoint_mode": "schedule",
+            "reachable": True,
+            "anticipating": False,
+        }
+    }
+    coordinator.devices = {
+        "gateway_001": {
+            "id": "gateway_001",
+            "type": "NAVaillant",
+            "home_id": "home_123",
+            "wifi_strength": 70,
+            "dhw_enabled": True,
+        },
+        "module_789": {
+            "id": "module_789",
+            "type": "NAThermVaillant",
+            "home_id": "home_123",
+            "battery_percent": 85,
+            "boiler_status": True,
+        },
+    }
+    coordinator.homes = {
+        "home_123": {
+            "id": "home_123",
+            "name": "My Home",
+            "therm_mode": "schedule",
+            "schedules": [
+                {"id": "schedule_001", "name": "Comfort", "type": "therm", "selected": True},
+                {"id": "schedule_002", "name": "Eco", "type": "therm", "selected": False},
+                {"id": "schedule_003", "name": "DHW only", "type": "event", "selected": False},
+            ],
+        }
+    }
+    coordinator.get_cached_value = MagicMock(return_value=None)
+    coordinator.set_cached_value = MagicMock()
+    coordinator.async_request_refresh = AsyncMock()
+    return coordinator
