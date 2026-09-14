@@ -10,8 +10,8 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, MODE_AWAY
-from .entity import MigoGatewayControlEntity, MigoGatewayEntity, MigoThermostatHomeControlEntity
+from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY, MODE_AWAY
+from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
 from .helpers import generate_unique_id, get_devices_by_type, is_home_away
 
 if TYPE_CHECKING:
@@ -32,28 +32,6 @@ async def async_setup_entry(
     coordinator = data.coordinator
 
     entities: list[ButtonEntity] = []
-
-    # Create refresh button for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoGatewayRefreshButton(
-                coordinator=coordinator,
-                device_id=device_id,
-            )
-        )
-
-    # Create refresh button for each thermostat
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_THERMOSTAT):
-        device_data = coordinator.devices.get(device_id, {})
-        home_id = device_data.get("home_id")
-        if home_id:
-            entities.append(
-                MigoThermostatRefreshButton(
-                    coordinator=coordinator,
-                    home_id=home_id,
-                    device_id=device_id,
-                )
-            )
 
     # Create reset heating curve button for each gateway
     for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
@@ -80,58 +58,6 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities)
-
-
-class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
-    """MiGO Refresh button entity for Gateway device.
-
-    No entity_category: kept in the primary "Controls" card - it's a quick
-    action a user reaches for directly, not a background maintenance detail.
-    """
-
-    _attr_translation_key = "refresh"
-    _attr_icon = "mdi:refresh"
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-    ) -> None:
-        """Initialize the refresh button entity."""
-        super().__init__(coordinator, device_id)
-        self._attr_unique_id = generate_unique_id("refresh_gateway", device_id)
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        _LOGGER.debug("Manual refresh requested from gateway %s", self._device_id)
-        await self.coordinator.async_request_refresh()
-
-
-class MigoThermostatRefreshButton(MigoThermostatHomeControlEntity, ButtonEntity):
-    """MiGO Refresh button entity for Thermostat device.
-
-    No entity_category - see MigoGatewayRefreshButton.
-    """
-
-    _attr_translation_key = "refresh"
-    _attr_icon = "mdi:refresh"
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        home_id: str,
-        device_id: str,
-    ) -> None:
-        """Initialize the refresh button entity."""
-        # MigoThermostatHomeControlEntity needs home_id and api, but we don't need api for refresh
-        super().__init__(coordinator, home_id, api=None)  # type: ignore[arg-type]
-        self._device_id = device_id
-        self._attr_unique_id = generate_unique_id("refresh_thermostat", device_id)
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        _LOGGER.debug("Manual refresh requested from thermostat %s", self._device_id)
-        await self.coordinator.async_request_refresh()
 
 
 class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity):

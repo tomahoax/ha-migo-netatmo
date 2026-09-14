@@ -92,9 +92,6 @@
       }
     },
     "button": {
-      "refresh": {
-        "name": "Обновить"
-      },
       "reset_heating_curve": {
         "name": "Сбросить кривую нагрева"
       },

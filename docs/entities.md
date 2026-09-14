@@ -33,7 +33,7 @@ what kind of thing it is, not by matching a neighbor at random:
 
 | Card | `entity_category` | What belongs there |
 |------|--------------------|---------------------|
-| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Away until, Heating anticipation, the active schedule, Refresh, the climate entity itself). |
+| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Away until, Heating anticipation, the active schedule, the climate entity itself). |
 | **Configuration** | `config` | A setpoint or tuning value you set occasionally and mostly leave alone (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset) - plus any button that directly acts on one of those (Reset heating curve). |
 | **Sensors** | *(unset)*, read-only domain | A measured or derived value you monitor (temperatures, boiler mode, scheduled DHW state). |
 | **Diagnostic** | `diagnostic` | Read-only technical/troubleshooting data (signal strength, battery, error flags) - plus a read-only companion to a Controls entity, when its only purpose is history graphs or automation triggers rather than being the entity a user interacts with (Away mode's binary_sensor companion to its switch). |
@@ -229,7 +229,6 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
-| `button.migo_{home}_refresh` | Refresh | Force data refresh from API |
 | `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Sets the heating curve to `DEFAULT_HEATING_CURVE` (`const.py`, currently `2.6`) - not a true "reset to factory default": no such concept exists in the API, and this value is installation-specific, not universal. Edit the constant to match your own installation if the shipped value doesn't match what the MiGo app shows |
 | `button.migo_{home}_reset_away_until` | Reset Away Until | Clears `datetime.migo_{home}_away_until` back to empty. While currently Away, also clears `therm_mode_endtime` server-side (via `sethomedata`, `endtime=None`) so it can't resurface on the next refresh; otherwise there is nothing to clear server-side, only this integration's own cache. |
 

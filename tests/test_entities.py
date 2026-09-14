@@ -15,10 +15,8 @@ from custom_components.migo_netatmo.binary_sensor import (
     MigoDHWScheduleBinarySensor,
 )
 from custom_components.migo_netatmo.button import (
-    MigoGatewayRefreshButton,
     MigoResetAwayUntilButton,
     MigoResetHeatingCurveButton,
-    MigoThermostatRefreshButton,
 )
 from custom_components.migo_netatmo.climate import (
     HVAC_TO_MIGO_MODE,
@@ -862,16 +860,6 @@ class TestDevicePageOrganization:
         """DHW always-on is an operational override, same reasoning as DHW boost."""
         api = create_autospec(MigoApi, instance=True)
         entity = MigoDHWAlwaysOnSwitch(mock_coordinator, "gateway_001", api)
-        assert entity.entity_category is None
-
-    def test_gateway_refresh_button_is_primary_control(self, mock_coordinator):
-        """Refresh is a quick action a user reaches for directly, kept in Controls."""
-        entity = MigoGatewayRefreshButton(mock_coordinator, "gateway_001")
-        assert entity.entity_category is None
-
-    def test_thermostat_refresh_button_is_primary_control(self, mock_coordinator):
-        """Refresh is a quick action a user reaches for directly, kept in Controls."""
-        entity = MigoThermostatRefreshButton(mock_coordinator, "home_123", "module_789")
         assert entity.entity_category is None
 
     def test_away_mode_binary_sensor_is_diagnostic(self, mock_coordinator):

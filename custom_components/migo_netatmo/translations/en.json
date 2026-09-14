@@ -92,9 +92,6 @@
       }
     },
     "button": {
-      "refresh": {
-        "name": "Refresh"
-      },
       "reset_heating_curve": {
         "name": "Reset heating curve"
       },

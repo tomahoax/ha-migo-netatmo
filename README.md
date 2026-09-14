@@ -128,7 +128,8 @@ Firmware version is shown on each device's info card, not as a separate sensor.
 
 ### Button
 
-- Manual refresh
+- **Reset heating curve** - sets the heating curve to a fixed value (`DEFAULT_HEATING_CURVE` in `const.py`), not a true API-supplied default - see [entities](docs/entities.md#buttons)
+- **Reset Away until** - clears a return date/time set on the Away until date/time entity
 
 ## Configuration Options
 
