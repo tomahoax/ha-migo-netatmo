@@ -91,13 +91,9 @@ GATEWAY_SENSORS: tuple[SensorConfig, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:wifi",
     ),
-    SensorConfig(
-        data_key="firmware_revision",
-        unique_id_key="gateway_firmware",
-        translation_key="gateway_firmware",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda v: str(v) if v is not None else None,
-    ),
+    # No firmware_revision sensor here: it duplicates the device page's own
+    # "Device info" card, which already shows it as sw_version (see
+    # MigoGatewayEntity.device_info in entity.py).
 )
 
 
@@ -132,13 +128,8 @@ THERMOSTAT_SENSORS: tuple[SensorConfig, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:signal",
     ),
-    SensorConfig(
-        data_key="firmware_revision",
-        unique_id_key="thermostat_firmware",
-        translation_key="thermostat_firmware",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda v: str(v) if v is not None else None,
-    ),
+    # No firmware_revision sensor here either - same reasoning as the
+    # Gateway's, it duplicates the Device info card's sw_version.
 )
 
 

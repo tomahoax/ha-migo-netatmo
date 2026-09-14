@@ -33,10 +33,16 @@ what kind of thing it is, not by matching a neighbor at random:
 
 | Card | `entity_category` | What belongs there |
 |------|--------------------|---------------------|
-| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Heating anticipation, the active schedule, the climate entity itself). |
+| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Heating anticipation, the active schedule, Refresh, the climate entity itself). |
 | **Configuration** | `config` | A setpoint or tuning value you set occasionally and mostly leave alone (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset) - plus any button that directly acts on one of those (Reset heating curve). |
 | **Sensors** | *(unset)*, read-only domain | A measured or derived value you monitor (temperatures, boiler mode, scheduled DHW state). |
-| **Diagnostic** | `diagnostic` | Read-only technical/troubleshooting data (firmware, signal strength, battery, error flags) and maintenance actions (Refresh) - plus a read-only companion to a Controls entity, when its only purpose is history graphs or automation triggers rather than being the entity a user interacts with (Away mode's binary_sensor companion to its switch). |
+| **Diagnostic** | `diagnostic` | Read-only technical/troubleshooting data (signal strength, battery, error flags) - plus a read-only companion to a Controls entity, when its only purpose is history graphs or automation triggers rather than being the entity a user interacts with (Away mode's binary_sensor companion to its switch). |
+
+Firmware/hardware version, serial number and MAC address are **not**
+duplicated as entities: Home Assistant's built-in "Device info" card already
+shows them (`sw_version`/`hw_version`/`serial_number`/`connections` set in
+each entity's `device_info`, see `entity.py`). Adding a `sensor` for one of
+these would just repeat that card.
 
 ---
 
@@ -104,7 +110,9 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 |-------------------|------|------|-------------|
 | `sensor.migo_{home}_outdoor_temperature` | Outdoor Temperature | °C | Outdoor temperature from gateway |
 | `sensor.migo_{home}_wifi_signal` | WiFi Signal | % | Gateway WiFi signal strength |
-| `sensor.migo_{home}_gateway_firmware` | Gateway Firmware | - | Gateway firmware version |
+
+Gateway firmware is shown on the device's "Device info" card, not as a
+separate sensor - see "Device Page Organization" above.
 
 ### Thermostat Sensors
 
@@ -114,7 +122,8 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 | `sensor.migo_{room}_humidity` | {Room} Humidity | % | Room humidity (if available) |
 | `sensor.migo_{home}_battery` | Battery | % | Thermostat battery level |
 | `sensor.migo_{home}_rf_signal` | RF Signal | % | Thermostat radio signal |
-| `sensor.migo_{home}_thermostat_firmware` | Thermostat Firmware | - | Thermostat firmware version |
+
+Thermostat firmware is likewise shown on the device's "Device info" card.
 
 ### Energy Consumption (Gateway)
 

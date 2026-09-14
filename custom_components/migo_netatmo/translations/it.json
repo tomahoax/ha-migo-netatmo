@@ -152,12 +152,6 @@
       "rf_strength": {
         "name": "Segnale RF"
       },
-      "gateway_firmware": {
-        "name": "Firmware gateway"
-      },
-      "thermostat_firmware": {
-        "name": "Firmware termostato"
-      },
       "outdoor_temperature": {
         "name": "Temperatura esterna"
       },

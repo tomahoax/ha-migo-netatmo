@@ -152,12 +152,6 @@
       "rf_strength": {
         "name": "RF signal"
       },
-      "gateway_firmware": {
-        "name": "Gateway firmware"
-      },
-      "thermostat_firmware": {
-        "name": "Thermostat firmware"
-      },
       "outdoor_temperature": {
         "name": "Outdoor temperature"
       },

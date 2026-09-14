@@ -75,13 +75,12 @@ async def async_setup_entry(
 class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
     """MiGO Refresh button entity for Gateway device.
 
-    Diagnostic, not Configuration: forcing a data refresh is a maintenance
-    action, not a setting, so it belongs with the other technical entities.
+    No entity_category: kept in the primary "Controls" card - it's a quick
+    action a user reaches for directly, not a background maintenance detail.
     """
 
     _attr_translation_key = "refresh"
     _attr_icon = "mdi:refresh"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -101,12 +100,11 @@ class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
 class MigoThermostatRefreshButton(MigoThermostatHomeControlEntity, ButtonEntity):
     """MiGO Refresh button entity for Thermostat device.
 
-    Diagnostic, not Configuration - see MigoGatewayRefreshButton.
+    No entity_category - see MigoGatewayRefreshButton.
     """
 
     _attr_translation_key = "refresh"
     _attr_icon = "mdi:refresh"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,

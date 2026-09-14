@@ -152,12 +152,6 @@
       "rf_strength": {
         "name": "Сигнал RF"
       },
-      "gateway_firmware": {
-        "name": "Прошивка шлюза"
-      },
-      "thermostat_firmware": {
-        "name": "Прошивка термостата"
-      },
       "outdoor_temperature": {
         "name": "Температура на улице"
       },

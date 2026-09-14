@@ -74,7 +74,6 @@ This integration creates **two separate devices** in Home Assistant:
 #### Gateway Sensors
 - Outdoor temperature
 - WiFi signal strength
-- Gateway firmware version
 - **Boiler mode** - Normal / DHW only / Frost guard quick-action mode (derived)
 
 #### Thermostat Sensors
@@ -82,7 +81,8 @@ This integration creates **two separate devices** in Home Assistant:
 - Humidity sensor per room (if available)
 - Battery level
 - RF signal strength
-- Thermostat firmware version
+
+Firmware version is shown on each device's info card, not as a separate sensor.
 
 #### Energy Consumption
 - **Daily boiler runtime** - Tracks boiler operation time in seconds (compatible with Energy Dashboard via `state_class: total_increasing`)
