@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from homeassistant.components.datetime import DateTimeEntity
@@ -50,21 +50,16 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
 
     Setting a value activates Away (home-level `therm_mode`) with an end
     time, matching the MiGo app's own "indicate a return date/time" option
-    when leaving. Uses `set_home_therm_mode` (the sethomedata endpoint,
-    which documents an optional `therm_mode_endtime`) rather than
-    `set_therm_mode` (setthermmode), which has no such parameter.
+    when leaving. Uses `set_home_therm_mode` (the sethomedata endpoint)
+    rather than `set_therm_mode` (setthermmode), which has no equivalent
+    parameter.
 
-    Deliberately does not touch `switch.away_mode`: this is an additive way
-    to leave with a return time, not a replacement for the plain indefinite
-    on/off toggle, which stays on the already-proven setthermmode call.
-
-    `therm_mode_endtime` is documented only as a sethomedata *request*
-    field, never confirmed as part of homesdata's or homestatus's response,
-    so there is no way to read it back from the API at all. `native_value`
-    reflects the optimistic cache only - and unlike the entities
-    `MigoApiControlMixin._call_api_optimistically` is meant for, that cache
-    is deliberately never cleared after a successful call, since there is no
-    real API data for it to hand back to.
+    `therm_mode_endtime` is undocumented by Netatmo, but confirmed present
+    on the home object in `homesdata`'s response via a live debug-log
+    capture - unlike this integration's other write-only settings
+    (`temperature_offset`, `hysteresis`, ...), it *does* round-trip, so
+    `native_value` falls back to it once the optimistic cache is cleared,
+    the same "cache first, API data second" shape those use.
     """
 
     _attr_translation_key = "away_until"
@@ -87,44 +82,47 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
 
     @property
     def native_value(self) -> datetime | None:
-        """Return the last return time set from Home Assistant, if any."""
-        return self.coordinator.get_cached_value(self._cache_key)
+        """Return the return time, from the optimistic cache or the API.
+
+        Only surfaced while actually Away: `therm_mode_endtime` may linger
+        server-side from a past Away period after `therm_mode` itself has
+        moved on, and showing it then would be misleading.
+        """
+        cached = self.coordinator.get_cached_value(self._cache_key)
+        if cached is not None:
+            return cached
+
+        home_id = self._device_data.get("home_id")
+        if not home_id:
+            return None
+        home_data = self.coordinator.homes.get(home_id, {})
+        if home_data.get("therm_mode") != MODE_AWAY:
+            return None
+
+        endtime = home_data.get("therm_mode_endtime")
+        if endtime is None:
+            return None
+        return datetime.fromtimestamp(endtime, tz=UTC)
 
     async def async_set_value(self, value: datetime) -> None:
-        """Activate Away with a return time.
-
-        Does not use `_call_api_optimistically`: that helper clears its
-        cache key after a successful refresh so real API data can take
-        over, but there is no real API data for this value (see class
-        docstring) - clearing it would make the just-set value vanish from
-        the UI immediately. The cache is written before the call for the
-        same immediate-feedback reason, and restored on failure, but never
-        cleared on success.
-        """
+        """Activate Away with a return time."""
         home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
         if not home_id:
             return
 
         endtime = int(value.timestamp())
-        previous = self.coordinator.get_cached_value(self._cache_key)
-        self.coordinator.set_cached_value(self._cache_key, value)
-        self.async_write_ha_state()
-
         _LOGGER.debug(
             "Activating away for home %s until %s (endtime=%s)",
             home_id,
             value,
             endtime,
         )
-        try:
-            await self._api.set_home_therm_mode(home_id=home_id, mode=MODE_AWAY, endtime=endtime)
-        except Exception:
-            if previous is None:
-                self.coordinator.clear_cached_value(self._cache_key)
-            else:
-                self.coordinator.set_cached_value(self._cache_key, previous)
-            self.async_write_ha_state()
-            raise
-
-        await self.coordinator.async_request_refresh()
+        await self._call_api_optimistically(
+            self._api.set_home_therm_mode,
+            cache_key=self._cache_key,
+            optimistic_value=value,
+            home_id=home_id,
+            mode=MODE_AWAY,
+            endtime=endtime,
+        )
         _LOGGER.debug("Away return time set for home %s", home_id)

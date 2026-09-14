@@ -184,6 +184,9 @@
       },
       "away_mode": {
         "name": "Modo ausente"
+      },
+      "dhw_always_on": {
+        "name": "ACS siempre activada"
       }
     }
   }

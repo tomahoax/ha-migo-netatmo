@@ -184,6 +184,9 @@
       },
       "away_mode": {
         "name": "Away mode"
+      },
+      "dhw_always_on": {
+        "name": "DHW always on"
       }
     }
   }

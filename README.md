@@ -92,10 +92,11 @@ Firmware version is shown on each device's info card, not as a separate sensor.
 - **DHW boost** (hot water boost) - Gateway
 - **Heating anticipation** (enable/disable) - Home setting
 - **Away mode** (enable/disable) - Gateway, writes the same home-level flag as the climate "Away" preset
+- **DHW always on** - Gateway, matches the MiGo app's "Toujours activée" DHW setting: forces the boiler to never suspend hot water heating, overriding the active schedule's per-slot production setting
 
 ### Date/Time
 
-- **Away until** - set a return date/time when leaving, matching the MiGo app's own option. Activates Away and sets the return time in one action; separate from the plain Away switch above, which stays indefinite. Toggling the Away switch (either direction), or the dedicated "Reset Away Until" button, both clear it back to empty - Home Assistant's date/time picker has no clear option of its own
+- **Away until** - set a return date/time when leaving, matching the MiGo app's own option. Activates Away and sets the return time in one action; separate from the plain Away switch above, which stays indefinite. Reads back from the API, so it survives a Home Assistant restart and reflects a return time set directly in the MiGo app. Toggling the Away switch (either direction), or the dedicated "Reset Away Until" button, both clear it back to empty (server-side too) - Home Assistant's date/time picker has no clear option of its own
 
 ### Number Controls (Configuration)
 

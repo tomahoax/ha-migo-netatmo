@@ -29,12 +29,12 @@ These endpoints are used by the MiGO app but are **not documented** in the offic
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/api/sethomedata` | Anticipation, manual setpoint duration |
+| `/api/sethomedata` | Anticipation, manual setpoint duration, Away mode with an optional return time (`therm_mode`/`therm_mode_endtime`) |
 | `/api/changeheatingcurve` | Heating curve (slope) adjustment |
 | `/api/setheatingsystem` | Heating type configuration |
 | `/api/changeheatingalgo` | Hysteresis threshold |
 | `/api/getmeasure` | Historical data and boiler consumption |
-| `/syncapi/v1/setconfigs` | DHW temperature, temperature offset |
+| `/syncapi/v1/setconfigs` | DHW temperature, temperature offset, DHW always-on |
 
 ### Why `/api/setstate` Instead of `/api/setroomthermpoint`?
 
@@ -107,6 +107,7 @@ Retrieves the static configuration of homes (structure, schedules, modules).
 | `id` | Unique home ID |
 | `name` | Home name |
 | `therm_mode` | Current mode: `schedule`, `away`, `hg` |
+| `therm_mode_endtime` | Unix timestamp when `therm_mode` (while `"away"`) automatically reverts. **Not documented by Netatmo**, confirmed via a live debug-log capture - matches the return time shown in the MiGo app when leaving with "indicate a return date/time". Set via `sethomedata` (see below); absent when no return time is set. |
 | `anticipation` | Heating anticipation enabled |
 | `therm_setpoint_default_duration` | Default duration for manual setpoints (minutes) |
 | `therm_heating_priority` | Heating priority: `eco`, `comfort` |
@@ -577,6 +578,19 @@ Sets module or room configuration.
 }
 ```
 
+**Request - Set DHW Always On:**
+```json
+{
+  "home_id": "<home_id>",
+  "home": {
+    "modules": [{
+      "id": "<gateway_module_id>",
+      "dhw_always_on": true
+    }]
+  }
+}
+```
+
 **Request - Set Temperature Offset:**
 ```json
 {
@@ -592,6 +606,13 @@ Sets module or room configuration.
 
 **Notes for DHW Temperature:**
 - Range: 45-65°C
+
+**Notes for DHW Always On:**
+- `dhw_always_on` is **not documented by Netatmo**, confirmed via a live
+  debug-log capture of `/syncapi/v1/getconfigs`'s response - it sits on the
+  same module entry as `dhw_setpoint_temperature`. Matches the MiGo app's
+  "Toujours activée" toggle: forces the boiler to never suspend DHW heating,
+  overriding the active schedule's per-slot production setting.
 
 **Notes for Temperature Offset:**
 - Range: -5.0 to +5.0°C
@@ -719,7 +740,16 @@ Registers the context for push notifications.
 ---
 
 ### POST `/syncapi/v1/getconfigs`
-Retrieves synchronization configurations.
+Retrieves synchronization configurations, including per-module DHW settings
+not present in `homesdata`/`homestatus`.
+
+**Response - Key Data (per module, NAVaillant/Gateway):**
+| Field | Description |
+|-------|-------------|
+| `dhw_setpoint_temperature` | Hot water temperature setpoint (°C) |
+| `dhw_temperature_min` | Minimum allowed DHW setpoint (°C) |
+| `dhw_temperature_max` | Maximum allowed DHW setpoint (°C) |
+| `dhw_always_on` | Whether DHW production always stays on, overriding the schedule. **Not documented by Netatmo**, confirmed via a live debug-log capture - matches the MiGo app's "Toujours activée" toggle. |
 
 ---
 
@@ -909,6 +939,7 @@ each device's own info card instead.
 - [x] Domestic Hot Water (DHW)
 - [x] Heating anticipation
 - [x] Away mode
+- [x] DHW always on
 
 ### Number Entities
 - [x] Heating curve (slope)
@@ -922,8 +953,13 @@ each device's own info card instead.
 - [x] Thermostat mode (schedule, away, hg)
 - [x] Heating type (radiator, convector, floor_heating)
 
+### Date/Time Entities
+- [x] Away return date/time
+
 ### Button Entities
 - [x] Refresh data
+- [x] Reset heating curve to default
+- [x] Reset Away return date/time
 
 ### Services
 - [ ] `migo.set_schedule` - Change schedule

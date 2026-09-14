@@ -43,7 +43,12 @@ from custom_components.migo_netatmo.const import (
 from custom_components.migo_netatmo.datetime import MigoAwayReturnDateTime
 from custom_components.migo_netatmo.number import MigoDHWTemperatureNumber, MigoTemperatureOffsetNumber
 from custom_components.migo_netatmo.sensor import MigoBoilerModeSensor
-from custom_components.migo_netatmo.switch import MigoAnticipationSwitch, MigoAwayModeSwitch, MigoDHWSwitch
+from custom_components.migo_netatmo.switch import (
+    MigoAnticipationSwitch,
+    MigoAwayModeSwitch,
+    MigoDHWAlwaysOnSwitch,
+    MigoDHWSwitch,
+)
 
 
 @pytest.fixture
@@ -382,7 +387,7 @@ class TestMigoAwayModeSwitch:
     def switch(self, mock_coordinator):
         """Create an away mode switch, with async_write_ha_state stubbed (no hass)."""
         api = create_autospec(MigoApi, instance=True)
-        api.set_therm_mode.return_value = {"status": "ok"}
+        api.set_home_therm_mode.return_value = {"status": "ok"}
         entity = MigoAwayModeSwitch(mock_coordinator, "gateway_001", api)
         entity.async_write_ha_state = MagicMock()
         return entity
@@ -398,19 +403,19 @@ class TestMigoAwayModeSwitch:
         assert switch.is_on is True
 
     @pytest.mark.asyncio
-    async def test_turn_on_calls_set_therm_mode_away(self, switch, mock_coordinator):
-        """Turning on writes therm_mode=away at the home level."""
+    async def test_turn_on_calls_set_home_therm_mode_away(self, switch, mock_coordinator):
+        """Turning on writes therm_mode=away at the home level, clearing any endtime."""
         await switch.async_turn_on()
 
-        switch._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY)
+        switch._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY, endtime=None)
         mock_coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_turn_off_calls_set_therm_mode_schedule(self, switch, mock_coordinator):
-        """Turning off returns to schedule mode (the app's "I'm back" button)."""
+    async def test_turn_off_calls_set_home_therm_mode_schedule(self, switch, mock_coordinator):
+        """Turning off returns to schedule mode (the app's "I'm back" button), clearing any endtime."""
         await switch.async_turn_off()
 
-        switch._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
+        switch._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE, endtime=None)
 
     @pytest.mark.asyncio
     async def test_turn_on_writes_optimistic_cache_before_api_call(self, switch, mock_coordinator):
@@ -437,6 +442,58 @@ class TestMigoAwayModeSwitch:
         await switch.async_turn_off()
 
         mock_coordinator.clear_cached_value.assert_any_call("away_until_gateway_001")
+
+
+class TestMigoDHWAlwaysOnSwitch:
+    """Tests for the DHW "always on" switch (the MiGo app's "Toujours activée").
+
+    Same shape as MigoDHWSwitch: `MigoGatewayControlEntity` base,
+    cache-then-API-fallback `is_on`, `_call_api_optimistically` on write.
+    Read/write via `dhw_always_on` (getconfigs/setconfigs), confirmed via a
+    live debug-log capture.
+    """
+
+    @pytest.fixture
+    def switch(self, mock_coordinator):
+        """Create a DHW always-on switch, with async_write_ha_state stubbed (no hass)."""
+        api = create_autospec(MigoApi, instance=True)
+        api.set_dhw_always_on.return_value = {"status": "ok"}
+        entity = MigoDHWAlwaysOnSwitch(mock_coordinator, "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
+
+    def test_is_on_none_by_default(self, switch):
+        """No dhw_always_on field in the default device fixture data."""
+        assert switch.is_on is None
+
+    def test_is_on_reads_from_api(self, switch, mock_coordinator):
+        """Falls back to the API-echoed dhw_always_on device field."""
+        mock_coordinator.devices["gateway_001"]["dhw_always_on"] = True
+        assert switch.is_on is True
+
+    @pytest.mark.asyncio
+    async def test_turn_on_calls_set_dhw_always_on(self, switch, mock_coordinator):
+        """Turning on writes dhw_always_on=True for this gateway."""
+        await switch.async_turn_on()
+
+        switch._api.set_dhw_always_on.assert_called_once_with(home_id="home_123", module_id="gateway_001", enabled=True)
+        mock_coordinator.async_request_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_turn_off_calls_set_dhw_always_on(self, switch, mock_coordinator):
+        """Turning off writes dhw_always_on=False for this gateway."""
+        await switch.async_turn_off()
+
+        switch._api.set_dhw_always_on.assert_called_once_with(
+            home_id="home_123", module_id="gateway_001", enabled=False
+        )
+
+    @pytest.mark.asyncio
+    async def test_turn_on_writes_optimistic_cache_before_api_call(self, switch, mock_coordinator):
+        """Immediate UI feedback, same regression guard as the other switches."""
+        await switch.async_turn_on()
+
+        mock_coordinator.set_cached_value.assert_any_call("dhw_always_on_gateway_001", True)
 
 
 class TestMigoAwayModeBinarySensor:
@@ -608,6 +665,12 @@ class TestDevicePageOrganization:
         entity = MigoAwayModeSwitch(mock_coordinator, "gateway_001", api)
         assert entity.entity_category is None
 
+    def test_dhw_always_on_switch_is_primary_control(self, mock_coordinator):
+        """DHW always-on is an operational override, same reasoning as DHW boost."""
+        api = create_autospec(MigoApi, instance=True)
+        entity = MigoDHWAlwaysOnSwitch(mock_coordinator, "gateway_001", api)
+        assert entity.entity_category is None
+
     def test_gateway_refresh_button_is_primary_control(self, mock_coordinator):
         """Refresh is a quick action a user reaches for directly, kept in Controls."""
         entity = MigoGatewayRefreshButton(mock_coordinator, "gateway_001")
@@ -681,11 +744,13 @@ class TestNumberOptimisticCacheClearing:
 class TestMigoAwayReturnDateTime:
     """Tests for the Away return date/time entity.
 
-    Unlike the number entities above, this one's cache must survive a
-    successful call (see the class docstring in datetime.py): there is no
-    API readback for therm_mode_endtime at all, so clearing the cache the
-    way _call_api_optimistically does would make the value vanish right
-    after every successful set.
+    `therm_mode_endtime` is confirmed to round-trip via the API (a live
+    debug-log capture, cross-checked against the user's own MiGo app
+    screenshot), so this uses the standard `_call_api_optimistically`
+    pattern like every other read/write entity: the cache is cleared after
+    a successful call, and `native_value` falls back to the API-echoed
+    value (gated on `therm_mode == MODE_AWAY`, so a lingering endtime from
+    a past Away period isn't shown once the mode has moved on).
     """
 
     @pytest.fixture
@@ -717,18 +782,47 @@ class TestMigoAwayReturnDateTime:
         )
 
     @pytest.mark.asyncio
-    async def test_native_value_survives_after_successful_set(self, entity, cache):
-        """The cache is NOT cleared after a successful call, unlike _call_api_optimistically."""
+    async def test_cache_cleared_after_successful_set(self, entity, cache):
+        """Unlike the earlier hand-rolled implementation, the cache IS cleared on success."""
         value = datetime(2026, 12, 24, 18, 0, tzinfo=UTC)
 
         await entity.async_set_value(value)
 
-        assert entity.native_value == value
-        assert cache != {}
+        assert cache == {}
 
     @pytest.mark.asyncio
-    async def test_native_value_none_by_default(self, entity):
-        """No return time has been set yet."""
+    async def test_native_value_falls_back_to_api_after_successful_set(self, entity, mock_coordinator, cache):
+        """Once the optimistic cache is cleared, native_value re-derives from the API-echoed home data."""
+        value = datetime(2026, 12, 24, 18, 0, tzinfo=UTC)
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.homes["home_123"]["therm_mode_endtime"] = int(value.timestamp())
+
+        await entity.async_set_value(value)
+
+        assert entity.native_value == value
+
+    def test_native_value_none_by_default(self, entity):
+        """No return time has been set yet, and therm_mode is not away by default."""
+        assert entity.native_value is None
+
+    def test_native_value_from_api_when_away(self, entity, mock_coordinator):
+        """Falls back to the API-echoed therm_mode_endtime while actually Away."""
+        value = datetime(2026, 12, 24, 18, 0, tzinfo=UTC)
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.homes["home_123"]["therm_mode_endtime"] = int(value.timestamp())
+
+        assert entity.native_value == value
+
+    def test_native_value_none_when_not_away_even_with_stale_endtime(self, entity, mock_coordinator):
+        """A lingering endtime from a past Away period isn't shown once therm_mode has moved on."""
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
+        mock_coordinator.homes["home_123"]["therm_mode_endtime"] = 1234567890
+
+        assert entity.native_value is None
+
+    def test_native_value_none_when_home_unresolved(self, entity, mock_coordinator):
+        """Unavailable (None) if the device has no home_id."""
+        mock_coordinator.devices["gateway_001"] = {"id": "gateway_001"}
         assert entity.native_value is None
 
     @pytest.mark.asyncio
@@ -747,26 +841,47 @@ class TestMigoAwayReturnDateTime:
 class TestMigoResetAwayUntilButton:
     """Tests for the dedicated Away-until reset button.
 
-    The only *deliberate* way to clear MigoAwayReturnDateTime's value: it
-    makes no API call, since there is nothing to clear server-side.
+    The only *deliberate* way to clear MigoAwayReturnDateTime's value.
+    `therm_mode_endtime` is confirmed to persist server-side, so a purely
+    local clear isn't enough while still Away - the button also clears it
+    server-side (via set_home_therm_mode with endtime=None) in that case.
+    If not currently Away, there is nothing meaningful to clear server-side,
+    so it only touches the local cache and pushes the change directly via
+    async_update_listeners() rather than a pointless refresh.
     """
 
     @pytest.fixture
     def button(self, mock_coordinator):
-        entity = MigoResetAwayUntilButton(mock_coordinator, "gateway_001")
+        api = create_autospec(MigoApi, instance=True)
+        api.set_home_therm_mode.return_value = {"status": "ok"}
+        entity = MigoResetAwayUntilButton(mock_coordinator, "gateway_001", api)
         entity.async_write_ha_state = MagicMock()
         return entity
 
     @pytest.mark.asyncio
-    async def test_press_clears_away_until(self, button, mock_coordinator):
+    async def test_press_clears_away_until_locally_when_not_away(self, button, mock_coordinator):
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
         await button.async_press()
 
         mock_coordinator.clear_cached_value.assert_called_once_with("away_until_gateway_001")
+        button._api.set_home_therm_mode.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_press_notifies_listeners_without_an_api_call(self, button, mock_coordinator):
+    async def test_press_notifies_listeners_without_an_api_call_when_not_away(self, button, mock_coordinator):
         """Pushes the change to MigoAwayReturnDateTime immediately, no API request."""
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
         await button.async_press()
 
         mock_coordinator.async_update_listeners.assert_called_once()
         mock_coordinator.async_request_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_press_clears_server_side_when_away(self, button, mock_coordinator):
+        """While actually Away, the endtime is also cleared server-side so it can't resurface."""
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+
+        await button.async_press()
+
+        button._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY, endtime=None)
+        mock_coordinator.clear_cached_value.assert_called_once_with("away_until_gateway_001")
+        mock_coordinator.async_request_refresh.assert_called_once()

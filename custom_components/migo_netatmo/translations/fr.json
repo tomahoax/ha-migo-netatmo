@@ -184,6 +184,9 @@
       },
       "away_mode": {
         "name": "Mode absent"
+      },
+      "dhw_always_on": {
+        "name": "Eau chaude sanitaire toujours activée"
       }
     }
   }

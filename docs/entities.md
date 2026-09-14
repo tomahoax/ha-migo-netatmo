@@ -179,7 +179,8 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|--------|-------------|
 | `switch.migo_{home}_dhw_boost` | DHW Boost | Gateway | Hot water temperature boost |
 | `switch.migo_{home}_anticipation` | Heating Anticipation | Home | Predictive heating |
-| `switch.migo_{home}_away_mode` | Away Mode | Gateway | Home-wide Away flag. Writes via `setthermmode`, the same call the climate preset uses, so it has no side effect on the boiler quick-action mode. |
+| `switch.migo_{home}_away_mode` | Away Mode | Gateway | Home-wide Away flag. Writes via `sethomedata` with an explicit `endtime=None` (rather than `setthermmode`, which has no such parameter), so toggling from here also clears any return time set via `datetime.migo_{home}_away_until` or the MiGo app itself. No side effect on the boiler quick-action mode. |
+| `switch.migo_{home}_dhw_always_on` | DHW Always On | Gateway | Matches the MiGo app's "Toujours activée" DHW setting: forces the boiler to never suspend hot water heating, overriding the active schedule's per-slot production setting. Read/write via `getconfigs`/`setconfigs`'s `dhw_always_on`, the same module-level config field pair as `number.migo_{home}_dhw_temperature`. |
 
 ---
 
@@ -219,7 +220,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
-| `datetime.migo_{home}_away_until` | Away Until | Sets a return date/time when activating Away, matching the MiGo app's own option. Writes via `sethomedata`'s `therm_mode`/`therm_mode_endtime`, activating Away and setting the return time in one action - separate from `switch.migo_{home}_away_mode`, which stays on the simpler indefinite on/off call. Read-only in practice: the API never echoes the end time back, so the displayed value is only ever what was last set from Home Assistant, and is lost across a full restart. Home Assistant's `datetime` platform has no way to clear a value back to empty from its own more-info dialog - toggling `switch.migo_{home}_away_mode` (either direction) or pressing `button.migo_{home}_reset_away_until` both clear it. |
+| `datetime.migo_{home}_away_until` | Away Until | Sets a return date/time when activating Away, matching the MiGo app's own option. Writes via `sethomedata`'s `therm_mode`/`therm_mode_endtime`, activating Away and setting the return time in one action - separate from `switch.migo_{home}_away_mode`, which stays on the simpler indefinite on/off call. `therm_mode_endtime` is echoed back on `homesdata`, so the value survives a Home Assistant restart and reflects a return time set directly in the MiGo app, as long as `therm_mode` is still `"away"`. Home Assistant's `datetime` platform has no way to clear a value back to empty from its own more-info dialog - toggling `switch.migo_{home}_away_mode` (either direction) or pressing `button.migo_{home}_reset_away_until` both clear it, server-side included. |
 
 ---
 
@@ -229,7 +230,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|-------------|
 | `button.migo_{home}_refresh` | Refresh | Force data refresh from API |
 | `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Reset heating curve to default value (1.5) |
-| `button.migo_{home}_reset_away_until` | Reset Away Until | Clears `datetime.migo_{home}_away_until` back to empty. No API call - there is nothing to clear server-side, only this integration's own cache. |
+| `button.migo_{home}_reset_away_until` | Reset Away Until | Clears `datetime.migo_{home}_away_until` back to empty. While currently Away, also clears `therm_mode_endtime` server-side (via `sethomedata`, `endtime=None`) so it can't resurface on the next refresh; otherwise there is nothing to clear server-side, only this integration's own cache. |
 
 ---
 

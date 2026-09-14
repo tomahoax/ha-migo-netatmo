@@ -62,6 +62,16 @@ async def async_setup_entry(
             )
         )
 
+    # Create DHW always-on switch for each gateway that supports DHW
+    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        entities.append(
+            MigoDHWAlwaysOnSwitch(
+                coordinator=coordinator,
+                device_id=device_id,
+                api=data.api,
+            )
+        )
+
     async_add_entities(entities)
 
 
@@ -202,10 +212,18 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
 
     Reads and writes the home-level `therm_mode` flag, which the climate
     entity's preset (derived from the same field, see climate.py) exposes
-    but which is easier to automate as its own boolean switch. Writes via
-    `set_therm_mode` (the same call the climate preset uses), so toggling
-    this has no side effect on the boiler quick-action mode
-    (Normal / DHW only / Frost guard).
+    but which is easier to automate as its own boolean switch.
+
+    Writes via `set_home_therm_mode` (sethomedata) with an explicit
+    `endtime=None`, rather than `set_therm_mode` (setthermmode, which has
+    no such parameter at all): `therm_mode_endtime` is confirmed to persist
+    server-side independently of `therm_mode` itself (see
+    `datetime.MigoAwayReturnDateTime`), so turning Away on or off from this
+    plain switch - which never specifies a return time - has to clear it
+    explicitly, or a stale one set earlier (from `MigoAwayReturnDateTime`,
+    or from the MiGo app itself) would resurface on the next refresh. This
+    has no side effect on the boiler quick-action mode (Normal / DHW only /
+    Frost guard), same as before.
     """
 
     _attr_translation_key = "away_mode"
@@ -241,23 +259,16 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
             return None
         return home_data.get("therm_mode") == MODE_AWAY
 
-    def _clear_away_until(self) -> None:
-        """Clear any cached Away return time - this switch never sets one.
+    def _clear_away_until_locally(self) -> None:
+        """Clear the local cache for the Away return time, for instant feedback.
 
         Shares the cache key format with `datetime.py`'s
         `MigoAwayReturnDateTime` (same device_id), the same cross-entity
         coupling `MigoResetHeatingCurveButton`/`MigoHeatingCurveNumber`
-        already use for `heating_curve_{device_id}`. Cleared *before*
-        `_call_api_optimistically` triggers its own refresh below, so the
-        datetime entity's display updates in that same refresh rather than
-        waiting for the next poll cycle.
-
-        Called from both turn_on and turn_off: whichever direction the
-        plain switch is toggled, it leaves no return time specified, so a
-        stale one from an earlier away period (or one set externally, e.g.
-        from the mobile app, which this integration has no way to detect
-        and clear otherwise) would be misleading if left displayed. This
-        also gives "toggle off then on" a predictable way to reset it.
+        already use for `heating_curve_{device_id}`. The actual clearing
+        happens server-side too, via `endtime=None` on the API call below -
+        this just makes the datetime entity's display update immediately,
+        in the same refresh, rather than waiting on that round-trip.
         """
         self.coordinator.clear_cached_value(f"away_until_{self._device_id}")
 
@@ -267,15 +278,16 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         if not home_id:
             return
 
-        self._clear_away_until()
+        self._clear_away_until_locally()
 
         _LOGGER.debug("Enabling away mode for home %s", home_id)
         await self._call_api_optimistically(
-            self._api.set_therm_mode,
+            self._api.set_home_therm_mode,
             cache_key=self._cache_key,
             optimistic_value=True,
             home_id=home_id,
             mode=MODE_AWAY,
+            endtime=None,
         )
         _LOGGER.debug("Away mode enabled for home %s", home_id)
 
@@ -285,14 +297,93 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         if not home_id:
             return
 
-        self._clear_away_until()
+        self._clear_away_until_locally()
 
         _LOGGER.debug("Disabling away mode for home %s", home_id)
         await self._call_api_optimistically(
-            self._api.set_therm_mode,
+            self._api.set_home_therm_mode,
             cache_key=self._cache_key,
             optimistic_value=False,
             home_id=home_id,
             mode=MODE_SCHEDULE,
+            endtime=None,
         )
         _LOGGER.debug("Away mode disabled for home %s", home_id)
+
+
+class MigoDHWAlwaysOnSwitch(MigoGatewayControlEntity, SwitchEntity):
+    """MiGO DHW "always on" switch entity.
+
+    Mirrors the MiGo app's "Toujours activée" toggle on the DHW temperature
+    settings screen: when enabled, the boiler never suspends DHW heating,
+    overriding whatever the active schedule's per-slot "Production d'eau
+    chaude" setting would otherwise say.
+
+    Read/write via `/syncapi/v1/getconfigs` and `/syncapi/v1/setconfigs`
+    (`dhw_always_on`, confirmed via a live debug-log capture), the same
+    module-level config field pair `MigoDHWTemperatureNumber` already uses
+    for `dhw_setpoint_temperature` - so this stays alongside `MigoDHWSwitch`
+    in the primary "Controls" card rather than "Configuration": like DHW
+    boost, it's an operational override the user reaches for directly, not
+    a set-once value.
+    """
+
+    _attr_translation_key = "dhw_always_on"
+    _attr_icon = "mdi:water-boiler-alert"
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+        api: MigoApi,
+    ) -> None:
+        """Initialize the DHW always-on switch entity."""
+        super().__init__(coordinator, device_id, api)
+        self._attr_unique_id = generate_unique_id("dhw_always_on", device_id)
+
+    @property
+    def _cache_key(self) -> str:
+        """Return the cache key for this entity."""
+        return f"dhw_always_on_{self._device_id}"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if DHW always-on is enabled."""
+        cached = self.coordinator.get_cached_value(self._cache_key)
+        if cached is not None:
+            return cached
+        return self._device_data.get("dhw_always_on")
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable DHW always-on."""
+        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
+        if not home_id:
+            return
+
+        _LOGGER.debug("Enabling DHW always-on for device %s", self._device_id)
+        await self._call_api_optimistically(
+            self._api.set_dhw_always_on,
+            cache_key=self._cache_key,
+            optimistic_value=True,
+            home_id=home_id,
+            module_id=self._device_id,
+            enabled=True,
+        )
+        _LOGGER.debug("DHW always-on enabled for device %s", self._device_id)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable DHW always-on."""
+        home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
+        if not home_id:
+            return
+
+        _LOGGER.debug("Disabling DHW always-on for device %s", self._device_id)
+        await self._call_api_optimistically(
+            self._api.set_dhw_always_on,
+            cache_key=self._cache_key,
+            optimistic_value=False,
+            home_id=home_id,
+            module_id=self._device_id,
+            enabled=False,
+        )
+        _LOGGER.debug("DHW always-on disabled for device %s", self._device_id)

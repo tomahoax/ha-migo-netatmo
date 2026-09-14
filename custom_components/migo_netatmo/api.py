@@ -864,6 +864,45 @@ class MigoApi:
         _LOGGER.debug("Setting DHW temperature=%s for module %s", temperature, module_id)
         return await self._api_request(API_SETCONFIGS_URL, data)
 
+    async def set_dhw_always_on(
+        self,
+        home_id: str,
+        module_id: str,
+        enabled: bool,
+    ) -> dict[str, Any]:
+        """Set whether DHW production always stays on, overriding the schedule.
+
+        `dhw_always_on` is undocumented by Netatmo, confirmed via a live
+        debug-log capture of `/syncapi/v1/getconfigs`'s response - it sits
+        on the same module entry as `dhw_setpoint_temperature`, which is
+        why this follows the exact same request shape as
+        `set_dhw_temperature` rather than `set_dhw_enabled` (which is a
+        `setstate` call, a different endpoint entirely, for the per-slot
+        schedule flag `dhw_always_on` overrides).
+
+        Args:
+            home_id: The home ID.
+            module_id: The gateway module ID.
+            enabled: True to force DHW production always on.
+
+        Returns:
+            The API response.
+        """
+        data = {
+            "home_id": home_id,
+            "home": {
+                "modules": [
+                    {
+                        "id": module_id,
+                        "dhw_always_on": enabled,
+                    }
+                ],
+            },
+        }
+
+        _LOGGER.debug("Setting DHW always-on=%s for module %s", enabled, module_id)
+        return await self._api_request(API_SETCONFIGS_URL, data)
+
     async def set_temperature_offset(
         self,
         home_id: str,

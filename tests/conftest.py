@@ -199,6 +199,7 @@ def mock_api(
     api.set_therm_mode.return_value = {"status": "ok"}
     api.set_home_therm_mode.return_value = {"status": "ok"}
     api.set_dhw_enabled.return_value = {"status": "ok"}
+    api.set_dhw_always_on.return_value = {"status": "ok"}
     api.switch_home_schedule.return_value = {"status": "ok"}
     return api
 

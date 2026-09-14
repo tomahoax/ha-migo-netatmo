@@ -208,6 +208,13 @@ class ModuleData(TypedDict):
     dhw_setpoint_endtime: NotRequired[int]
     outdoor_temperature: NotRequired[float]
     sequence_id: NotRequired[int]
+    # From /syncapi/v1/getconfigs (coordinator._fetch_home_configs), not
+    # homesdata/homestatus like the fields above - confirmed via a live
+    # debug-log capture, not documented anywhere by Netatmo.
+    dhw_setpoint_temperature: NotRequired[int]
+    dhw_temperature_min: NotRequired[int]
+    dhw_temperature_max: NotRequired[int]
+    dhw_always_on: NotRequired[bool]
 
     # Thermostat specific
     room_id: NotRequired[str]
@@ -237,6 +244,10 @@ class HomeConfig(TypedDict):
     id: str
     name: str
     therm_mode: NotRequired[str]  # "schedule", "away", "hg"
+    # Unix timestamp when `therm_mode` (while "away") automatically reverts.
+    # Confirmed present via a live debug-log capture - not documented by
+    # Netatmo, and set by `MigoApi.set_home_therm_mode()`'s `endtime`.
+    therm_mode_endtime: NotRequired[int]
     anticipation: NotRequired[bool]
     therm_setpoint_default_duration: NotRequired[int]
     therm_heating_priority: NotRequired[str]  # "eco", "comfort"
