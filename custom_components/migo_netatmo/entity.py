@@ -76,6 +76,7 @@ class MigoApiControlMixin:
         *,
         cache_key: str,
         optimistic_value: Any,
+        on_optimistic: Callable[[], None] | None = None,
         **kwargs: Any,
     ) -> None:
         """Call an API method with immediate optimistic UI feedback.
@@ -87,6 +88,18 @@ class MigoApiControlMixin:
         cache entry so API data regains authority - the cache key is not left
         behind to shadow future API values. On failure, the previous cached
         value (or its absence) is restored before the exception propagates.
+
+        `on_optimistic`, if given, runs synchronously right after this
+        entity's own optimistic cache/state write, before the API call - the
+        one moment where a *different* entity's cache-aware read (e.g.
+        `helpers.is_home_away()`) is guaranteed to see this entity's fresh
+        optimistic value without also risking a read of stale coordinator
+        data. Used by `MigoAwayModeSwitch` to clear and push
+        `MigoAwayReturnDateTime`'s value in the same instant, rather than
+        only when this entity's own state is written. Not restored on
+        failure along with `cache_key` - a rare API failure just leaves the
+        dependent entity blank a little longer than strictly necessary,
+        until the next real refresh, rather than needing its own rollback.
 
         Deliberately does *not* write state again right after clearing the
         cache. `async_request_refresh()` goes through the coordinator's
@@ -111,11 +124,15 @@ class MigoApiControlMixin:
             cache_key: The coordinator optimistic-cache key for this entity.
             optimistic_value: The value to show immediately while the call is
                 in flight.
+            on_optimistic: Optional callback run right after the optimistic
+                write above, before the API call.
             **kwargs: Arguments to pass to the API method.
         """
         previous = self.coordinator.get_cached_value(cache_key)
         self.coordinator.set_cached_value(cache_key, optimistic_value)
         self.async_write_ha_state()
+        if on_optimistic is not None:
+            on_optimistic()
 
         try:
             await api_method(**kwargs)

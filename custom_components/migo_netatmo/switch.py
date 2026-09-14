@@ -257,17 +257,28 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         return is_home_away(self.coordinator, self._device_id, self._device_data)
 
     def _clear_away_until_locally(self) -> None:
-        """Clear the local cache for the Away return time, for instant feedback.
+        """Clear the local cache for the Away return time and push it now.
 
         Shares the cache key format with `datetime.py`'s
         `MigoAwayReturnDateTime` (same device_id), the same cross-entity
         coupling `MigoResetHeatingCurveButton`/`MigoHeatingCurveNumber`
         already use for `heating_curve_{device_id}`. The actual clearing
-        happens server-side too, via `endtime=None` on the API call below -
-        this just makes the datetime entity's display update immediately,
-        in the same refresh, rather than waiting on that round-trip.
+        happens server-side too, via `endtime=None` on the API call below.
+
+        Passed as `_call_api_optimistically`'s `on_optimistic` hook, so it
+        runs right after *this* switch's own optimistic cache is set - not
+        after the whole call completes - which matters:
+        `MigoAwayReturnDateTime.native_value` gates on `is_home_away()`,
+        which checks this same switch's cache first. Pushing listeners at
+        that exact moment means the datetime entity re-renders while the
+        switch's cache already reflects the new state, so it reads as
+        correctly not-Away (or Away) immediately - not against
+        `coordinator.homes` data that may still be stale for several more
+        seconds (see `_call_api_optimistically`'s own docstring). Pushing
+        any earlier or later would risk exactly that staleness.
         """
         self.coordinator.clear_cached_value(f"away_until_{self._device_id}")
+        self.coordinator.async_update_listeners()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable away mode."""
@@ -275,13 +286,12 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         if not home_id:
             return
 
-        self._clear_away_until_locally()
-
         _LOGGER.debug("Enabling away mode for home %s", home_id)
         await self._call_api_optimistically(
             self._api.set_home_therm_mode,
             cache_key=self._cache_key,
             optimistic_value=True,
+            on_optimistic=self._clear_away_until_locally,
             home_id=home_id,
             mode=MODE_AWAY,
             endtime=None,
@@ -294,13 +304,12 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         if not home_id:
             return
 
-        self._clear_away_until_locally()
-
         _LOGGER.debug("Disabling away mode for home %s", home_id)
         await self._call_api_optimistically(
             self._api.set_home_therm_mode,
             cache_key=self._cache_key,
             optimistic_value=False,
+            on_optimistic=self._clear_away_until_locally,
             home_id=home_id,
             mode=MODE_SCHEDULE,
             endtime=None,

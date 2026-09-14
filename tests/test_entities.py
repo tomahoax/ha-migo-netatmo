@@ -465,6 +465,51 @@ class TestMigoAwayModeSwitch:
 
         mock_coordinator.clear_cached_value.assert_any_call("away_until_gateway_001")
 
+    @pytest.mark.asyncio
+    async def test_turn_off_notifies_listeners_for_away_until(self, switch, mock_coordinator):
+        """Regression guard: clearing the cache alone doesn't push any entity's state.
+
+        Reported live: the Away until value wasn't clearing when Away mode
+        was turned off. Clearing the coordinator cache dict is invisible to
+        Home Assistant on its own - MigoAwayReturnDateTime needs its
+        listener actually invoked to re-render.
+        """
+        await switch.async_turn_off()
+
+        mock_coordinator.async_update_listeners.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_turn_on_notifies_listeners_for_away_until(self, switch, mock_coordinator):
+        """Same as turn_off, for symmetry."""
+        await switch.async_turn_on()
+
+        mock_coordinator.async_update_listeners.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_away_until_notified_before_api_call(self, mock_coordinator):
+        """The push must happen before the API call, not after.
+
+        That's the whole point of the on_optimistic hook: is_home_away()
+        (which MigoAwayReturnDateTime.native_value now uses) needs to see
+        this switch's fresh optimistic cache value, not risk reading
+        coordinator.homes data that a debounced refresh hasn't updated yet.
+        """
+        events: list[str] = []
+        mock_coordinator.async_update_listeners = MagicMock(side_effect=lambda: events.append("notify"))
+        api = create_autospec(MigoApi, instance=True)
+
+        async def fake_set_home_therm_mode(**kwargs):
+            events.append("api_call")
+            return {"status": "ok"}
+
+        api.set_home_therm_mode.side_effect = fake_set_home_therm_mode
+        entity = MigoAwayModeSwitch(mock_coordinator, "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+
+        await entity.async_turn_off()
+
+        assert events == ["notify", "api_call"]
+
     def test_is_on_reads_optimistic_cache_first(self, switch, mock_coordinator):
         """The cache MigoAwayModeSwitch itself writes takes priority over API data."""
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
@@ -942,6 +987,28 @@ class TestMigoAwayReturnDateTime:
     def test_native_value_none_when_home_unresolved(self, entity, mock_coordinator):
         """Unavailable (None) if the device has no home_id."""
         mock_coordinator.devices["gateway_001"] = {"id": "gateway_001"}
+        assert entity.native_value is None
+
+    def test_native_value_none_when_switch_cache_says_not_away_even_if_home_data_stale(self, entity, mock_coordinator):
+        """Reads MigoAwayModeSwitch's own cache, not just raw coordinator.homes data.
+
+        Regression guard for the reported "turning off Away doesn't clear
+        Away until" complaint: the switch's own async_request_refresh() can
+        be coalesced by the coordinator's debouncer, leaving
+        coordinator.homes stale (still showing therm_mode="away") for
+        several more seconds. native_value must still show cleared
+        immediately once the switch's away_mode cache says otherwise,
+        rather than waiting on that stale raw data.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.homes["home_123"]["therm_mode_endtime"] = 1234567890
+        # Simulate MigoAwayModeSwitch having just set its own cache to False
+        # (as _call_api_optimistically does, synchronously, before the API
+        # call even returns) while coordinator.homes above is still stale.
+        mock_coordinator.get_cached_value = MagicMock(
+            side_effect=lambda key, default=None: False if key == "away_mode_gateway_001" else default
+        )
+
         assert entity.native_value is None
 
     @pytest.mark.asyncio

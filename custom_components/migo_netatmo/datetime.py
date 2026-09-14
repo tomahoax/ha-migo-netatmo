@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY
 from .entity import MigoGatewayControlEntity
-from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error, is_home_away
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -87,7 +87,14 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
 
         Only surfaced while actually Away: `therm_mode_endtime` may linger
         server-side from a past Away period after `therm_mode` itself has
-        moved on, and showing it then would be misleading.
+        moved on, and showing it then would be misleading. Uses
+        `is_home_away()` for that check - the same optimistic cache
+        `MigoAwayModeSwitch` writes, not just raw `coordinator.homes` data -
+        so toggling Away off clears this value immediately (the switch
+        pushes this entity's listener right when it sets that cache, see
+        `MigoAwayModeSwitch._clear_away_until_locally`) instead of only
+        once a real coordinator refresh confirms it, which can lag several
+        seconds behind a plain toggle.
         """
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
@@ -96,10 +103,10 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         home_id = self._device_data.get("home_id")
         if not home_id:
             return None
-        home_data = self.coordinator.homes.get(home_id, {})
-        if home_data.get("therm_mode") != MODE_AWAY:
+        if not is_home_away(self.coordinator, self._device_id, self._device_data):
             return None
 
+        home_data = self.coordinator.homes.get(home_id, {})
         endtime = home_data.get("therm_mode_endtime")
         if endtime is None:
             return None
