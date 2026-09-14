@@ -14,7 +14,11 @@ from custom_components.migo_netatmo.binary_sensor import (
     MigoAwayModeBinarySensor,
     MigoDHWScheduleBinarySensor,
 )
-from custom_components.migo_netatmo.button import MigoGatewayRefreshButton, MigoThermostatRefreshButton
+from custom_components.migo_netatmo.button import (
+    MigoGatewayRefreshButton,
+    MigoResetAwayUntilButton,
+    MigoThermostatRefreshButton,
+)
 from custom_components.migo_netatmo.climate import (
     HVAC_TO_MIGO_MODE,
     MIGO_TO_HVAC_MODE,
@@ -415,6 +419,25 @@ class TestMigoAwayModeSwitch:
 
         mock_coordinator.set_cached_value.assert_any_call("away_mode_gateway_001", True)
 
+    @pytest.mark.asyncio
+    async def test_turn_on_clears_away_until(self, switch, mock_coordinator):
+        """A plain toggle specifies no return time, so any stale one is cleared.
+
+        Reported as "can't reset Away until": the datetime entity has no
+        clear affordance of its own, so toggling this switch is one way to
+        reset it (MigoResetAwayUntilButton in button.py is the other).
+        """
+        await switch.async_turn_on()
+
+        mock_coordinator.clear_cached_value.assert_any_call("away_until_gateway_001")
+
+    @pytest.mark.asyncio
+    async def test_turn_off_clears_away_until(self, switch, mock_coordinator):
+        """Same as turn_on: coming back should not leave a stale return time displayed."""
+        await switch.async_turn_off()
+
+        mock_coordinator.clear_cached_value.assert_any_call("away_until_gateway_001")
+
 
 class TestMigoAwayModeBinarySensor:
     """Tests for the read-only away mode binary sensor."""
@@ -719,3 +742,31 @@ class TestMigoAwayReturnDateTime:
             await entity.async_set_value(datetime(2026, 12, 24, 18, 0, tzinfo=UTC))
 
         assert entity.native_value == previous
+
+
+class TestMigoResetAwayUntilButton:
+    """Tests for the dedicated Away-until reset button.
+
+    The only *deliberate* way to clear MigoAwayReturnDateTime's value: it
+    makes no API call, since there is nothing to clear server-side.
+    """
+
+    @pytest.fixture
+    def button(self, mock_coordinator):
+        entity = MigoResetAwayUntilButton(mock_coordinator, "gateway_001")
+        entity.async_write_ha_state = MagicMock()
+        return entity
+
+    @pytest.mark.asyncio
+    async def test_press_clears_away_until(self, button, mock_coordinator):
+        await button.async_press()
+
+        mock_coordinator.clear_cached_value.assert_called_once_with("away_until_gateway_001")
+
+    @pytest.mark.asyncio
+    async def test_press_notifies_listeners_without_an_api_call(self, button, mock_coordinator):
+        """Pushes the change to MigoAwayReturnDateTime immediately, no API request."""
+        await button.async_press()
+
+        mock_coordinator.async_update_listeners.assert_called_once()
+        mock_coordinator.async_request_refresh.assert_not_called()

@@ -241,11 +241,33 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
             return None
         return home_data.get("therm_mode") == MODE_AWAY
 
+    def _clear_away_until(self) -> None:
+        """Clear any cached Away return time - this switch never sets one.
+
+        Shares the cache key format with `datetime.py`'s
+        `MigoAwayReturnDateTime` (same device_id), the same cross-entity
+        coupling `MigoResetHeatingCurveButton`/`MigoHeatingCurveNumber`
+        already use for `heating_curve_{device_id}`. Cleared *before*
+        `_call_api_optimistically` triggers its own refresh below, so the
+        datetime entity's display updates in that same refresh rather than
+        waiting for the next poll cycle.
+
+        Called from both turn_on and turn_off: whichever direction the
+        plain switch is toggled, it leaves no return time specified, so a
+        stale one from an earlier away period (or one set externally, e.g.
+        from the mobile app, which this integration has no way to detect
+        and clear otherwise) would be misleading if left displayed. This
+        also gives "toggle off then on" a predictable way to reset it.
+        """
+        self.coordinator.clear_cached_value(f"away_until_{self._device_id}")
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable away mode."""
         home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
         if not home_id:
             return
+
+        self._clear_away_until()
 
         _LOGGER.debug("Enabling away mode for home %s", home_id)
         await self._call_api_optimistically(
@@ -262,6 +284,8 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         home_id = get_home_id_or_log_error(self._device_data, "device", self._device_id)
         if not home_id:
             return
+
+        self._clear_away_until()
 
         _LOGGER.debug("Disabling away mode for home %s", home_id)
         await self._call_api_optimistically(

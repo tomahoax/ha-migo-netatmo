@@ -97,6 +97,9 @@
       },
       "reset_heating_curve": {
         "name": "Réinitialiser courbe de chauffe"
+      },
+      "reset_away_until": {
+        "name": "Réinitialiser absent jusqu'à"
       }
     },
     "climate": {

@@ -69,6 +69,15 @@ async def async_setup_entry(
                 )
             )
 
+    # Create reset away-until button for each gateway
+    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        entities.append(
+            MigoResetAwayUntilButton(
+                coordinator=coordinator,
+                device_id=device_id,
+            )
+        )
+
     async_add_entities(entities)
 
 
@@ -161,3 +170,39 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
             device_id=self._device_id,
             slope=DEFAULT_HEATING_CURVE,
         )
+
+
+class MigoResetAwayUntilButton(MigoGatewayEntity, ButtonEntity):
+    """MiGO button to clear the Away return time.
+
+    `datetime.py`'s `MigoAwayReturnDateTime` has no clear affordance of its
+    own - Home Assistant's `datetime` platform requires a value, its
+    more-info dialog cannot set one back to empty. This button is the only
+    way to reset it (toggling `switch.away_mode` also clears it as a side
+    effect, but isn't a deliberate, discoverable "reset" action).
+
+    Purely local, no API call: there is nothing to clear server-side, since
+    `therm_mode_endtime` was never confirmed readable from the API at all
+    (see `MigoAwayReturnDateTime`'s docstring) - `set_cached_value`/
+    `clear_cached_value` are this integration's only record of it either
+    way. `coordinator.async_update_listeners()` pushes the change to the
+    datetime entity immediately, without triggering a pointless API refresh.
+    """
+
+    _attr_translation_key = "reset_away_until"
+    _attr_icon = "mdi:calendar-remove"
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+    ) -> None:
+        """Initialize the reset away-until button entity."""
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = generate_unique_id("reset_away_until", device_id)
+
+    async def async_press(self) -> None:
+        """Handle the button press - clear the cached return time."""
+        _LOGGER.debug("Clearing away-until return time for device %s", self._device_id)
+        self.coordinator.clear_cached_value(f"away_until_{self._device_id}")
+        self.coordinator.async_update_listeners()

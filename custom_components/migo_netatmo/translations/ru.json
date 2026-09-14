@@ -97,6 +97,9 @@
       },
       "reset_heating_curve": {
         "name": "Сбросить кривую нагрева"
+      },
+      "reset_away_until": {
+        "name": "Сбросить «отсутствие до»"
       }
     },
     "climate": {
