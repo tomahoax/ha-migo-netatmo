@@ -143,6 +143,7 @@ Entities use Home Assistant's translation system:
 ```python
 _attr_translation_key = "thermostat"
 
+
 @property
 def translation_placeholders(self):
     return {"room_name": self._room_data.get("name")}

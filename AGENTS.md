@@ -13,22 +13,36 @@ This is a Home Assistant custom integration for MiGO thermostats (Saunier Duval/
 ### Core Components
 
 - `__init__.py` - Integration setup and entry point (`ConfigEntry.runtime_data`, no `hass.data[DOMAIN]`)
-- `api.py` - Netatmo API client (authentication, API calls)
+- `api/` - Netatmo API client, split by concern: `client.py` (the assembled `MigoApi` class),
+  `auth.py` (token lifecycle), `transport.py` (the authenticated-request path, JSON boundary,
+  redacted/raw logging), `endpoints_read.py`/`endpoints_write.py` (the get_*/set_* calls),
+  `exceptions.py`. `__init__.py` re-exports `MigoApi` and the exception classes - that's the
+  only surface anything outside `api/` should import.
 - `coordinator.py` - Data update coordinator (polling)
 - `config_flow.py` - Configuration UI flow (user, reauth, reconfigure, options)
-- `entity.py` - Base entity classes and DeviceInfo builders
+- `entity.py` - The 11 base entity classes (MigoEntity through MigoRoomControlEntity)
+- `entity_device_info.py` - DeviceInfo builders (`build_gateway_device_info` etc.) and the
+  `via_device_id` registry-resolution helpers
+- `entity_setup.py` - `register_dynamic_entities`, the dynamic-devices platform-setup helper
+- `entity_mixin.py` - `MigoApiControlMixin` (API-calling), `_MigoCachedValueMixin`
+  (optimistic-cache read pattern), `_MigoDescriptionEntityMixin` (entity-description read pattern)
+- `entity_descriptions.py` - `MigoEntityDescriptionMixin`, the data_key/unique_id_key/value_fn
+  fields shared by sensor.py's and binary_sensor.py's entity descriptions
 - `helpers.py` - Pure utility functions shared across platforms
 - `models.py` - TypedDicts describing API responses and coordinator data
 
 ### Entity Platforms
 
-- `climate.py` - Thermostat climate entity (Auto/Heat/Off modes)
-- `sensor.py` - Temperature, humidity, battery, signal strength, firmware sensors
-- `binary_sensor.py` - Boiler status, errors, reachability sensors
-- `switch.py` - Domestic Hot Water (DHW) control, heating anticipation
+- `climate.py` - Thermostat climate entity (Auto/Heat/Off modes, Away/Frost guard/Hot water only/Boost presets)
+- `sensor.py` - Temperature, humidity, battery, signal strength, firmware, measured gas/electricity
+  energy, boiler runtime, derived boiler mode sensors
+- `binary_sensor.py` - Boiler status, errors, reachability, Away mode, scheduled DHW sensors
+- `switch.py` - Domestic Hot Water (DHW) boost, heating anticipation, Away mode, DHW always-on
 - `select.py` - Schedule selection
 - `number.py` - DHW temperature, manual setpoint duration, temperature offset, hysteresis, heating curve
-- `button.py` - Manual refresh, reset heating curve
+- `button.py` - Reset heating curve (no manual-refresh button: `homeassistant.update_entity`
+  already does what it did, for every entity, since they share one coordinator)
+- `datetime.py` - Away return date/time
 
 ### Configuration
 
@@ -69,15 +83,17 @@ This is a Home Assistant custom integration for MiGO thermostats (Saunier Duval/
 ```python
 # Coordinator pattern for data updates, typed via models.CoordinatorData
 class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
-    async def _async_update_data(self) -> CoordinatorData:
-        ...  # fetches homes/rooms/devices, see coordinator.py
+    async def _async_update_data(self) -> CoordinatorData: ...  # fetches homes/rooms/devices, see coordinator.py
+
 
 # Config entry data: ConfigEntry.runtime_data, NOT hass.data[DOMAIN]
 type MigoConfigEntry = ConfigEntry[MigoData]
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool:
     entry.runtime_data = MigoData(api=api, coordinator=coordinator)
     ...
+
 
 # Platform setup reads it back from entry.runtime_data, not hass.data
 async def async_setup_entry(hass, entry: MigoConfigEntry, async_add_entities):
@@ -97,7 +113,8 @@ async def async_setup_entry(hass, entry: MigoConfigEntry, async_add_entities):
 
 ### Updating API calls
 
-1. Modify `api.py` methods
+1. Modify the relevant `api/` module (`endpoints_read.py`/`endpoints_write.py` for a new
+   call, `auth.py`/`transport.py` for the request path itself)
 2. Update `docs/api/reference.md`
 3. Test authentication flow
 

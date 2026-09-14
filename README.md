@@ -265,7 +265,7 @@ Leave these empty to use the default MiGO app credentials.
 Development happens on the `dev` branch, and pre-releases are published from it so
 you can try changes before they reach a stable version. HACS cannot install a git
 branch directly, only published versions, so `dev` reaches you as a pre-release tag
-such as `v0.42.0-beta.1`.
+such as `v1.0.0-beta3`.
 
 Pre-releases are hidden by default, so nothing changes unless you opt in.
 
@@ -516,11 +516,15 @@ This integration uses the Netatmo API (`app.netatmo.net`) which is the backend f
 | `/api/homesdata` | Home structure and configuration |
 | `/api/homestatus` | Real-time status |
 | `/api/getmeasure` | Historical data and consumption |
+| `/syncapi/v1/getconfigs` | DHW temperature, hysteresis, heating curve, DHW always-on (config values not in homesdata/homestatus) |
 | `/api/setstate` | Control room temperature and DHW |
 | `/api/setthermmode` | Set global mode |
-| `/api/sethomedata` | Home settings (anticipation, duration) |
-| `/syncapi/v1/setconfigs` | DHW temperature, offsets |
+| `/api/sethomedata` | Home settings (anticipation, duration, Away with return time) |
+| `/api/switchhomeschedule` | Switch active schedule |
+| `/syncapi/v1/setconfigs` | DHW temperature, offsets, DHW always-on |
 | `/api/changeheatingalgo` | Hysteresis settings |
+| `/api/changeheatingcurve` | Heating curve (slope) |
+| `/api/setheatingsystem` | Heating system type (no entity exposes this yet) |
 
 ## Contributing
 
