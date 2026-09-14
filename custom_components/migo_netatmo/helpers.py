@@ -16,6 +16,7 @@ from .const import (
     DEVICE_TYPE_GATEWAY,
     DEVICE_TYPE_THERMOSTAT,
     KEY_BODY,
+    MODE_AWAY,
     MODE_FROST_GUARD,
     SCHEDULE_TYPE_EVENT,
     SCHEDULE_TYPE_THERM,
@@ -273,6 +274,57 @@ def get_thermostat_for_room(
     return None
 
 
+def get_rooms_for_home(
+    coordinator: MigoDataUpdateCoordinator,
+    home_id: str,
+) -> list[dict[str, Any]]:
+    """Return the rooms belonging to a given home.
+
+    Args:
+        coordinator: The data update coordinator.
+        home_id: The home ID to filter rooms by.
+
+    Returns:
+        List of room data dicts whose `home_id` matches.
+    """
+    return [room for room in coordinator.rooms.values() if room.get("home_id") == home_id]
+
+
+def is_home_away(
+    coordinator: MigoDataUpdateCoordinator,
+    device_id: str,
+    device_data: dict[str, Any],
+) -> bool | None:
+    """Return whether Away mode is active for a gateway device's home.
+
+    Checks the optimistic cache `switch.MigoAwayModeSwitch` writes first
+    (keyed `away_mode_{device_id}`, the same shape it uses), so read-only
+    companions (the away mode binary_sensor, the DHW schedule binary
+    sensor's Away override) reflect a toggle immediately instead of lagging
+    one coordinator refresh behind the switch itself. Falls back to the
+    API-echoed home-level `therm_mode` once the cache is cleared.
+
+    Args:
+        coordinator: The data update coordinator.
+        device_id: The gateway device ID (its cache key is scoped to this).
+        device_data: The gateway's device data (for its `home_id`).
+
+    Returns:
+        True/False if resolvable, None if the home can't be resolved.
+    """
+    cached = coordinator.get_cached_value(f"away_mode_{device_id}")
+    if cached is not None:
+        return cached
+
+    home_id = device_data.get("home_id")
+    if not home_id:
+        return None
+    home_data = coordinator.homes.get(home_id)
+    if home_data is None:
+        return None
+    return home_data.get("therm_mode") == MODE_AWAY
+
+
 # =============================================================================
 # Boiler mode derivation
 # =============================================================================
@@ -310,6 +362,8 @@ def derive_boiler_mode(
 # Timetable resolution (DHW / event schedules)
 # =============================================================================
 
+MINUTES_PER_WEEK = 10080
+
 
 def current_week_minutes(now: datetime | None = None) -> int:
     """Return minutes elapsed since Monday 00:00 in the local timezone.
@@ -340,13 +394,19 @@ def resolve_timetable_zone(
 
     Args:
         timetable: List of {"zone_id": int, "m_offset": int} entries.
-        week_minutes: Minutes since Monday 00:00 to resolve against.
+        week_minutes: Minutes since Monday 00:00 to resolve against. Values
+            outside [0, MINUTES_PER_WEEK) are wrapped rather than trusted
+            as-is - currently only `current_week_minutes()` calls this, which
+            always returns an in-range value, but nothing else in this
+            function's contract enforces that for a future caller.
 
     Returns:
         The zone_id of the active entry, or None if the timetable is empty.
     """
     if not timetable:
         return None
+
+    week_minutes %= MINUTES_PER_WEEK
 
     sorted_entries = sorted(timetable, key=lambda entry: entry.get("m_offset", 0))
 

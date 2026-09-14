@@ -37,6 +37,7 @@ from custom_components.migo_netatmo.const import (
     MODE_FROST_GUARD,
     MODE_HOME,
     MODE_MANUAL,
+    MODE_MAX,
     MODE_SCHEDULE,
     TEMP_MAX,
 )
@@ -248,6 +249,26 @@ class TestMigoClimate:
         mock_coordinator.rooms["room_456"]["therm_setpoint_temperature"] = TEMP_MAX
         assert climate.preset_mode == PRESET_BOOST
 
+    def test_preset_mode_away_not_hidden_by_manual_override(self, climate, mock_coordinator):
+        """Away must surface even while the room has a manual/boost override active.
+
+        Regression guard: the MODE_MANUAL/MODE_MAX branches used to `return`
+        before the code ever reached the Away check, contradicting the
+        adjacent comment's own claim that Away "is checked first".
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_MANUAL
+        mock_coordinator.rooms["room_456"]["therm_setpoint_temperature"] = TEMP_MAX
+
+        assert climate.preset_mode == PRESET_AWAY
+
+    def test_preset_mode_away_not_hidden_by_boost(self, climate, mock_coordinator):
+        """Same as above, for the MODE_MAX (forced boost) branch."""
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_MAX
+
+        assert climate.preset_mode == PRESET_AWAY
+
     def test_preset_mode_manual_not_boost(self, climate, mock_coordinator):
         """Test that manual mode at lower temp is not detected as boost."""
         mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_MANUAL
@@ -443,6 +464,26 @@ class TestMigoAwayModeSwitch:
 
         mock_coordinator.clear_cached_value.assert_any_call("away_until_gateway_001")
 
+    def test_is_on_reads_optimistic_cache_first(self, switch, mock_coordinator):
+        """The cache MigoAwayModeSwitch itself writes takes priority over API data."""
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
+        mock_coordinator.get_cached_value = MagicMock(return_value=True)
+
+        assert switch.is_on is True
+
+    @pytest.mark.asyncio
+    async def test_turn_on_while_frost_guard_replaces_it(self, switch, mock_coordinator):
+        """therm_mode is a single shared field: Away and real Frost guard are
+        mutually exclusive by construction, same as in the MiGo app itself -
+        confirmed not a bug (see class docstring), not something to guard
+        against here.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_FROST_GUARD
+
+        await switch.async_turn_on()
+
+        switch._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY, endtime=None)
+
 
 class TestMigoDHWAlwaysOnSwitch:
     """Tests for the DHW "always on" switch (the MiGo app's "Toujours activée").
@@ -519,6 +560,18 @@ class TestMigoAwayModeBinarySensor:
         mock_coordinator.devices["gateway_001"] = {"id": "gateway_001"}
         assert binary_sensor.is_on is None
 
+    def test_is_on_reads_optimistic_cache_first(self, binary_sensor, mock_coordinator):
+        """Reflects a MigoAwayModeSwitch toggle immediately, not one refresh behind.
+
+        Regression guard: this read-only companion used to read
+        coordinator.homes directly, so it visibly disagreed with the switch
+        (which does check its own cache) until the next coordinator refresh.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
+        mock_coordinator.get_cached_value = MagicMock(return_value=True)
+
+        assert binary_sensor.is_on is True
+
 
 class TestMigoBoilerModeSensor:
     """Tests for the derived boiler quick-action mode sensor."""
@@ -549,6 +602,24 @@ class TestMigoBoilerModeSensor:
         """Unavailable (None) if the device has no home_id."""
         mock_coordinator.devices["gateway_001"] = {"id": "gateway_001"}
         assert sensor.native_value is None
+
+    def test_ignores_rooms_from_other_homes(self, sensor, mock_coordinator):
+        """A DHW-only room in a different home must not leak into this gateway's mode.
+
+        Regression guard: native_value used to scan every room in every
+        home before filtering by home_id inline, rather than through a
+        home-scoped lookup - same result today, but this pins the scoping
+        so a future change to that lookup can't silently regress it.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
+        mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_HOME
+        mock_coordinator.rooms["other_room"] = {
+            "id": "other_room",
+            "home_id": "other_home",
+            "therm_setpoint_mode": MODE_FROST_GUARD,
+        }
+
+        assert sensor.native_value == BOILER_MODE_NORMAL
 
 
 class TestMigoDHWScheduleBinarySensor:
@@ -628,6 +699,53 @@ class TestMigoDHWScheduleBinarySensor:
 
         freezer.move_to("2026-01-05 10:00:00")
         assert sensor.is_on is True
+
+    def test_forced_off_when_away_without_event_schedule(self, mock_coordinator, freezer):
+        """Away still forces off even when the schedule itself can't be resolved.
+
+        Regression guard: the away override used to be applied only on the
+        fully-resolved path, so an unresolvable schedule during Away
+        reported unknown (None) instead of the documented unconditional off.
+        """
+        mock_coordinator.homes["home_123"]["schedules"] = []
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        sensor = MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
+
+        freezer.move_to("2026-01-05 10:00:00")
+        assert sensor.is_on is False
+        assert sensor.extra_state_attributes["overridden_by_away"] is True
+
+    def test_forced_off_when_away_with_unresolvable_zone(self, mock_coordinator, freezer):
+        """Same as above, for a schedule whose timetable resolves to no matching zone."""
+        schedule = {**self.EVENT_SCHEDULE, "zones": []}
+        mock_coordinator.homes["home_123"]["schedules"] = [schedule]
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        sensor = MigoDHWScheduleBinarySensor(mock_coordinator, "gateway_001")
+
+        freezer.move_to("2026-01-05 10:00:00")
+        assert sensor.is_on is False
+        assert sensor.extra_state_attributes["overridden_by_away"] is True
+
+    def test_resolve_cached_per_coordinator_update(self, binary_sensor, freezer):
+        """is_on and extra_state_attributes share one resolution per update cycle.
+
+        Regression guard: _resolve() used to fully recompute (including a
+        timetable sort) on every property access - once from is_on, once
+        from extra_state_attributes.
+        """
+        freezer.move_to("2026-01-05 08:00:00")
+
+        first = binary_sensor.is_on
+        attrs = binary_sensor.extra_state_attributes
+        assert first is False
+        assert attrs["zone_id"] == 7
+        # extra_state_attributes must not have mutated the cached dict that
+        # is_on's own result came from (an aliasing hazard the cache adds).
+        assert binary_sensor.is_on is False
+
+        binary_sensor.async_write_ha_state = MagicMock()
+        binary_sensor._handle_coordinator_update()
+        assert binary_sensor._resolved_cache is None
 
 
 class TestDevicePageOrganization:

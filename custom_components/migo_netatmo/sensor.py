@@ -23,7 +23,7 @@ from .const import (
     DEVICE_TYPE_THERMOSTAT,
 )
 from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
-from .helpers import derive_boiler_mode, generate_unique_id, get_devices_by_type, safe_float
+from .helpers import derive_boiler_mode, generate_unique_id, get_devices_by_type, get_rooms_for_home, safe_float
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -383,9 +383,5 @@ class MigoBoilerModeSensor(MigoGatewayEntity, SensorEntity):
         if home_data is None:
             return None
 
-        room_modes = [
-            room.get("therm_setpoint_mode")
-            for room in self.coordinator.rooms.values()
-            if room.get("home_id") == home_id
-        ]
+        room_modes = [room.get("therm_setpoint_mode") for room in get_rooms_for_home(self.coordinator, home_id)]
         return derive_boiler_mode(home_data.get("therm_mode"), room_modes)

@@ -65,6 +65,15 @@ class MigoApiControlMixin:
         behind to shadow future API values. On failure, the previous cached
         value (or its absence) is restored before the exception propagates.
 
+        The coordinator's own `async_update_listeners()` call happens inside
+        `async_request_refresh()`, *before* the cache is cleared below - so
+        every entity's state has already been pushed once with the optimistic
+        value still shadowing the (possibly different) authoritative one. The
+        explicit `async_write_ha_state()` after `clear_cached_value()` is a
+        second, deliberate push so this entity's own state reflects the real
+        API data rather than waiting for some unrelated future poll to
+        happen to differ from it.
+
         Args:
             api_method: The async API method to call.
             cache_key: The coordinator optimistic-cache key for this entity.
@@ -88,6 +97,7 @@ class MigoApiControlMixin:
 
         await self.coordinator.async_request_refresh()
         self.coordinator.clear_cached_value(cache_key)
+        self.async_write_ha_state()
 
 
 class MigoEntity(CoordinatorEntity["MigoDataUpdateCoordinator"]):

@@ -79,12 +79,13 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 
 > **Note:** The preset is cleared (set to None) when switching back to Auto mode.
 >
-> **Note:** When Away and "DHW only"/"Frost guard" are combined (the app
-> allows this), the climate preset shows Away - it takes priority since it is
-> the more actionable state. The boiler quick-action mode remains visible
-> independently via the `sensor.migo_{home}_boiler_mode` entity below, and
-> Away itself via `binary_sensor.migo_{home}_away_mode` /
-> `switch.migo_{home}_away_mode`.
+> **Note:** When Away is combined with any room-level override (DHW only,
+> Frost guard, a manual setpoint, or Boost - the app allows all of these),
+> the climate preset shows Away - it takes priority since it is the more
+> actionable state, and is checked before any of the others. The other
+> state remains visible independently: the boiler quick-action mode via
+> `sensor.migo_{home}_boiler_mode` below, Away itself via
+> `binary_sensor.migo_{home}_away_mode` / `switch.migo_{home}_away_mode`.
 
 ### Attributes
 
@@ -162,7 +163,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 | `binary_sensor.migo_{home}_boiler_error` | Boiler Error | problem | Boiler error detected |
 | `binary_sensor.migo_{home}_ebus_error` | eBus Error | problem | eBus communication error |
 | `binary_sensor.migo_{home}_away_mode` | Away Mode | - | Home-level Away flag (`therm_mode == "away"`). Read-only companion to `switch.migo_{home}_away_mode`. |
-| `binary_sensor.migo_{home}_dhw_schedule` | Scheduled DHW | - | Whether hot water production is enabled for the *currently active* time slot of the selected DHW (`event`-type) schedule. Forced `off` while Away is active. `unavailable` if the schedule/slot can't be resolved - never a guessed value. See [API Reference](api/reference.md#event-dhw-schedules) for how the slot is resolved. |
+| `binary_sensor.migo_{home}_dhw_schedule` | Scheduled DHW | - | Whether hot water production is enabled for the *currently active* time slot of the selected DHW (`event`-type) schedule. Forced `off` while Away is active, even if the schedule/slot itself can't be resolved. State is `unknown` (never a guessed value) if it can't be resolved and Away is not active. See [API Reference](api/reference.md#event-dhw-schedules) for how the slot is resolved. |
 
 ### Thermostat Binary Sensors
 
@@ -179,7 +180,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 |-------------------|------|--------|-------------|
 | `switch.migo_{home}_dhw_boost` | DHW Boost | Gateway | Hot water temperature boost |
 | `switch.migo_{home}_anticipation` | Heating Anticipation | Home | Predictive heating |
-| `switch.migo_{home}_away_mode` | Away Mode | Gateway | Home-wide Away flag. Writes via `sethomedata` with an explicit `endtime=None` (rather than `setthermmode`, which has no such parameter), so toggling from here also clears any return time set via `datetime.migo_{home}_away_until` or the MiGo app itself. No side effect on the boiler quick-action mode. |
+| `switch.migo_{home}_away_mode` | Away Mode | Gateway | Home-wide Away flag. Writes via `sethomedata` with an explicit `endtime=None` (rather than `setthermmode`, which has no such parameter), so toggling from here also clears any return time set via `datetime.migo_{home}_away_until` or the MiGo app itself. Never touches room state, so the room-level boiler quick-action (Normal/DHW only) is always untouched; real Frost guard (the home-level third quick-action state) shares the same underlying field as Away, so it is replaced if active, same as in the MiGo app itself. |
 | `switch.migo_{home}_dhw_always_on` | DHW Always On | Gateway | Matches the MiGo app's "Toujours activée" DHW setting: forces the boiler to never suspend hot water heating, overriding the active schedule's per-slot production setting. Read/write via `getconfigs`/`setconfigs`'s `dhw_always_on`, the same module-level config field pair as `number.migo_{home}_dhw_temperature`. |
 
 ---

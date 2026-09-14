@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY, MODE_SCHEDULE
 from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error
+from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_log_error, is_home_away
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -221,9 +221,16 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
     `datetime.MigoAwayReturnDateTime`), so turning Away on or off from this
     plain switch - which never specifies a return time - has to clear it
     explicitly, or a stale one set earlier (from `MigoAwayReturnDateTime`,
-    or from the MiGo app itself) would resurface on the next refresh. This
-    has no side effect on the boiler quick-action mode (Normal / DHW only /
-    Frost guard), same as before.
+    or from the MiGo app itself) would resurface on the next refresh.
+
+    Writes only the home-level `therm_mode` field, never room state, so the
+    room-level boiler quick-action (Normal / DHW only) is always untouched.
+    Real Frost guard/standby is the home-level third quick-action state
+    (`therm_mode == "hg"`, see `helpers.derive_boiler_mode`) and shares this
+    same field with Away, so the two are mutually exclusive by construction:
+    turning Away on while Frost guard is active does replace it, same as it
+    would in the MiGo app itself (there is no API-level way to represent
+    both at once) - not a bug this integration introduces.
     """
 
     _attr_translation_key = "away_mode"
@@ -247,17 +254,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return True if away mode is active."""
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return cached
-
-        home_id = self._device_data.get("home_id")
-        if not home_id:
-            return None
-        home_data = self.coordinator.homes.get(home_id)
-        if home_data is None:
-            return None
-        return home_data.get("therm_mode") == MODE_AWAY
+        return is_home_away(self.coordinator, self._device_id, self._device_data)
 
     def _clear_away_until_locally(self) -> None:
         """Clear the local cache for the Away return time, for instant feedback.

@@ -8,6 +8,7 @@ derivation (derive_boiler_mode).
 from __future__ import annotations
 
 from datetime import datetime
+from unittest.mock import MagicMock
 
 from custom_components.migo_netatmo.const import (
     BOILER_MODE_DHW_ONLY,
@@ -15,9 +16,12 @@ from custom_components.migo_netatmo.const import (
     BOILER_MODE_NORMAL,
 )
 from custom_components.migo_netatmo.helpers import (
+    MINUTES_PER_WEEK,
     current_week_minutes,
     derive_boiler_mode,
     get_event_schedule,
+    get_rooms_for_home,
+    is_home_away,
     resolve_timetable_zone,
 )
 
@@ -80,6 +84,21 @@ class TestResolveTimetableZone:
         """A missing m_offset defaults to 0 rather than raising."""
         timetable = [{"zone_id": 3}]
         assert resolve_timetable_zone(timetable, 10) == 3
+
+    def test_out_of_range_week_minutes_wraps(self):
+        """A week_minutes outside [0, MINUTES_PER_WEEK) is wrapped, not trusted as-is.
+
+        The sole real caller (current_week_minutes) always returns an
+        in-range value, but the function's own contract shouldn't silently
+        misbehave for a hypothetical future caller that doesn't.
+        """
+        timetable = [
+            {"zone_id": 1, "m_offset": 0},
+            {"zone_id": 7, "m_offset": 465},
+            {"zone_id": 0, "m_offset": 555},
+        ]
+        assert resolve_timetable_zone(timetable, 500 + MINUTES_PER_WEEK) == 7
+        assert resolve_timetable_zone(timetable, 500 - MINUTES_PER_WEEK) == 7
 
 
 class TestGetEventSchedule:
@@ -211,3 +230,59 @@ class TestDeriveBoilerMode:
     def test_no_rooms(self):
         """A home with no rooms defaults to normal rather than raising."""
         assert derive_boiler_mode("schedule", []) == BOILER_MODE_NORMAL
+
+
+class TestGetRoomsForHome:
+    """Tests for get_rooms_for_home."""
+
+    def test_filters_by_home_id(self):
+        """Only rooms belonging to the given home are returned."""
+        coordinator = MagicMock()
+        coordinator.rooms = {
+            "room_1": {"id": "room_1", "home_id": "home_a"},
+            "room_2": {"id": "room_2", "home_id": "home_b"},
+            "room_3": {"id": "room_3", "home_id": "home_a"},
+        }
+        rooms = get_rooms_for_home(coordinator, "home_a")
+        assert {r["id"] for r in rooms} == {"room_1", "room_3"}
+
+    def test_no_matching_rooms(self):
+        """A home with no rooms returns an empty list rather than raising."""
+        coordinator = MagicMock()
+        coordinator.rooms = {"room_1": {"id": "room_1", "home_id": "home_b"}}
+        assert get_rooms_for_home(coordinator, "home_a") == []
+
+
+class TestIsHomeAway:
+    """Tests for is_home_away - the shared lookup MigoAwayModeSwitch,
+    MigoAwayModeBinarySensor and MigoDHWScheduleBinarySensor all use.
+    """
+
+    def _coordinator(self, cached=None, home_data=None):
+        coordinator = MagicMock()
+        coordinator.get_cached_value = MagicMock(return_value=cached)
+        coordinator.homes = {"home_123": home_data} if home_data is not None else {}
+        return coordinator
+
+    def test_reads_optimistic_cache_first(self):
+        """A cached value (written by MigoAwayModeSwitch) wins over API data."""
+        coordinator = self._coordinator(cached=True, home_data={"therm_mode": "schedule"})
+        assert is_home_away(coordinator, "gateway_001", {"home_id": "home_123"}) is True
+
+    def test_falls_back_to_api_when_no_cache(self):
+        """Once the cache is cleared, falls back to the API-echoed therm_mode."""
+        coordinator = self._coordinator(cached=None, home_data={"therm_mode": "away"})
+        assert is_home_away(coordinator, "gateway_001", {"home_id": "home_123"}) is True
+
+        coordinator = self._coordinator(cached=None, home_data={"therm_mode": "schedule"})
+        assert is_home_away(coordinator, "gateway_001", {"home_id": "home_123"}) is False
+
+    def test_none_when_home_id_missing(self):
+        """Unresolvable (None) if the device has no home_id."""
+        coordinator = self._coordinator(cached=None)
+        assert is_home_away(coordinator, "gateway_001", {}) is None
+
+    def test_none_when_home_unresolved(self):
+        """Unresolvable (None) if the home_id doesn't match any known home."""
+        coordinator = self._coordinator(cached=None)
+        assert is_home_away(coordinator, "gateway_001", {"home_id": "home_123"}) is None

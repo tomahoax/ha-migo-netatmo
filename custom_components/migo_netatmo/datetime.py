@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY
 from .entity import MigoGatewayControlEntity
@@ -110,7 +111,11 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         if not home_id:
             return
 
-        endtime = int(value.timestamp())
+        # HA's datetime service schema normally supplies an aware value, but
+        # guard against a naive one anyway rather than silently trusting the
+        # system's own local timezone (which may not match HA's configured
+        # one) the way a plain value.timestamp() call would.
+        endtime = int(dt_util.as_utc(value).timestamp())
         _LOGGER.debug(
             "Activating away for home %s until %s (endtime=%s)",
             home_id,

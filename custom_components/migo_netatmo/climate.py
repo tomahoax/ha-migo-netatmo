@@ -334,6 +334,18 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
     def preset_mode(self) -> str | None:
         """Return the current preset mode."""
         room_mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
+        home_therm_mode = self._home_therm_mode
+
+        # Away is a home-level flag: `therm_mode == "away"` is the reliable
+        # source (room-level "away" is documented by Netatmo but was never
+        # observed in community testing). Checked first, before any
+        # room-level override (manual, boost, boiler quick-action mode): the
+        # app lets you combine Away with Normal/DHW only/manual/boost, and
+        # it is the more actionable state when combined with any of them -
+        # this must run before the manual/boost checks below, or an active
+        # Away never surfaces while either override is also in effect.
+        if MODE_AWAY in (home_therm_mode, room_mode):
+            return PRESET_AWAY
 
         # Check if it's a boost (manual mode at max temperature)
         if room_mode == MODE_MANUAL:
@@ -344,16 +356,6 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         if room_mode == MODE_MAX:
             return PRESET_BOOST
-
-        home_therm_mode = self._home_therm_mode
-
-        # Away is a home-level flag: `therm_mode == "away"` is the reliable
-        # source (room-level "away" is documented by Netatmo but was never
-        # observed in community testing). Checked first because it is
-        # independent of the boiler quick-action mode below - the app lets
-        # you combine Away with any of Normal/DHW only/Frost guard.
-        if MODE_AWAY in (home_therm_mode, room_mode):
-            return PRESET_AWAY
 
         # Real frost guard/standby: therm_mode itself is "hg".
         if home_therm_mode == MODE_FROST_GUARD:

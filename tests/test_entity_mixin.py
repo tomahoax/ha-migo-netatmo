@@ -65,9 +65,14 @@ class TestCallApiOptimistically:
             ("refresh",),
             ("clear", "dhw_gateway_001"),
         ]
-        # Only the pre-call optimistic write - the UI should already reflect
-        # the new value immediately, not wait for the refresh's own callback.
-        entity.async_write_ha_state.assert_called_once()
+        # Two writes: the pre-call optimistic one (immediate UI feedback,
+        # not waiting for the coordinator's own refresh callback) and a
+        # second one after the cache is cleared. The second one is not
+        # redundant with whatever async_update_listeners() does inside
+        # async_request_refresh() above - that call happens *before* the
+        # cache is cleared, so it would still be reading the optimistic
+        # value, not yet the authoritative one this clears the way for.
+        assert entity.async_write_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_success_clears_cache_so_api_data_regains_authority(self, coordinator):

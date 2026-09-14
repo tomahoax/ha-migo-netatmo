@@ -11,16 +11,17 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, MODE_AWAY
+from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
 from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
 from .helpers import (
     current_week_minutes,
     generate_unique_id,
     get_devices_by_type,
     get_event_schedule,
+    is_home_away,
     resolve_timetable_zone,
 )
 
@@ -221,6 +222,10 @@ class MigoAwayModeBinarySensor(MigoGatewayEntity, BinarySensorEntity):
     Diagnostic: the switch is the primary, visible representation in
     Controls; this sensor is for history graphs and automation triggers, so
     it moves to Diagnostic instead of duplicating the switch in "Sensors".
+
+    Reads the same optimistic cache `MigoAwayModeSwitch` writes (via
+    `is_home_away`), so toggling the switch is reflected here immediately
+    too, rather than lagging one coordinator refresh behind it.
     """
 
     _attr_translation_key = "away_mode"
@@ -235,13 +240,7 @@ class MigoAwayModeBinarySensor(MigoGatewayEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return True if away mode is active."""
-        home_id = self._device_data.get("home_id")
-        if not home_id:
-            return None
-        home_data = self.coordinator.homes.get(home_id)
-        if home_data is None:
-            return None
-        return home_data.get("therm_mode") == MODE_AWAY
+        return is_home_away(self.coordinator, self._device_id, self._device_data)
 
 
 def _zone_dhw_module(zone: dict[str, Any], device_id: str) -> dict[str, Any] | None:
@@ -279,10 +278,14 @@ class MigoDHWScheduleBinarySensor(MigoGatewayEntity, BinarySensorEntity):
 
     Forced to `off` while Away mode is active: the Away temperature slot
     replaces the current schedule slot with hot water production disabled,
-    so a plain timetable lookup would be misleading during Away.
+    so a plain timetable lookup would be misleading during Away. This
+    override applies regardless of whether the schedule/zone can otherwise
+    be resolved - Away is checked first, not just on the fully-resolved
+    path, since it is known independently of the timetable lookup.
 
-    Reports `unavailable` (never a guessed value) when the schedule or the
-    active zone cannot be resolved.
+    Reports its state as `unknown` (never a guessed value) when the
+    schedule or the active zone cannot be resolved - the entity itself
+    stays available, only this one derived value can't be determined.
     """
 
     _attr_translation_key = "dhw_schedule"
@@ -292,41 +295,66 @@ class MigoDHWScheduleBinarySensor(MigoGatewayEntity, BinarySensorEntity):
         """Initialize the DHW schedule binary sensor."""
         super().__init__(coordinator, device_id)
         self._attr_unique_id = generate_unique_id("dhw_schedule", device_id)
+        self._resolved_cache: dict[str, Any] | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Invalidate the cached resolution before the base class re-renders state."""
+        self._resolved_cache = None
+        super()._handle_coordinator_update()
 
     def _resolve(self) -> dict[str, Any]:
         """Resolve the current DHW schedule state and its extra attributes.
+
+        Cached for the lifetime of the current coordinator data (cleared in
+        `_handle_coordinator_update`) - both `is_on` and
+        `extra_state_attributes` call this, and it would otherwise fully
+        re-run `get_event_schedule()`/`resolve_timetable_zone()` (a sort)
+        twice per state write for no reason.
 
         Returns:
             A dict with "enabled" (bool | None) plus debug attributes
             "schedule_name", "zone_name", "zone_id", "overridden_by_away".
         """
+        if self._resolved_cache is not None:
+            return self._resolved_cache
+
         home_id = self._device_data.get("home_id")
         home_data = self.coordinator.homes.get(home_id, {}) if home_id else {}
+        overridden_by_away = is_home_away(self.coordinator, self._device_id, self._device_data) or False
 
         schedule = get_event_schedule(home_data)
         if schedule is None:
-            return {"enabled": None}
+            self._resolved_cache = {
+                "enabled": False if overridden_by_away else None,
+                "overridden_by_away": overridden_by_away,
+            }
+            return self._resolved_cache
 
         week_minutes = current_week_minutes()
         zone_id = resolve_timetable_zone(schedule.get("timetable", []), week_minutes)
         zone = next((z for z in schedule.get("zones", []) if z.get("id") == zone_id), None)
         if zone is None:
-            return {"enabled": None, "schedule_name": schedule.get("name")}
+            self._resolved_cache = {
+                "enabled": False if overridden_by_away else None,
+                "schedule_name": schedule.get("name"),
+                "overridden_by_away": overridden_by_away,
+            }
+            return self._resolved_cache
 
         module = _zone_dhw_module(zone, self._device_id)
         enabled = module.get("dhw_enabled") if module is not None else None
-
-        overridden_by_away = home_data.get("therm_mode") == MODE_AWAY
         if overridden_by_away:
             enabled = False
 
-        return {
+        self._resolved_cache = {
             "enabled": enabled,
             "schedule_name": schedule.get("name"),
             "zone_name": zone.get("name"),
             "zone_id": zone_id,
             "overridden_by_away": overridden_by_away,
         }
+        return self._resolved_cache
 
     @property
     def is_on(self) -> bool | None:
@@ -336,6 +364,6 @@ class MigoDHWScheduleBinarySensor(MigoGatewayEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return debug attributes: which schedule/zone was resolved."""
-        resolved = self._resolve()
+        resolved = dict(self._resolve())
         resolved.pop("enabled", None)
         return resolved
