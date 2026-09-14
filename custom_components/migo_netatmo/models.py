@@ -79,8 +79,6 @@ class Schedule(TypedDict):
     type: NotRequired[str]  # "therm" or "event"
     selected: NotRequired[bool]
     default: NotRequired[bool]
-    hg_temp: NotRequired[float]  # Frost guard temperature
-    away_temp: NotRequired[float]  # Away temperature
     zones: NotRequired[list[ScheduleZone]]
     timetable: NotRequired[list[TimetableEntry]]
 
@@ -109,7 +107,6 @@ class RoomStatus(TypedDict):
     therm_measured_temperature: NotRequired[float]
     therm_setpoint_temperature: NotRequired[float]
     therm_setpoint_mode: NotRequired[str]  # "schedule", "manual", "home", "hg", "away"
-    therm_setpoint_start_time: NotRequired[int]
     therm_setpoint_end_time: NotRequired[int]
     # User-configured setpoint offset, surfaced by the temperature offset entity.
     therm_setpoint_offset: NotRequired[float]
@@ -133,7 +130,6 @@ class RoomData(TypedDict):
     therm_measured_temperature: NotRequired[float]
     therm_setpoint_temperature: NotRequired[float]
     therm_setpoint_mode: NotRequired[str]
-    therm_setpoint_start_time: NotRequired[int]
     therm_setpoint_end_time: NotRequired[int]
     therm_setpoint_offset: NotRequired[float]
     humidity: NotRequired[float]
@@ -165,7 +161,6 @@ class ModuleConfig(TypedDict):
     subtype: NotRequired[str]  # "NAEbusSdbg"
     oem_serial: NotRequired[str]
     dhw_control: NotRequired[str]  # "instantaneous"
-    modules_bridged: NotRequired[list[str]]
 
     # Thermostat specific, type NAThermVaillant
     room_id: NotRequired[str]
@@ -192,11 +187,8 @@ class ModuleStatus(TypedDict):
     boiler_id: NotRequired[str]
     boiler_error: NotRequired[list[str]]
     ebus_error: NotRequired[bool]
-    emf_avail: NotRequired[bool]
     dhw_enabled: NotRequired[bool]
-    dhw_setpoint_endtime: NotRequired[int]
     outdoor_temperature: NotRequired[float]
-    sequence_id: NotRequired[int]
 
     # Thermostat specific, type NAThermVaillant
     bridge: NotRequired[str]
@@ -204,9 +196,6 @@ class ModuleStatus(TypedDict):
     battery_percent: NotRequired[int]  # 0-100
     battery_state: NotRequired[str]  # "high", "medium", "low"
     boiler_status: NotRequired[bool]
-    last_seen: NotRequired[int]
-    last_message: NotRequired[int]
-    radio_id: NotRequired[int]
 
     # Both
     firmware_revision: NotRequired[int]
@@ -225,8 +214,6 @@ class ModuleConfigData(TypedDict):
 
     id: NotRequired[str]
     dhw_setpoint_temperature: NotRequired[float]
-    dhw_temperature_min: NotRequired[int]
-    dhw_temperature_max: NotRequired[int]
     dhw_always_on: NotRequired[bool]
     simple_heating_algo_deadband: NotRequired[float]
     heating_curve: NotRequired[float]
@@ -248,23 +235,16 @@ class ModuleData(TypedDict):
     subtype: NotRequired[str]
     oem_serial: NotRequired[str]
     dhw_control: NotRequired[str]
-    modules_bridged: NotRequired[list[str]]
     wifi_strength: NotRequired[int]
     hardware_version: NotRequired[int]
     boiler_id: NotRequired[str]
     boiler_error: NotRequired[list[str]]
     ebus_error: NotRequired[bool]
-    emf_avail: NotRequired[bool]
     dhw_enabled: NotRequired[bool]
-    dhw_setpoint_endtime: NotRequired[int]
     outdoor_temperature: NotRequired[float]
-    sequence_id: NotRequired[int]
-    # dhw_temperature_min/max/always_on are not modeled on `dev` yet - kept
-    # from this branch, undocumented by Netatmo, confirmed via a live
+    # dhw_always_on is undocumented by Netatmo, confirmed via a live
     # debug-log capture. dhw_setpoint_temperature/simple_heating_algo_deadband/
-    # heating_curve are dev's - same /syncapi/v1/getconfigs source.
-    dhw_temperature_min: NotRequired[int]
-    dhw_temperature_max: NotRequired[int]
+    # heating_curve below share the same /syncapi/v1/getconfigs source.
     dhw_always_on: NotRequired[bool]
 
     # Thermostat specific
@@ -274,9 +254,6 @@ class ModuleData(TypedDict):
     battery_percent: NotRequired[int]
     battery_state: NotRequired[str]
     boiler_status: NotRequired[bool]
-    last_seen: NotRequired[int]
-    last_message: NotRequired[int]
-    radio_id: NotRequired[int]
 
     # From getconfigs
     dhw_setpoint_temperature: NotRequired[float]
@@ -306,8 +283,6 @@ class HomeConfig(TypedDict):
     therm_mode_endtime: NotRequired[int]
     anticipation: NotRequired[bool]
     therm_setpoint_default_duration: NotRequired[int]
-    therm_heating_priority: NotRequired[str]  # "eco", "comfort"
-    outdoor_temperature_source: NotRequired[str]
     rooms: NotRequired[list[RoomConfig]]
     modules: NotRequired[list[ModuleConfig]]
     schedules: NotRequired[list[Schedule]]

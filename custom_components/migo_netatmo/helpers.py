@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
@@ -28,44 +28,6 @@ if TYPE_CHECKING:
     from .coordinator import MigoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
-
-@overload
-def safe_get(data: Mapping[str, Any] | None, *keys: str) -> Any | None: ...
-@overload
-def safe_get[T](data: Mapping[str, Any] | None, *keys: str, default: T) -> Any | T: ...
-def safe_get(data: Mapping[str, Any] | None, *keys: str, default: Any = None) -> Any:
-    """Safely get a nested value from a dictionary or mapping (e.g. a TypedDict).
-
-    Args:
-        data: The mapping to get the value from.
-        *keys: The keys to traverse.
-        default: The default value if any key is missing.
-
-    Returns:
-        The value at the nested key path, or the default. When a non-None
-        default is passed, the return type is narrowed accordingly (see
-        overloads above) so callers don't need to re-check for None.
-
-    Example:
-        >>> data = {"body": {"home": {"id": "123"}}}
-        >>> safe_get(data, "body", "home", "id")
-        '123'
-        >>> safe_get(data, "body", "missing", "key", default="N/A")
-        'N/A'
-    """
-    if data is None:
-        return default
-
-    result: Any = data
-    for key in keys:
-        if isinstance(result, dict):
-            result = result.get(key)
-            if result is None:
-                return default
-        else:
-            return default
-    return result
 
 
 def safe_float(value: Any, default: float | None = None) -> float | None:

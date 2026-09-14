@@ -8,7 +8,6 @@ from typing import Final
 
 DOMAIN: Final = "migo_netatmo"
 MANUFACTURER: Final = "Saunier Duval"
-MODEL_NAME: Final = "MiGO Thermostat"
 
 # =============================================================================
 # Netatmo API Endpoints
@@ -46,10 +45,6 @@ GRANT_TYPE_REFRESH: Final = "refresh_token"
 
 DEVICE_TYPE_GATEWAY: Final = "NAVaillant"
 DEVICE_TYPE_THERMOSTAT: Final = "NAThermVaillant"
-DEVICE_SUBTYPE_EBUS: Final = "NAEbusSdbg"
-
-# Legacy alias for backward compatibility
-DEVICE_TYPE: Final = DEVICE_TYPE_GATEWAY
 
 # =============================================================================
 # App Identification
@@ -136,27 +131,6 @@ KEY_HOME: Final = "home"
 KEY_HOMES: Final = "homes"
 KEY_ROOMS: Final = "rooms"
 KEY_MODULES: Final = "modules"
-KEY_SCHEDULES: Final = "schedules"
-KEY_STATUS: Final = "status"
-
-# Room data keys
-KEY_THERM_MEASURED_TEMP: Final = "therm_measured_temperature"
-KEY_THERM_SETPOINT_TEMP: Final = "therm_setpoint_temperature"
-KEY_THERM_SETPOINT_MODE: Final = "therm_setpoint_mode"
-KEY_ANTICIPATING: Final = "anticipating"
-KEY_REACHABLE: Final = "reachable"
-
-# Module data keys
-KEY_FIRMWARE_REVISION: Final = "firmware_revision"
-KEY_WIFI_STRENGTH: Final = "wifi_strength"
-KEY_RF_STRENGTH: Final = "rf_strength"
-KEY_BATTERY_PERCENT: Final = "battery_percent"
-KEY_BATTERY_STATE: Final = "battery_state"
-KEY_BATTERY_LEVEL: Final = "battery_level"
-KEY_BOILER_STATUS: Final = "boiler_status"
-KEY_BOILER_ERROR: Final = "boiler_error"
-KEY_EBUS_ERROR: Final = "ebus_error"
-KEY_DHW_ENABLED: Final = "dhw_enabled"
 
 # =============================================================================
 # Temperature Constants
@@ -170,19 +144,6 @@ TEMP_STEP: Final = 0.5
 # Heating System Settings
 # =============================================================================
 
-# Heating types (API values - singular form)
-HEATING_TYPE_RADIATOR: Final = "radiator"
-HEATING_TYPE_CONVECTOR: Final = "convector"
-HEATING_TYPE_FLOOR: Final = "floor_heating"
-HEATING_TYPE_UNKNOWN: Final = "unknown"
-
-HEATING_TYPES: Final = [
-    HEATING_TYPE_RADIATOR,
-    HEATING_TYPE_CONVECTOR,
-    HEATING_TYPE_FLOOR,
-    HEATING_TYPE_UNKNOWN,
-]
-
 # Manual setpoint duration (in minutes - API stores in minutes)
 MANUAL_SETPOINT_DURATION_MIN: Final = 5  # 5 minutes
 MANUAL_SETPOINT_DURATION_MAX: Final = 720  # 12 hours (720 minutes)
@@ -192,10 +153,6 @@ MANUAL_SETPOINT_DURATION_STEP: Final = 5  # 5 minutes
 TEMP_OFFSET_MIN: Final = -5.0
 TEMP_OFFSET_MAX: Final = 5.0
 TEMP_OFFSET_STEP: Final = 0.5
-
-# DHW control modes
-DHW_CONTROL_WATER_TANK: Final = "water_tank"
-DHW_CONTROL_INSTANTANEOUS: Final = "instantaneous"
 
 # DHW temperature
 DHW_TEMP_MIN: Final = 45
@@ -233,29 +190,6 @@ TOKEN_EXPIRY_BUFFER: Final = 300  # Refresh 5 minutes before expiry
 API_TIMEOUT: Final = 30  # API request timeout in seconds
 
 # =============================================================================
-# Signal Thresholds
-# =============================================================================
-
-# WiFi signal thresholds (NAVaillant gateway)
-WIFI_THRESHOLD_EXCELLENT: Final = 56
-WIFI_THRESHOLD_GOOD: Final = 71
-WIFI_THRESHOLD_FAIR: Final = 86
-
-# RF signal thresholds (thermostat radio)
-RF_THRESHOLD_EXCELLENT: Final = 60
-RF_THRESHOLD_GOOD: Final = 70
-RF_THRESHOLD_FAIR: Final = 80
-
-# =============================================================================
-# Battery Thresholds (mV)
-# =============================================================================
-
-BATTERY_FULL: Final = 4100
-BATTERY_HIGH: Final = 3600
-BATTERY_MEDIUM: Final = 3200
-BATTERY_LOW: Final = 3000
-
-# =============================================================================
 # Config Keys
 # =============================================================================
 
@@ -265,12 +199,6 @@ CONF_CLIENT_ID: Final = "client_id"
 CONF_CLIENT_SECRET: Final = "client_secret"
 CONF_USER_PREFIX: Final = "user_prefix"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
-
-# =============================================================================
-# Entity ID Prefixes
-# =============================================================================
-
-ENTITY_ID_PREFIX: Final = "migo_netatmo"
 
 # =============================================================================
 # Default Values

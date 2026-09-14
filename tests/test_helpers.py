@@ -3,9 +3,9 @@
 Covers timetable resolution (current_week_minutes, resolve_timetable_zone),
 therm/event schedule pairing (get_event_schedule), boiler mode derivation
 (derive_boiler_mode), the shared Away lookup (is_home_away), and the
-smaller pure utilities in helpers.py (safe_get, safe_float,
-generate_unique_id, get_devices_by_type, get_home_id_or_raise,
-get_gateway_mac_for_home, get_thermostat_for_room).
+smaller pure utilities in helpers.py (safe_float, generate_unique_id,
+get_devices_by_type, get_home_id_or_raise, get_gateway_mac_for_home,
+get_thermostat_for_room).
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ from custom_components.migo_netatmo.helpers import (
     is_home_away,
     resolve_timetable_zone,
     safe_float,
-    safe_get,
 )
 
 
@@ -301,35 +300,6 @@ class TestIsHomeAway:
         """Unresolvable (None) if the home_id doesn't match any known home."""
         coordinator = self._coordinator(cached=None)
         assert is_home_away(coordinator, "gateway_001", {"home_id": "home_123"}) is None
-
-
-class TestSafeGet:
-    """Tests for safe_get."""
-
-    def test_returns_none_data_default(self) -> None:
-        """A None root mapping returns the default without traversing."""
-        assert safe_get(None, "body") is None
-        assert safe_get(None, "body", default="fallback") == "fallback"
-
-    def test_traverses_nested_keys(self) -> None:
-        """Nested keys are followed in order."""
-        data = {"body": {"home": {"id": "123"}}}
-        assert safe_get(data, "body", "home", "id") == "123"
-
-    def test_missing_key_returns_default(self) -> None:
-        """A missing key anywhere along the path returns the default."""
-        data = {"body": {"home": {"id": "123"}}}
-        assert safe_get(data, "body", "missing", "key", default="N/A") == "N/A"
-
-    def test_non_dict_intermediate_returns_default(self) -> None:
-        """Hitting a non-dict value before exhausting keys returns the default."""
-        data = {"body": "not_a_dict"}
-        assert safe_get(data, "body", "home", default="N/A") == "N/A"
-
-    def test_no_keys_returns_data_itself(self) -> None:
-        """With no keys to traverse, the mapping itself is returned."""
-        data = {"a": 1}
-        assert safe_get(data) == data
 
 
 class TestSafeFloat:
