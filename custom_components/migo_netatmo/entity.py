@@ -88,14 +88,23 @@ class MigoApiControlMixin:
         behind to shadow future API values. On failure, the previous cached
         value (or its absence) is restored before the exception propagates.
 
-        The coordinator's own `async_update_listeners()` call happens inside
-        `async_request_refresh()`, *before* the cache is cleared below - so
-        every entity's state has already been pushed once with the optimistic
-        value still shadowing the (possibly different) authoritative one. The
-        explicit `async_write_ha_state()` after `clear_cached_value()` is a
-        second, deliberate push so this entity's own state reflects the real
-        API data rather than waiting for some unrelated future poll to
-        happen to differ from it.
+        Deliberately does *not* write state again right after clearing the
+        cache. `async_request_refresh()` goes through the coordinator's
+        refresh debouncer (10s cooldown, `immediate=True`): the very first
+        call in a while runs the fetch synchronously and pushes state via
+        its own `async_update_listeners()` while the cache is still
+        populated (showing the optimistic value, correctly) - but any call
+        within 10s of a previous refresh (routine background polling, or
+        just toggling more than one control in a row) is coalesced and
+        returns immediately *without* having fetched anything yet. A write
+        here would then render the just-cleared cache against still-stale
+        coordinator data, i.e. the UI would revert to the old value and
+        only jump back to the new one once the coalesced refresh actually
+        completes a few seconds later - a real, reported regression from
+        this line's own earlier addition, not a hypothetical. Leaving the
+        optimistic value on screen (it already matches what was just
+        requested, in the overwhelmingly common case) until the coordinator's
+        own next real update is the better trade-off.
 
         Args:
             api_method: The async API method to call.
@@ -120,7 +129,6 @@ class MigoApiControlMixin:
 
         await self.coordinator.async_request_refresh()
         self.coordinator.clear_cached_value(cache_key)
-        self.async_write_ha_state()
 
 
 class MigoEntity(CoordinatorEntity["MigoDataUpdateCoordinator"]):

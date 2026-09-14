@@ -65,14 +65,15 @@ class TestCallApiOptimistically:
             ("refresh",),
             ("clear", "dhw_gateway_001"),
         ]
-        # Two writes: the pre-call optimistic one (immediate UI feedback,
-        # not waiting for the coordinator's own refresh callback) and a
-        # second one after the cache is cleared. The second one is not
-        # redundant with whatever async_update_listeners() does inside
-        # async_request_refresh() above - that call happens *before* the
-        # cache is cleared, so it would still be reading the optimistic
-        # value, not yet the authoritative one this clears the way for.
-        assert entity.async_write_ha_state.call_count == 2
+        # Only the pre-call optimistic write - deliberately no write after
+        # clearing the cache. Regression guard: a write there once caused a
+        # real, reported UI flicker (toggle jumps to the old value, then
+        # back to the new one a few seconds later) whenever
+        # async_request_refresh() got coalesced by the coordinator's
+        # debouncer (routine within its 10s cooldown) instead of actually
+        # completing a fetch - see the docstring in entity.py for the full
+        # mechanism.
+        entity.async_write_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_success_clears_cache_so_api_data_regains_authority(self, coordinator):
