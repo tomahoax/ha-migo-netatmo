@@ -887,11 +887,14 @@ existing equivalent path.
 - [x] Thermostat RF signal
 - [x] Gateway WiFi signal
 - [x] Outdoor temperature
-- [x] Gateway firmware version
-- [x] Thermostat firmware version
 - [x] Room humidity
 - [x] Daily boiler runtime (Energy Dashboard compatible)
 - [x] Boiler mode (Normal / DHW only / Frost guard, derived)
+
+Gateway/Thermostat firmware version are **not** separate sensor entities -
+see "Device Page Organization" in `docs/entities.md`. They're still listed
+under "Diagnostic Information" below, which they remain true for: shown on
+each device's own info card instead.
 
 ### Binary Sensor Entities
 - [x] Boiler running
