@@ -425,10 +425,10 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             )
         elif preset_mode == PRESET_AWAY:
             # Home-level Away via sethomedata, the same call
-            # switch.migo_{home}_away_mode and button.migo_{home}_reset_away_until
-            # use, rather than the generic set_mode() dispatcher (which
-            # routes through setthermmode, with no endtime parameter, so it
-            # can't clear a return time left over from a previous Away period).
+            # switch.migo_{home}_away_mode uses, rather than the generic
+            # set_mode() dispatcher (which routes through setthermmode, with
+            # no endtime parameter, so it can't clear a return time left
+            # over from a previous Away period).
             _LOGGER.debug("Setting home %s to Away", home_id)
             await self._call_api_and_refresh(
                 self._api.set_home_therm_mode,

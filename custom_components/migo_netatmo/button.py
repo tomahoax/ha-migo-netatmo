@@ -10,9 +10,9 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY, MODE_AWAY
-from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
-from .helpers import generate_unique_id, get_devices_by_type, is_home_away
+from .const import DEFAULT_HEATING_CURVE, DEVICE_TYPE_GATEWAY
+from .entity import MigoThermostatHomeControlEntity
+from .helpers import generate_unique_id, get_devices_by_type
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -46,16 +46,6 @@ async def async_setup_entry(
                     api=data.api,
                 )
             )
-
-    # Create reset away-until button for each gateway
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoResetAwayUntilButton(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
 
     async_add_entities(entities)
 
@@ -107,64 +97,3 @@ class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity)
             device_id=self._device_id,
             slope=DEFAULT_HEATING_CURVE,
         )
-
-
-class MigoResetAwayUntilButton(MigoGatewayControlEntity, ButtonEntity):
-    """MiGO button to clear the Away return time.
-
-    `datetime.py`'s `MigoAwayReturnDateTime` has no clear affordance of its
-    own - Home Assistant's `datetime` platform requires a value, its
-    more-info dialog cannot set one back to empty. This button is the only
-    deliberate, discoverable way to reset it (toggling `switch.away_mode`
-    also clears it as a side effect, but that's incidental to what the
-    switch is for).
-
-    `therm_mode_endtime` is confirmed to persist server-side (see
-    `MigoAwayReturnDateTime`'s docstring), so a purely local clear is not
-    enough while still Away: `native_value`'s API fallback would just read
-    the same stale value back on the next refresh. If currently Away, this
-    also calls `set_home_therm_mode` with `endtime=None` to clear it
-    server-side too, staying Away with no return time; if not Away, there
-    is nothing meaningful server-side to clear, so it only touches the
-    local cache and pushes the change to the datetime entity directly via
-    `coordinator.async_update_listeners()` rather than a pointless refresh.
-    """
-
-    _attr_translation_key = "reset_away_until"
-    _attr_icon = "mdi:calendar-remove"
-
-    def __init__(
-        self,
-        coordinator: MigoDataUpdateCoordinator,
-        device_id: str,
-        api: MigoApi,
-    ) -> None:
-        """Initialize the reset away-until button entity."""
-        super().__init__(coordinator, device_id, api)
-        self._attr_unique_id = generate_unique_id("reset_away_until", device_id)
-
-    async def async_press(self) -> None:
-        """Handle the button press - clear the cached and, if relevant, server-side return time."""
-        cache_key = f"away_until_{self._device_id}"
-        home_id = self._device_data.get("home_id")
-
-        # is_home_away() checks the switch's optimistic cache before falling
-        # back to raw coordinator data, so this doesn't act on a stale Away
-        # state right after the switch was just toggled (see helpers.is_home_away).
-        if home_id and is_home_away(self.coordinator, self._device_id, self._device_data):
-            _LOGGER.debug("Clearing away-until return time server-side for home %s", home_id)
-            # Clear and push before the API call/refresh, not after: the
-            # refresh's own listener push can otherwise fire while the cache
-            # is still populated, briefly re-rendering the stale value.
-            self.coordinator.clear_cached_value(cache_key)
-            self.coordinator.async_update_listeners()
-            await self._call_api_and_refresh(
-                self._api.set_home_therm_mode,
-                home_id=home_id,
-                mode=MODE_AWAY,
-                endtime=None,
-            )
-        else:
-            _LOGGER.debug("Clearing away-until return time locally for device %s", self._device_id)
-            self.coordinator.clear_cached_value(cache_key)
-            self.coordinator.async_update_listeners()

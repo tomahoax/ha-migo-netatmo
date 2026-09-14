@@ -94,9 +94,6 @@
     "button": {
       "reset_heating_curve": {
         "name": "Reset heating curve"
-      },
-      "reset_away_until": {
-        "name": "Reset away until"
       }
     },
     "climate": {

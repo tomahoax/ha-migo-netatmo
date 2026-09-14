@@ -221,7 +221,7 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
-| `datetime.migo_{home}_away_until` | Away Until | Sets a return date/time when activating Away, matching the MiGo app's own option. Writes via `sethomedata`'s `therm_mode`/`therm_mode_endtime`, activating Away and setting the return time in one action - separate from `switch.migo_{home}_away_mode`, which stays on the simpler indefinite on/off call. `therm_mode_endtime` is echoed back on `homesdata`, so the value survives a Home Assistant restart and reflects a return time set directly in the MiGo app, as long as `therm_mode` is still `"away"`. Home Assistant's `datetime` platform has no way to clear a value back to empty from its own more-info dialog - toggling `switch.migo_{home}_away_mode` (either direction) or pressing `button.migo_{home}_reset_away_until` both clear it, server-side included. |
+| `datetime.migo_{home}_away_until` | Away Until | Sets a return date/time when activating Away, matching the MiGo app's own option. Writes via `sethomedata`'s `therm_mode`/`therm_mode_endtime`, activating Away and setting the return time in one action - separate from `switch.migo_{home}_away_mode`, which stays on the simpler indefinite on/off call. `therm_mode_endtime` is echoed back on `homesdata`, so the value survives a Home Assistant restart and reflects a return time set directly in the MiGo app, as long as `therm_mode` is still `"away"`. Home Assistant's `datetime` platform has no way to clear a value back to empty from its own more-info dialog - toggling `switch.migo_{home}_away_mode` (either direction) clears it, server-side included. There is no way to clear just the return time while staying Away indefinitely (a dedicated button for that, `reset_away_until`, was removed as redundant) - toggling Away off and back on is the only way. |
 
 ---
 
@@ -230,7 +230,6 @@ The daily boiler runtime sensor is compatible with the Home Assistant Energy Das
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
 | `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Sets the heating curve to `DEFAULT_HEATING_CURVE` (`const.py`, currently `2.6`) - not a true "reset to factory default": no such concept exists in the API, and this value is installation-specific, not universal. Edit the constant to match your own installation if the shipped value doesn't match what the MiGo app shows |
-| `button.migo_{home}_reset_away_until` | Reset Away Until | Clears `datetime.migo_{home}_away_until` back to empty. While currently Away, also clears `therm_mode_endtime` server-side (via `sethomedata`, `endtime=None`) so it can't resurface on the next refresh; otherwise there is nothing to clear server-side, only this integration's own cache. |
 
 ---
 

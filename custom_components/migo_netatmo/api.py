@@ -642,6 +642,19 @@ class MigoApi:
         for. `endtime` is always sent explicitly (including as `None`), so a
         call with no end time also clears out any previously-set one.
 
+        Always sends `temperature_control_mode: "heating"` too, matching
+        every `sethomedata` call the MiGo app itself makes (see
+        `docs/api/reference.md`'s captured request). Confirmed live: the API
+        rejects any `therm_mode` change with a 403 ("Cannot change
+        therm_mode while being in temperature_control_mode cooling") if the
+        account's `temperature_control_mode` is `"cooling"` - a state this
+        integration never sets and never reads back, but which apparently
+        can end up set regardless. This boiler line (gas heating only, no
+        cooling capability) has no legitimate reason for this field to ever
+        be anything but `"heating"`, so it's sent unconditionally rather
+        than read back and passed through (which would just reproduce the
+        403 if the account happened to be in the broken "cooling" state).
+
         Args:
             home_id: The home ID.
             mode: The mode (schedule, away, hg).
@@ -654,6 +667,7 @@ class MigoApi:
         data = {
             "home": {
                 "id": home_id,
+                "temperature_control_mode": "heating",
                 "therm_mode": mode,
                 "therm_mode_endtime": endtime,
             }

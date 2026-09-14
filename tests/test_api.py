@@ -154,6 +154,55 @@ class TestMigoApiSetTemperature:
         assert room["therm_setpoint_end_time"] == 1704067200
 
 
+class TestMigoApiSetHomeThermMode:
+    """Tests for set_home_therm_mode payload building.
+
+    Regression guard: reported live, turning Away mode on returned a 403
+    ("Cannot change therm_mode while being in temperature_control_mode
+    cooling") because the payload never included temperature_control_mode
+    at all, so the account's broken "cooling" state (this boiler line has
+    no cooling capability) blocked every therm_mode change. Fixed by always
+    sending "heating", matching every sethomedata call the MiGo app itself
+    makes (see docs/api/reference.md's captured request).
+    """
+
+    def _make_api(self) -> MigoApi:
+        """Create an API client with a mocked request layer."""
+        api = MigoApi(
+            username="test@example.com",
+            password="test_password",
+            session=MagicMock(),
+        )
+        api._api_request = AsyncMock(return_value={"status": "ok"})
+        return api
+
+    def _sent_home_payload(self, api: MigoApi) -> dict:
+        """Return the home dict sent to the sethomedata endpoint."""
+        data = api._api_request.call_args.args[1]
+        return data["home"]
+
+    @pytest.mark.asyncio
+    async def test_always_sends_heating_temperature_control_mode(self) -> None:
+        api = self._make_api()
+
+        await api.set_home_therm_mode(home_id="home_123", mode="away", endtime=None)
+
+        home = self._sent_home_payload(api)
+        assert home["temperature_control_mode"] == "heating"
+        assert home["therm_mode"] == "away"
+        assert home["therm_mode_endtime"] is None
+
+    @pytest.mark.asyncio
+    async def test_endtime_forwarded_unchanged(self) -> None:
+        api = self._make_api()
+
+        await api.set_home_therm_mode(home_id="home_123", mode="away", endtime=1789568616)
+
+        home = self._sent_home_payload(api)
+        assert home["temperature_control_mode"] == "heating"
+        assert home["therm_mode_endtime"] == 1789568616
+
+
 class TestMigoApiSession:
     """Tests for API session management."""
 

@@ -96,7 +96,7 @@ Firmware version is shown on each device's info card, not as a separate sensor.
 
 ### Date/Time
 
-- **Away until** - set a return date/time when leaving, matching the MiGo app's own option. Activates Away and sets the return time in one action; separate from the plain Away switch above, which stays indefinite. Reads back from the API, so it survives a Home Assistant restart and reflects a return time set directly in the MiGo app. Toggling the Away switch (either direction), or the dedicated "Reset Away Until" button, both clear it back to empty (server-side too) - Home Assistant's date/time picker has no clear option of its own
+- **Away until** - set a return date/time when leaving, matching the MiGo app's own option. Activates Away and sets the return time in one action; separate from the plain Away switch above, which stays indefinite. Reads back from the API, so it survives a Home Assistant restart and reflects a return time set directly in the MiGo app. Toggling the Away switch (either direction) clears it back to empty (server-side too) - Home Assistant's date/time picker has no clear option of its own
 
 ### Number Controls (Configuration)
 
@@ -129,7 +129,6 @@ Firmware version is shown on each device's info card, not as a separate sensor.
 ### Button
 
 - **Reset heating curve** - sets the heating curve to a fixed value (`DEFAULT_HEATING_CURVE` in `const.py`), not a true API-supplied default - see [entities](docs/entities.md#buttons)
-- **Reset Away until** - clears a return date/time set on the Away until date/time entity
 
 ## Configuration Options
 

@@ -94,9 +94,6 @@
     "button": {
       "reset_heating_curve": {
         "name": "Ripristina curva di riscaldamento"
-      },
-      "reset_away_until": {
-        "name": "Ripristina assente fino a"
       }
     },
     "climate": {

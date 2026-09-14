@@ -14,10 +14,7 @@ from custom_components.migo_netatmo.binary_sensor import (
     MigoAwayModeBinarySensor,
     MigoDHWScheduleBinarySensor,
 )
-from custom_components.migo_netatmo.button import (
-    MigoResetAwayUntilButton,
-    MigoResetHeatingCurveButton,
-)
+from custom_components.migo_netatmo.button import MigoResetHeatingCurveButton
 from custom_components.migo_netatmo.climate import (
     HVAC_TO_MIGO_MODE,
     MIGO_TO_HVAC_MODE,
@@ -478,8 +475,8 @@ class TestMigoAwayModeSwitch:
         """A plain toggle specifies no return time, so any stale one is cleared.
 
         Reported as "can't reset Away until": the datetime entity has no
-        clear affordance of its own, so toggling this switch is one way to
-        reset it (MigoResetAwayUntilButton in button.py is the other).
+        clear affordance of its own, so toggling this switch (either
+        direction) is the only deliberate way to reset it.
         """
         await switch.async_turn_on()
 
@@ -1077,77 +1074,6 @@ class TestMigoAwayReturnDateTime:
             await entity.async_set_value(datetime(2026, 12, 24, 18, 0, tzinfo=UTC))
 
         assert entity.native_value == previous
-
-
-class TestMigoResetAwayUntilButton:
-    """Tests for the dedicated Away-until reset button.
-
-    The only *deliberate* way to clear MigoAwayReturnDateTime's value.
-    `therm_mode_endtime` is confirmed to persist server-side, so a purely
-    local clear isn't enough while still Away - the button also clears it
-    server-side (via set_home_therm_mode with endtime=None) in that case.
-    If not currently Away, there is nothing meaningful to clear server-side,
-    so it only touches the local cache and pushes the change directly via
-    async_update_listeners() rather than a pointless refresh.
-    """
-
-    @pytest.fixture
-    def button(self, mock_coordinator):
-        api = create_autospec(MigoApi, instance=True)
-        api.set_home_therm_mode.return_value = {"status": "ok"}
-        entity = MigoResetAwayUntilButton(mock_coordinator, "gateway_001", api)
-        entity.async_write_ha_state = MagicMock()
-        return entity
-
-    @pytest.mark.asyncio
-    async def test_press_clears_away_until_locally_when_not_away(self, button, mock_coordinator):
-        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
-        await button.async_press()
-
-        mock_coordinator.clear_cached_value.assert_called_once_with("away_until_gateway_001")
-        button._api.set_home_therm_mode.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_press_notifies_listeners_without_an_api_call_when_not_away(self, button, mock_coordinator):
-        """Pushes the change to MigoAwayReturnDateTime immediately, no API request."""
-        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
-        await button.async_press()
-
-        mock_coordinator.async_update_listeners.assert_called_once()
-        mock_coordinator.async_request_refresh.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_press_clears_server_side_when_away(self, button, mock_coordinator):
-        """While actually Away, the endtime is also cleared server-side so it can't resurface."""
-        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
-
-        await button.async_press()
-
-        button._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY, endtime=None)
-        mock_coordinator.clear_cached_value.assert_called_once_with("away_until_gateway_001")
-        mock_coordinator.async_request_refresh.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_press_does_not_reactivate_away_when_switch_cache_says_off(self, button, mock_coordinator):
-        """Regression guard: must not act on stale raw coordinator.homes data.
-
-        If the user just turned switch.migo_{home}_away_mode off (its own
-        optimistic cache now says False) and immediately presses this
-        button before the switch's own refresh lands, coordinator.homes may
-        still say therm_mode="away" for a few more seconds. Reading that
-        raw data instead of is_home_away() would take the "currently Away"
-        branch and re-send set_home_therm_mode(mode=MODE_AWAY, ...) -
-        reactivating Away right after the user turned it off.
-        """
-        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
-        mock_coordinator.get_cached_value = MagicMock(
-            side_effect=lambda key, default=None: False if key == "away_mode_gateway_001" else default
-        )
-
-        await button.async_press()
-
-        button._api.set_home_therm_mode.assert_not_called()
-        mock_coordinator.async_request_refresh.assert_not_called()
 
 
 class TestResolveViaDeviceId:
