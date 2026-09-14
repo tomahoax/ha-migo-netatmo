@@ -73,11 +73,15 @@ async def async_setup_entry(
 
 
 class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
-    """MiGO Refresh button entity for Gateway device."""
+    """MiGO Refresh button entity for Gateway device.
+
+    Diagnostic, not Configuration: forcing a data refresh is a maintenance
+    action, not a setting, so it belongs with the other technical entities.
+    """
 
     _attr_translation_key = "refresh"
     _attr_icon = "mdi:refresh"
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -95,11 +99,14 @@ class MigoGatewayRefreshButton(MigoGatewayEntity, ButtonEntity):
 
 
 class MigoThermostatRefreshButton(MigoThermostatHomeControlEntity, ButtonEntity):
-    """MiGO Refresh button entity for Thermostat device."""
+    """MiGO Refresh button entity for Thermostat device.
+
+    Diagnostic, not Configuration - see MigoGatewayRefreshButton.
+    """
 
     _attr_translation_key = "refresh"
     _attr_icon = "mdi:refresh"
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -120,7 +127,11 @@ class MigoThermostatRefreshButton(MigoThermostatHomeControlEntity, ButtonEntity)
 
 
 class MigoResetHeatingCurveButton(MigoThermostatHomeControlEntity, ButtonEntity):
-    """MiGO Reset heating curve button entity."""
+    """MiGO Reset heating curve button entity.
+
+    Stays Configuration (unlike the refresh buttons): it directly acts on
+    the Heating curve setting, so it belongs grouped with it.
+    """
 
     _attr_translation_key = "reset_heating_curve"
     _attr_icon = "mdi:chart-bell-curve"

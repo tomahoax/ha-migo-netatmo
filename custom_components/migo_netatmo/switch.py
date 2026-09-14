@@ -6,7 +6,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -67,9 +66,14 @@ async def async_setup_entry(
 
 
 class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
-    """MiGO Domestic Hot Water (DHW) boost switch entity."""
+    """MiGO Domestic Hot Water (DHW) boost switch entity.
 
-    _attr_entity_category = EntityCategory.CONFIG
+    No entity_category: this is a control with an immediate operational
+    effect (a quick, temporary override), not a set-once configuration
+    value, so it belongs in the primary "Controls" card alongside the other
+    toggles rather than in "Configuration".
+    """
+
     _attr_translation_key = "dhw_boost"
     _attr_icon = "mdi:water-boiler"
 
@@ -134,9 +138,12 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
 
 
 class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
-    """MiGO Heating Anticipation switch entity."""
+    """MiGO Heating Anticipation switch entity.
 
-    _attr_entity_category = EntityCategory.CONFIG
+    No entity_category: same reasoning as MigoDHWSwitch - an operational
+    toggle, not a configuration value.
+    """
+
     _attr_translation_key = "anticipation"
     _attr_icon = "mdi:clock-fast"
 

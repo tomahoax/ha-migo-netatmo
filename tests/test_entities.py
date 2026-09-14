@@ -6,12 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 from homeassistant.components.climate import PRESET_AWAY, PRESET_BOOST, HVACAction, HVACMode
+from homeassistant.const import EntityCategory
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.binary_sensor import (
     MigoAwayModeBinarySensor,
     MigoDHWScheduleBinarySensor,
 )
+from custom_components.migo_netatmo.button import MigoGatewayRefreshButton, MigoThermostatRefreshButton
 from custom_components.migo_netatmo.climate import (
     HVAC_TO_MIGO_MODE,
     MIGO_TO_HVAC_MODE,
@@ -34,7 +36,7 @@ from custom_components.migo_netatmo.const import (
     TEMP_MAX,
 )
 from custom_components.migo_netatmo.sensor import MigoBoilerModeSensor
-from custom_components.migo_netatmo.switch import MigoAwayModeSwitch
+from custom_components.migo_netatmo.switch import MigoAnticipationSwitch, MigoAwayModeSwitch, MigoDHWSwitch
 
 
 @pytest.fixture
@@ -528,3 +530,53 @@ class TestMigoDHWScheduleBinarySensor:
 
         freezer.move_to("2026-01-05 10:00:00")
         assert sensor.is_on is True
+
+
+class TestDevicePageOrganization:
+    """Regression guard for the Controls/Configuration/Diagnostic reorganization.
+
+    See docs/entities.md's "Device Page Organization" section: operational
+    toggles land in Controls (no entity_category), setpoints/tuning values
+    and the buttons acting on them stay in Configuration, and maintenance
+    actions plus read-only companions to a Controls entity move to
+    Diagnostic. These assertions exist so the grouping can't silently drift.
+    """
+
+    # Note: entity_category must be read from an instance's `.entity_category`
+    # property, not `_attr_entity_category` on the class - Home Assistant's
+    # CachedProperty machinery turns the latter into a descriptor at class
+    # definition time, so accessing it unbound (on the class, no instance)
+    # returns the descriptor object rather than the configured value.
+
+    def test_dhw_boost_switch_is_primary_control(self, mock_coordinator):
+        """DHW boost is an operational toggle, not a configuration value."""
+        api = create_autospec(MigoApi, instance=True)
+        entity = MigoDHWSwitch(mock_coordinator, "gateway_001", api)
+        assert entity.entity_category is None
+
+    def test_anticipation_switch_is_primary_control(self, mock_coordinator):
+        """Heating anticipation is an operational toggle, not a configuration value."""
+        api = create_autospec(MigoApi, instance=True)
+        entity = MigoAnticipationSwitch(mock_coordinator, "home_123", api)
+        assert entity.entity_category is None
+
+    def test_away_mode_switch_is_primary_control(self, mock_coordinator):
+        """Away mode switch stays a primary control (unchanged by this reorganization)."""
+        api = create_autospec(MigoApi, instance=True)
+        entity = MigoAwayModeSwitch(mock_coordinator, "gateway_001", api)
+        assert entity.entity_category is None
+
+    def test_gateway_refresh_button_is_diagnostic(self, mock_coordinator):
+        """Refresh is a maintenance action, not a setting."""
+        entity = MigoGatewayRefreshButton(mock_coordinator, "gateway_001")
+        assert entity.entity_category == EntityCategory.DIAGNOSTIC
+
+    def test_thermostat_refresh_button_is_diagnostic(self, mock_coordinator):
+        """Refresh is a maintenance action, not a setting."""
+        entity = MigoThermostatRefreshButton(mock_coordinator, "home_123", "module_789")
+        assert entity.entity_category == EntityCategory.DIAGNOSTIC
+
+    def test_away_mode_binary_sensor_is_diagnostic(self, mock_coordinator):
+        """Read-only companion to the switch: moved out of Sensors to avoid duplicating it."""
+        entity = MigoAwayModeBinarySensor(mock_coordinator, "gateway_001")
+        assert entity.entity_category == EntityCategory.DIAGNOSTIC

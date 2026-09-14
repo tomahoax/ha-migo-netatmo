@@ -24,6 +24,20 @@ The wall-mounted thermostat connected to the Gateway via RF (radio). Battery pow
 - **Model**: NAThermVaillant
 - **Connected via**: Gateway (via_device relationship)
 
+### Device Page Organization
+
+Each device's page in Home Assistant auto-sorts its entities into up to
+four cards, driven purely by domain (writable vs. read-only) and
+`entity_category`. When adding a new entity, pick its category by asking
+what kind of thing it is, not by matching a neighbor at random:
+
+| Card | `entity_category` | What belongs there |
+|------|--------------------|---------------------|
+| **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Heating anticipation, the active schedule, the climate entity itself). |
+| **Configuration** | `config` | A setpoint or tuning value you set occasionally and mostly leave alone (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset) - plus any button that directly acts on one of those (Reset heating curve). |
+| **Sensors** | *(unset)*, read-only domain | A measured or derived value you monitor (temperatures, boiler mode, scheduled DHW state). |
+| **Diagnostic** | `diagnostic` | Read-only technical/troubleshooting data (firmware, signal strength, battery, error flags) and maintenance actions (Refresh) - plus a read-only companion to a Controls entity, when its only purpose is history graphs or automation triggers rather than being the entity a user interacts with (Away mode's binary_sensor companion to its switch). |
+
 ---
 
 ## Climate

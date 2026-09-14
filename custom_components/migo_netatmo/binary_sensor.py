@@ -217,10 +217,15 @@ class MigoAwayModeBinarySensor(MigoGatewayEntity, BinarySensorEntity):
     `therm_mode` is "away" whenever the home-wide Away preset is active,
     independently of the boiler quick-action mode (Normal / DHW only /
     Frost guard). Read-only companion to the `MigoAwayModeSwitch`.
+
+    Diagnostic: the switch is the primary, visible representation in
+    Controls; this sensor is for history graphs and automation triggers, so
+    it moves to Diagnostic instead of duplicating the switch in "Sensors".
     """
 
     _attr_translation_key = "away_mode"
     _attr_icon = "mdi:home-export-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: MigoDataUpdateCoordinator, device_id: str) -> None:
         """Initialize the away mode binary sensor."""
