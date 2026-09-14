@@ -36,3 +36,18 @@ class TestMigoResetHeatingCurveButton:
         button._api.set_heating_curve.assert_awaited_once_with(device_id="gateway_001", slope=DEFAULT_HEATING_CURVE)
         mock_coordinator.set_cached_value.assert_called_once_with("heating_curve_gateway_001", DEFAULT_HEATING_CURVE)
         mock_coordinator.async_request_refresh.assert_awaited_once()
+
+
+def test_default_heating_curve_is_2_6() -> None:
+    """Pins the constant so a future edit doesn't silently drift again.
+
+    Reported live: "Reset heating curve" set the value to 1.5, not the 2.6
+    shown in the MiGo app. Root cause investigated via a live debug-log
+    capture: `heating_curve` is never present in homesdata/homestatus/
+    getconfigs, so there is no API-discoverable "true default" to reset to
+    at all - it's an installation-specific calibration value. The user
+    chose to just update the constant to match their own installation
+    (2.6) rather than remove the button; this pins that constant's current
+    value, not that 2.6 is itself "correct" in any universal sense.
+    """
+    assert DEFAULT_HEATING_CURVE == 2.6
