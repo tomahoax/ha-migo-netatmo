@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 
@@ -17,6 +16,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT
 from .entity import MigoGatewayEntity, MigoThermostatEntity
+from .entity_descriptions import MigoEntityDescriptionMixin
+from .entity_mixin import _MigoDescriptionEntityMixin
 from .entity_setup import register_dynamic_entities
 from .helpers import (
     current_week_minutes,
@@ -26,7 +27,6 @@ from .helpers import (
     is_home_away,
     resolve_timetable_zone,
 )
-from .models import ModuleData
 
 if TYPE_CHECKING:
     from . import MigoConfigEntry
@@ -37,16 +37,13 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class MigoBinarySensorEntityDescription(BinarySensorEntityDescription):
+class MigoBinarySensorEntityDescription(MigoEntityDescriptionMixin, BinarySensorEntityDescription):
     """Describes a MiGO binary sensor entity.
 
-    The key field is cosmetic; unique_id_key feeds generate_unique_id and
-    must never change (users would lose recorder history).
+    data_key/unique_id_key/value_fn come from MigoEntityDescriptionMixin,
+    shared with sensor.py's MigoSensorEntityDescription.
     """
 
-    data_key: str
-    unique_id_key: str
-    value_fn: Callable[[Any], bool | None] | None = None
     # Connectivity diagnostics stay available while reporting unreachable
     ignores_reachability: bool = False
 
@@ -141,36 +138,21 @@ async def async_setup_entry(
     )
 
 
-class _MigoDeviceBinarySensorMixin(BinarySensorEntity):
-    """Mixin for device-based binary sensors with common functionality."""
+class _MigoDeviceBinarySensorMixin(_MigoDescriptionEntityMixin, BinarySensorEntity):
+    """Mixin for device-based binary sensors, described by a MigoBinarySensorEntityDescription."""
 
     entity_description: MigoBinarySensorEntityDescription
 
-    @property
-    def _device_data(self) -> ModuleData:
-        """Get current device data.
-
-        Read-only stub: the concrete entity's MRO always resolves this to
-        MigoDeviceEntity._device_data (see MigoGatewayBinarySensor/
-        MigoThermostatBinarySensor below). Declared here, matching that
-        base's read-only property, so static type checkers accept the
-        multiple inheritance.
-        """
-        raise NotImplementedError
-
     def _init_binary_sensor(self, device_id: str, description: MigoBinarySensorEntityDescription) -> None:
         """Initialize binary sensor attributes from the entity description."""
-        self.entity_description = description
+        self._init_description_entity(device_id, description)
         self._ignore_reachable = description.ignores_reachability
-        self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
 
     @property
     @override
     def is_on(self) -> bool | None:
         """Return True if the sensor is on."""
-        value = self._device_data.get(self.entity_description.data_key)
-        if self.entity_description.value_fn:
-            return self.entity_description.value_fn(value)
+        value = self._resolve_described_value()
         return None if value is None else bool(value)
 
 

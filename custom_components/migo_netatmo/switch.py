@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY, MODE_SCHEDULE
 from .entity import MigoGatewayControlEntity, MigoThermostatHomeControlEntity
+from .entity_mixin import _MigoCachedValueMixin
 from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise, is_home_away
 
@@ -77,7 +78,7 @@ async def async_setup_entry(
     )
 
 
-class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
+class MigoDHWSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, SwitchEntity):
     """MiGO Domestic Hot Water (DHW) boost switch entity.
 
     No entity_category: this is a control with an immediate operational
@@ -107,12 +108,7 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
     @override
     def is_on(self) -> bool | None:
         """Return True if DHW is enabled."""
-        # Check optimistic cache first for immediate feedback
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return cached
-        # Fallback to API data
-        return self._device_data.get("dhw_enabled")
+        return self._resolve_cached_value(lambda: self._device_data.get("dhw_enabled"))
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -147,7 +143,7 @@ class MigoDHWSwitch(MigoGatewayControlEntity, SwitchEntity):
         _LOGGER.debug("DHW disabled for device %s", self._device_id)
 
 
-class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
+class MigoAnticipationSwitch(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, SwitchEntity):
     """MiGO Heating Anticipation switch entity.
 
     No entity_category: same reasoning as MigoDHWSwitch - an operational
@@ -175,12 +171,7 @@ class MigoAnticipationSwitch(MigoThermostatHomeControlEntity, SwitchEntity):
     @override
     def is_on(self) -> bool | None:
         """Return True if anticipation is enabled."""
-        # Check optimistic cache first for immediate feedback
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return bool(cached)
-        # Fallback to API data
-        return self._home_data.get("anticipation", False)
+        return bool(self._resolve_cached_value(lambda: self._home_data.get("anticipation", False)))
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -315,7 +306,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         _LOGGER.debug("Away mode disabled for home %s", home_id)
 
 
-class MigoDHWAlwaysOnSwitch(MigoGatewayControlEntity, SwitchEntity):
+class MigoDHWAlwaysOnSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, SwitchEntity):
     """MiGO DHW "always on" switch entity.
 
     Mirrors the MiGo app's "Toujours activée" toggle on the DHW temperature
@@ -353,10 +344,7 @@ class MigoDHWAlwaysOnSwitch(MigoGatewayControlEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return True if DHW always-on is enabled."""
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return cached
-        return self._device_data.get("dhw_always_on")
+        return self._resolve_cached_value(lambda: self._device_data.get("dhw_always_on"))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable DHW always-on."""

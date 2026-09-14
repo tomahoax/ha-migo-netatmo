@@ -9,10 +9,13 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .api import MigoApiError, MigoAuthError, MigoConnectionError
 from .const import DOMAIN
+from .entity_descriptions import MigoEntityDescriptionMixin
+from .helpers import generate_unique_id
 
 if TYPE_CHECKING:
     from .api import MigoApi
     from .coordinator import MigoDataUpdateCoordinator
+    from .models import ModuleData
 
 
 class MigoApiControlMixin:
@@ -156,3 +159,55 @@ class MigoApiControlMixin:
 
         await self.coordinator.async_request_refresh()
         self.coordinator.clear_cached_value(cache_key)
+
+
+class _MigoCachedValueMixin:
+    """Shared "optimistic cache, else computed fallback" read pattern.
+
+    Every number.py/switch.py entity's native_value/is_on checked the
+    coordinator's optimistic cache first (for immediate feedback right after
+    a write, before the next refresh lands) and fell back to a per-entity
+    computation otherwise - hand-rolled identically nine times. Combined
+    alongside `MigoApiControlMixin`, which already shares the write side of
+    the same pattern (`_call_api_optimistically`).
+    """
+
+    if TYPE_CHECKING:
+        coordinator: MigoDataUpdateCoordinator
+
+        @property
+        def _cache_key(self) -> str: ...
+
+    def _resolve_cached_value(self, fallback: Callable[[], Any]) -> Any:
+        """Return the optimistic cache value if present, else `fallback()`."""
+        cached = self.coordinator.get_cached_value(self._cache_key)
+        return cached if cached is not None else fallback()
+
+
+class _MigoDescriptionEntityMixin:
+    """Shared init/read logic for MiGO's entity-description-driven entities.
+
+    Combined with a device-data-providing entity base (`MigoGatewayEntity`/
+    `MigoThermostatEntity`) and a Home Assistant platform's own `Entity`
+    subclass - see `sensor.py`'s `_MigoDeviceSensorMixin`/`binary_sensor.py`'s
+    `_MigoDeviceBinarySensorMixin` for the concrete platform-specific uses.
+    """
+
+    entity_description: MigoEntityDescriptionMixin
+
+    if TYPE_CHECKING:
+
+        @property
+        def _device_data(self) -> ModuleData: ...
+
+    def _init_description_entity(self, device_id: str, description: MigoEntityDescriptionMixin) -> None:
+        """Set entity_description and the unique_id, from the description."""
+        self.entity_description = description
+        self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
+
+    def _resolve_described_value(self) -> Any:
+        """Return entity_description.value_fn(data_key's value), or the raw value."""
+        value = self._device_data.get(self.entity_description.data_key)
+        if self.entity_description.value_fn:
+            return self.entity_description.value_fn(value)
+        return value

@@ -38,6 +38,7 @@ from .entity import (
     MigoRoomControlEntity,
     MigoThermostatHomeControlEntity,
 )
+from .entity_mixin import _MigoCachedValueMixin
 from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise
 from .models import ModuleData
@@ -112,7 +113,7 @@ async def async_setup_entry(
     )
 
 
-class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEntity):
+class MigoManualSetpointDurationNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, NumberEntity):
     """MiGO Manual setpoint default duration number entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -138,21 +139,21 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         """Return the cache key for this entity."""
         return f"manual_setpoint_duration_{self._home_id}"
 
-    @property
-    @override
-    def native_value(self) -> int | None:
-        """Return the current manual setpoint duration in minutes."""
-        # Check optimistic cache first
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return int(cached)
-        # Fallback to API data (therm_setpoint_default_duration is in minutes)
+    def _native_value_fallback(self) -> int:
+        """Return the API-derived value, falling back to the documented default."""
+        # therm_setpoint_default_duration is in minutes
         home_data = self.coordinator.homes.get(self._home_id, {})
         duration_minutes = home_data.get("therm_setpoint_default_duration")
         if duration_minutes is not None:
             return int(duration_minutes)
         # Default to 3 hours (180 minutes) as shown in the app
         return DEFAULT_MANUAL_SETPOINT_DURATION
+
+    @property
+    @override
+    def native_value(self) -> int | None:
+        """Return the current manual setpoint duration in minutes."""
+        return int(self._resolve_cached_value(self._native_value_fallback))
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -174,7 +175,7 @@ class MigoManualSetpointDurationNumber(MigoThermostatHomeControlEntity, NumberEn
         _LOGGER.debug("Manual setpoint duration set for home %s", self._home_id)
 
 
-class MigoTemperatureOffsetNumber(MigoRoomControlEntity, NumberEntity):
+class MigoTemperatureOffsetNumber(_MigoCachedValueMixin, MigoRoomControlEntity, NumberEntity):
     """MiGO Temperature offset number entity for rooms."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -202,36 +203,23 @@ class MigoTemperatureOffsetNumber(MigoRoomControlEntity, NumberEntity):
         """Return the cache key for this entity."""
         return f"temp_offset_{self._room_id}"
 
+    def _native_value_fallback(self) -> float:
+        """Return the API-derived value, falling back to the documented default.
+
+        Only therm_setpoint_offset (the user-configured value) is used:
+        measure_offset_NAVaillant_temperature is hardware sensor calibration,
+        not the user-configurable offset, so it is not read here.
+        """
+        offset = self._room_data.get("therm_setpoint_offset")
+        if offset is not None:
+            return float(offset)
+        return DEFAULT_TEMP_OFFSET
+
     @property
     @override
     def native_value(self) -> float | None:
         """Return the current temperature offset."""
-        # Check optimistic cache first (API doesn't always return this value)
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            _LOGGER.debug(
-                "Temperature offset for room %s: using cached value %s",
-                self._room_id,
-                cached,
-            )
-            return cached
-        # Fallback to API data - only use therm_setpoint_offset (user-configured value)
-        # Note: measure_offset_NAVaillant_temperature is hardware sensor calibration,
-        # not the user-configurable offset, so we don't read it here.
-        offset = self._room_data.get("therm_setpoint_offset")
-        if offset is not None:
-            _LOGGER.debug(
-                "Temperature offset for room %s: using API value %s",
-                self._room_id,
-                offset,
-            )
-            return float(offset)
-        _LOGGER.debug(
-            "Temperature offset for room %s: no value found, using default %s",
-            self._room_id,
-            DEFAULT_TEMP_OFFSET,
-        )
-        return DEFAULT_TEMP_OFFSET
+        return self._resolve_cached_value(self._native_value_fallback)
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -248,7 +236,7 @@ class MigoTemperatureOffsetNumber(MigoRoomControlEntity, NumberEntity):
         _LOGGER.debug("Temperature offset set for room %s", self._room_id)
 
 
-class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
+class MigoDHWTemperatureNumber(_MigoCachedValueMixin, MigoGatewayControlEntity, NumberEntity):
     """MiGO Domestic Hot Water temperature number entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -274,20 +262,19 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         """Return the cache key for this entity."""
         return f"dhw_temperature_{self._device_id}"
 
-    @property
-    @override
-    def native_value(self) -> int | None:
-        """Return the current DHW temperature."""
-        # Check optimistic cache first
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return int(cached)
-        # Fallback to API data
+    def _native_value_fallback(self) -> int:
+        """Return the API-derived value, falling back to the documented default."""
         temp = self._device_data.get("dhw_setpoint_temperature")
         if temp is not None:
             return int(temp)
         # Default to 60°C as shown in the screenshot
         return DEFAULT_DHW_TEMPERATURE
+
+    @property
+    @override
+    def native_value(self) -> int | None:
+        """Return the current DHW temperature."""
+        return int(self._resolve_cached_value(self._native_value_fallback))
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -311,7 +298,7 @@ class MigoDHWTemperatureNumber(MigoGatewayControlEntity, NumberEntity):
         _LOGGER.debug("DHW temperature set for device %s", self._device_id)
 
 
-class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
+class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, NumberEntity):
     """MiGO Hysteresis threshold number entity.
 
     Note: Although hysteresis is a gateway parameter, it's assigned to the
@@ -348,20 +335,22 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         """Return the cache key for this entity."""
         return f"hysteresis_{self._device_id}"
 
-    @property
-    @override
-    def native_value(self) -> float | None:
-        """Return the current hysteresis threshold."""
-        # Check optimistic cache first
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return cached
-        # Fallback to API data: hysteresis = (deadband + 1) / 10
+    def _native_value_fallback(self) -> float:
+        """Return the API-derived value, falling back to the documented default.
+
+        Hysteresis in Celsius is the deadband value plus one, over ten.
+        """
         deadband = self._device_data.get("simple_heating_algo_deadband")
         if deadband is not None:
             return round((deadband + 1) / 10, 1)
         # Default to 1.6°C (deadband=15) as seen in typical configuration
         return DEFAULT_HYSTERESIS
+
+    @property
+    @override
+    def native_value(self) -> float | None:
+        """Return the current hysteresis threshold."""
+        return self._resolve_cached_value(self._native_value_fallback)
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -383,7 +372,7 @@ class MigoHysteresisNumber(MigoThermostatHomeControlEntity, NumberEntity):
         _LOGGER.debug("Hysteresis set for device %s", self._device_id)
 
 
-class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
+class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, NumberEntity):
     """MiGO Heating curve (slope) number entity.
 
     Note: Although heating curve is a gateway parameter, it's assigned to the
@@ -419,10 +408,8 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         """Return the cache key for this entity."""
         return f"heating_curve_{self._device_id}"
 
-    @property
-    @override
-    def native_value(self) -> float | None:
-        """Return the current heating curve slope.
+    def _native_value_fallback(self) -> float:
+        """Return the API-derived value, falling back to the documented default.
 
         Write-only setting: `heating_curve` is never present in
         `homesdata`/`homestatus`/`getconfigs` (confirmed via a live
@@ -434,15 +421,17 @@ class MigoHeatingCurveNumber(MigoThermostatHomeControlEntity, NumberEntity):
         else, including right after the reset button - see its own
         docstring on why that's not a real factory default).
         """
-        # Check optimistic cache first
-        cached = self.coordinator.get_cached_value(self._cache_key)
-        if cached is not None:
-            return cached
-        # Fallback to API data: slope in UI = api_slope / 10
+        # slope in UI = api_slope / 10
         api_slope = self._device_data.get("heating_curve")
         if api_slope is not None:
             return round(api_slope / 10, 1)
         return DEFAULT_HEATING_CURVE
+
+    @property
+    @override
+    def native_value(self) -> float | None:
+        """Return the current heating curve slope."""
+        return self._resolve_cached_value(self._native_value_fallback)
 
     @override
     async def async_set_native_value(self, value: float) -> None:

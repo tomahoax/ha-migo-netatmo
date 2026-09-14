@@ -25,6 +25,8 @@ from .const import (
     WH_PER_KWH,
 )
 from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
+from .entity_descriptions import MigoEntityDescriptionMixin
+from .entity_mixin import _MigoDescriptionEntityMixin
 from .entity_setup import register_dynamic_entities
 from .helpers import (
     derive_boiler_mode,
@@ -44,16 +46,13 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class MigoSensorEntityDescription(SensorEntityDescription):
+class MigoSensorEntityDescription(MigoEntityDescriptionMixin, SensorEntityDescription):
     """Describes a MiGO sensor entity.
 
-    The key field is cosmetic; unique_id_key feeds generate_unique_id and
-    must never change (users would lose recorder history).
+    data_key/unique_id_key/value_fn come from MigoEntityDescriptionMixin,
+    shared with binary_sensor.py's MigoBinarySensorEntityDescription.
     """
 
-    data_key: str
-    unique_id_key: str
-    value_fn: Callable[[Any], Any] | None = None
     extra_attrs_fn: Callable[[ModuleData], dict[str, Any]] | None = None
 
 
@@ -255,35 +254,16 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         return value
 
 
-class _MigoDeviceSensorMixin(SensorEntity):
-    """Mixin for device-based sensors with common functionality."""
+class _MigoDeviceSensorMixin(_MigoDescriptionEntityMixin, SensorEntity):
+    """Mixin for device-based sensors, described by a MigoSensorEntityDescription."""
 
     entity_description: MigoSensorEntityDescription
-
-    @property
-    def _device_data(self) -> ModuleData:
-        """Get current device data.
-
-        Read-only stub: the concrete entity's MRO always resolves this to
-        MigoDeviceEntity._device_data (see MigoGatewaySensor/MigoThermostatSensor
-        below). Declared here, matching that base's read-only property, so
-        static type checkers accept the multiple inheritance.
-        """
-        raise NotImplementedError
-
-    def _init_sensor(self, device_id: str, description: MigoSensorEntityDescription) -> None:
-        """Initialize sensor attributes from the entity description."""
-        self.entity_description = description
-        self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
 
     @property
     @override
     def native_value(self) -> Any:
         """Return the sensor value."""
-        value = self._device_data.get(self.entity_description.data_key)
-        if self.entity_description.value_fn:
-            return self.entity_description.value_fn(value)
-        return value
+        return self._resolve_described_value()
 
     @property
     @override
@@ -305,7 +285,7 @@ class MigoGatewaySensor(MigoGatewayEntity, _MigoDeviceSensorMixin):
     ) -> None:
         """Initialize the gateway sensor."""
         super().__init__(coordinator, device_id)
-        self._init_sensor(device_id, description)
+        self._init_description_entity(device_id, description)
 
 
 class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
@@ -319,7 +299,7 @@ class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
     ) -> None:
         """Initialize the thermostat sensor."""
         super().__init__(coordinator, device_id)
-        self._init_sensor(device_id, description)
+        self._init_description_entity(device_id, description)
 
 
 @dataclass(frozen=True, kw_only=True)
