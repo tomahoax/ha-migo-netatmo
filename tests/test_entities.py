@@ -1046,6 +1046,38 @@ class TestMigoAwayReturnDateTime:
 
         assert entity.native_value == value
 
+    def test_native_value_none_when_switch_cache_says_away_but_raw_data_not_refreshed_yet(
+        self, entity, mock_coordinator
+    ):
+        """Regression guard for the reported "old date flashes on reactivation" complaint.
+
+        Reactivating switch.migo_{home}_away_mode sets its own cache to
+        True (via _call_api_optimistically) *before* the API call, and its
+        on_optimistic hook pushes this entity's listener right then - so
+        is_home_away() already reads True while coordinator.homes hasn't
+        been refreshed yet and still carries therm_mode="schedule" plus
+        whatever therm_mode_endtime a *previous* Away period left behind.
+        native_value must not show that stale value in this window.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
+        mock_coordinator.homes["home_123"]["therm_mode_endtime"] = 1234567890
+        mock_coordinator.get_cached_value = MagicMock(
+            side_effect=lambda key, default=None: True if key == "away_mode_gateway_001" else default
+        )
+
+        assert entity.native_value is None
+
+    def test_native_value_shows_once_raw_data_agrees_too(self, entity, mock_coordinator):
+        """Once coordinator.homes itself catches up (raw therm_mode == away), the value shows - no over-correction."""
+        value = datetime(2026, 12, 24, 18, 0, tzinfo=UTC)
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+        mock_coordinator.homes["home_123"]["therm_mode_endtime"] = int(value.timestamp())
+        mock_coordinator.get_cached_value = MagicMock(
+            side_effect=lambda key, default=None: True if key == "away_mode_gateway_001" else default
+        )
+
+        assert entity.native_value == value
+
     def test_native_value_none_when_not_away_even_with_stale_endtime(self, entity, mock_coordinator):
         """A lingering endtime from a past Away period isn't shown once therm_mode has moved on."""
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE

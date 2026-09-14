@@ -96,6 +96,19 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         `MigoAwayModeSwitch._clear_away_until_locally`) instead of only
         once a real coordinator refresh confirms it, which can lag several
         seconds behind a plain toggle.
+
+        Reported live: reactivating Away right after a *previous* Away
+        period with a return time made the old date flash briefly before
+        disappearing. `is_home_away()` can already be `True` from the
+        switch's fresh optimistic cache the instant it's toggled on -
+        before `coordinator.homes` itself has been refreshed - so a second
+        gate below requires the *raw* `therm_mode` to also already say
+        `"away"` before trusting `therm_mode_endtime`: `is_home_away()`
+        only proves Away is conceptually active, not that the rest of
+        `coordinator.homes` has caught up to that same reality yet. Once
+        the real API call and refresh land, both agree and the correct
+        value (`None`, since the switch always sends `endtime=None`) shows
+        with no intermediate flash.
         """
         cached = self.coordinator.get_cached_value(self._cache_key)
         if cached is not None:
@@ -108,6 +121,9 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
             return None
 
         home_data = self.coordinator.homes.get(home_id, {})
+        if home_data.get("therm_mode") != MODE_AWAY:
+            return None
+
         endtime = home_data.get("therm_mode_endtime")
         if endtime is None:
             return None
