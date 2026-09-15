@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DEVICE_TYPE_GATEWAY, MODE_AWAY
 from .entity import MigoGatewayControlEntity
+from .entity_setup import register_dynamic_entities
 from .helpers import generate_unique_id, get_devices_by_type, get_home_id_or_raise, is_home_away
 
 if TYPE_CHECKING:
@@ -33,18 +34,20 @@ async def async_setup_entry(
     data = entry.runtime_data
     coordinator = data.coordinator
 
-    entities: list[MigoAwayReturnDateTime] = []
-
-    for device_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
-        entities.append(
-            MigoAwayReturnDateTime(
-                coordinator=coordinator,
-                device_id=device_id,
-                api=data.api,
-            )
-        )
-
-    async_add_entities(entities)
+    # Unlike every other platform in this integration, this used to build
+    # entities once from the gateways known at setup time, without going
+    # through register_dynamic_entities - a gateway added to the account
+    # after the first refresh never got an "Away until" entity, unlike its
+    # away_mode switch and binary_sensor companions.
+    register_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        get_current_ids=lambda: get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY),
+        create_entities=lambda device_id: [
+            MigoAwayReturnDateTime(coordinator=coordinator, device_id=device_id, api=data.api)
+        ],
+    )
 
 
 class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):

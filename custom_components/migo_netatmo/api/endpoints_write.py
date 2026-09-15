@@ -13,11 +13,8 @@ from ..const import (
     API_SETHEATINGSYSTEM_URL,
     API_SETHOMEDATA_URL,
     API_SETSTATE_URL,
-    API_SETTHERMMODE_URL,
     API_SWITCHHOMESCHEDULE_URL,
-    MODE_AWAY,
     MODE_MANUAL,
-    MODE_SCHEDULE,
 )
 
 if TYPE_CHECKING:
@@ -116,58 +113,6 @@ class WriteEndpointsMixin:
             temp=temperature,
             end_time=end_time,
         )
-
-    async def set_mode(
-        self,
-        home_id: str,
-        room_id: str,
-        mode: str,
-    ) -> dict[str, Any]:
-        """Set operating mode for a room or home.
-
-        For room-level modes (manual, home, hg), uses setstate.
-        For global modes (schedule, away), uses setthermmode.
-
-        Args:
-            home_id: The home ID.
-            room_id: The room ID.
-            mode: The mode to set.
-
-        Returns:
-            The API response.
-        """
-        # Global modes that affect the whole home
-        if mode in (MODE_SCHEDULE, MODE_AWAY):
-            return await self.set_therm_mode(home_id=home_id, mode=mode)
-
-        # Room-level modes
-        return await self.set_room_state(
-            home_id=home_id,
-            room_id=room_id,
-            mode=mode,
-        )
-
-    async def set_therm_mode(
-        self,
-        home_id: str,
-        mode: str,
-    ) -> dict[str, Any]:
-        """Set global thermostat mode for a home.
-
-        Args:
-            home_id: The home ID.
-            mode: The mode (schedule, away, hg).
-
-        Returns:
-            The API response.
-        """
-        data = {
-            "home_id": home_id,
-            "mode": mode,
-        }
-
-        _LOGGER.debug("Setting home %s therm mode to: %s", home_id, mode)
-        return await self._api_request(API_SETTHERMMODE_URL, data)
 
     async def set_home_therm_mode(
         self,

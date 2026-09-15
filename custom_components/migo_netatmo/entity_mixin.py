@@ -90,6 +90,9 @@ class MigoApiControlMixin:
         cache_key: str,
         optimistic_value: Any,
         on_optimistic: Callable[[], None] | None = None,
+        clear_cache_on_success: bool = True,
+        secondary_cache_key: str | None = None,
+        secondary_optimistic_value: Any = None,
         **kwargs: Any,
     ) -> None:
         """Call an API method with immediate optimistic UI feedback.
@@ -97,10 +100,30 @@ class MigoApiControlMixin:
         Unlike `_call_api_and_refresh`, this writes `optimistic_value` to the
         coordinator's cache and to entity state *before* the API call, so the
         UI reacts immediately instead of waiting for the coordinator's next
-        refresh cycle. On success, it requests a refresh and then clears the
-        cache entry so API data regains authority - the cache key is not left
-        behind to shadow future API values. On failure, the previous cached
-        value (or its absence) is restored before the exception propagates.
+        refresh cycle. On success, it requests a refresh and then, unless
+        `clear_cache_on_success` is False, clears the cache entry so API data
+        regains authority - the cache key is not left behind to shadow future
+        API values. On failure, the previous cached value (or its absence) is
+        restored before the exception propagates.
+
+        `clear_cache_on_success` defaults to True, matching every existing
+        caller. Pass False for a value the API never echoes back on any read
+        endpoint (see `MigoHeatingCurveNumber`/`MigoHysteresisNumber` in
+        number.py): clearing the cache for one of those does not let "API
+        data regain authority" the way the docstring above describes for
+        everyone else - there is no API data for it - it instead makes
+        `native_value` fall through to a hardcoded default, silently
+        discarding the value that was just written and confirmed to succeed.
+
+        `secondary_cache_key`/`secondary_optimistic_value`, if given, get the
+        exact same set-before-call, roll-back-on-failure, clear-on-success
+        treatment as `cache_key`/`optimistic_value`. Used where a single
+        write changes state two different read-side properties each track
+        with their own cache key (see climate.py's `hvac_mode` vs
+        `preset_mode`, both derived from overlapping room/home fields but
+        each only ever written by its own setter before this parameter
+        existed - selecting a preset left `hvac_mode` showing the previous
+        mode, and vice versa, until the next coordinator refresh).
 
         `on_optimistic`, if given, runs synchronously right after this
         entity's own optimistic cache/state write, before the API call - the
@@ -109,10 +132,11 @@ class MigoApiControlMixin:
         optimistic value without also risking a read of stale coordinator
         data. Used by `MigoAwayModeSwitch` to clear and push
         `MigoAwayReturnDateTime`'s value in the same instant, rather than
-        only when this entity's own state is written. Not restored on
-        failure along with `cache_key` - a rare API failure just leaves the
-        dependent entity blank a little longer than strictly necessary,
-        until the next real refresh, rather than needing its own rollback.
+        only when this entity's own state is written. On failure, after
+        `cache_key`/`secondary_cache_key` are rolled back, listeners are
+        pushed again so any entity that reacted to the premature broadcast
+        above sees the corrected value too, rather than only self-correcting
+        on the next real refresh.
 
         Deliberately does *not* write state again right after clearing the
         cache. `async_request_refresh()` goes through the coordinator's
@@ -139,6 +163,14 @@ class MigoApiControlMixin:
                 in flight.
             on_optimistic: Optional callback run right after the optimistic
                 write above, before the API call.
+            clear_cache_on_success: Whether to clear `cache_key` (and
+                `secondary_cache_key`) once the call succeeds and a refresh
+                has been requested. Defaults to True; pass False for a value
+                the API never echoes back on any read endpoint.
+            secondary_cache_key: Optional second coordinator cache key that
+                gets the same set/roll-back/clear treatment as `cache_key`.
+            secondary_optimistic_value: The value to show immediately for
+                `secondary_cache_key`, while the call is in flight.
             **kwargs: Arguments to pass to the API method.
 
         Raises:
@@ -152,6 +184,10 @@ class MigoApiControlMixin:
         """
         previous = self.coordinator.get_cached_value(cache_key)
         self.coordinator.set_cached_value(cache_key, optimistic_value)
+        secondary_previous = None
+        if secondary_cache_key is not None:
+            secondary_previous = self.coordinator.get_cached_value(secondary_cache_key)
+            self.coordinator.set_cached_value(secondary_cache_key, secondary_optimistic_value)
         self.async_write_ha_state()
         if on_optimistic is not None:
             on_optimistic()
@@ -163,11 +199,25 @@ class MigoApiControlMixin:
                 self.coordinator.clear_cached_value(cache_key)
             else:
                 self.coordinator.set_cached_value(cache_key, previous)
+            if secondary_cache_key is not None:
+                if secondary_previous is None:
+                    self.coordinator.clear_cached_value(secondary_cache_key)
+                else:
+                    self.coordinator.set_cached_value(secondary_cache_key, secondary_previous)
             self.async_write_ha_state()
+            if on_optimistic is not None:
+                # Undo the premature broadcast `on_optimistic` triggered
+                # above: any entity that already reacted to it needs to see
+                # the rolled-back value too, not just this entity's own
+                # state (async_write_ha_state only re-renders this one).
+                self.coordinator.async_update_listeners()
             raise
 
         await self.coordinator.async_request_refresh()
-        self.coordinator.clear_cached_value(cache_key)
+        if clear_cache_on_success:
+            self.coordinator.clear_cached_value(cache_key)
+            if secondary_cache_key is not None:
+                self.coordinator.clear_cached_value(secondary_cache_key)
 
 
 class _MigoCachedValueMixin:

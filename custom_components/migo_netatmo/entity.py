@@ -131,7 +131,9 @@ class MigoThermostatEntity(MigoDeviceEntity):
 
     Thermostat entities are associated with the physical thermostat device
     and include sensors like battery, RF strength, temperature offset.
-    The thermostat is connected via the gateway (via_device_id).
+    The thermostat is connected via the gateway (via_device - see
+    entity_device_info.build_thermostat_device_info's docstring for why
+    not via_device_id).
     """
 
     @property

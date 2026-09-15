@@ -383,6 +383,11 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
             self._api.set_hysteresis,
             cache_key=self._cache_key,
             optimistic_value=hysteresis,
+            # simple_heating_algo_deadband is never echoed back by the API
+            # (see _native_value_fallback's docstring) - clearing the cache
+            # on success would make native_value fall straight through to
+            # DEFAULT_HYSTERESIS instead of the value just confirmed set.
+            clear_cache_on_success=False,
             device_id=self._device_id,
             hysteresis=hysteresis,
         )
@@ -465,6 +470,11 @@ class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
             self._api.set_heating_curve,
             cache_key=self._cache_key,
             optimistic_value=slope,
+            # heating_curve is never echoed back by the API (see
+            # _native_value_fallback's docstring) - clearing the cache on
+            # success would make native_value fall straight through to
+            # DEFAULT_HEATING_CURVE instead of the value just confirmed set.
+            clear_cache_on_success=False,
             device_id=self._device_id,
             slope=slope,
         )

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Selecting DHW-only, then Heat or Boost on any room, could leave the whole home silently unable to heat.** A stale `temperature_control_mode: "cooling"` left over from DHW-only was only ever reset by Auto/Normal/Frost guard/Away (all of which write through `sethomedata`); Heat and Boost only ever called `set_temperature`, which never touches that field. Both now reset it unconditionally
+- **`hvac_mode` and `preset_mode` could each show a different mode/preset than the other for a few seconds after a write**, since each had its own optimistic-cache key but a setter only ever populated the one it was named after. Every climate write now updates both together
+- **A rapid Frost guard-then-DHW-only (or Boost-then-Auto/Frost guard) selection could leave stale state behind**, because the staleness clears added for the reported "stuck" bugs were gated on a *raw*, not-necessarily-fresh read of coordinator data, so a just-written value could be missed if the coordinator's refresh got debounced. Room-level and home-level clears in `climate.py` are now unconditional (a harmless no-op when nothing needs clearing) instead of conditional on a raw read
+- **A transient failure on the last of `_write_dhw_only`'s three sequential API calls could leave the home's heating silently disabled**, with the two earlier calls having already succeeded. The `temperature_control_mode` change is now best-effort reverted if the final call fails
+- **Dragging the temperature slider left `hvac_mode` showing the previous mode** (e.g. Auto) even though the write implicitly switches the room to Manual server-side. `async_set_temperature` now updates the `hvac_mode` cache too
+- **A failed Away-mode toggle could leave sibling entities (the Away-until datetime, in particular) showing the wrong value** after already having been pushed to the new state by the switch's `on_optimistic` broadcast, which only rolled back the switch's own state on failure. Rollback now re-broadcasts to correct any entity that reacted early
+- **`number.migo_{home}_heating_curve`/`hysteresis` silently reverted to their hardcoded default immediately after a confirmed, successful write.** Both values are never echoed back by any API endpoint (see the beta3 entry below), so clearing the optimistic cache after a successful write - the correct behavior for every other write-capable entity - just meant `native_value` fell straight through to the default instead of keeping what was just set. Both now keep the last-written value until Home Assistant restarts, instead
+- **A gateway added to the account after the first coordinator refresh never got a `datetime.migo_{home}_away_until` entity**, unlike its Away mode switch and binary sensor companions, until the config entry was reloaded - `datetime.py` was the one platform not using the shared dynamic-entity registration helper every other platform does
+
+### Removed
+- `MigoApi.set_mode()`/`set_therm_mode()` and the `/api/setthermmode` endpoint constant, unused since `climate.py` was rewritten to call `set_room_state`/`set_home_therm_mode` explicitly for every mode change - no behavior change, dead code only
+
 ## [1.0.0-beta3] - 2026-09-15
 
 This release incorporates analysis and real-device testing shared by the
