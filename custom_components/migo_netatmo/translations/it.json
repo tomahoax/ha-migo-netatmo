@@ -107,11 +107,6 @@
         "name": "ACS programmata"
       }
     },
-    "button": {
-      "reset_heating_curve": {
-        "name": "Ripristina curva di riscaldamento"
-      }
-    },
     "climate": {
       "thermostat": {
         "name": "Termostato",

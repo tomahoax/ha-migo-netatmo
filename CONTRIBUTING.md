@@ -71,7 +71,6 @@ custom_components/migo_netatmo/
 ├── select.py            # Select entities
 ├── number.py            # Number entities
 ├── binary_sensor.py     # Binary sensor entities
-├── button.py            # Button entities
 └── translations/        # Translation files
 ```
 

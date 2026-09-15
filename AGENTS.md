@@ -40,9 +40,12 @@ This is a Home Assistant custom integration for MiGO thermostats (Saunier Duval/
 - `switch.py` - Domestic Hot Water (DHW) boost, heating anticipation, Away mode, DHW always-on
 - `select.py` - Schedule selection
 - `number.py` - DHW temperature, manual setpoint duration, temperature offset, hysteresis, heating curve
-- `button.py` - Reset heating curve (no manual-refresh button: `homeassistant.update_entity`
-  already does what it did, for every entity, since they share one coordinator)
 - `datetime.py` - Away return date/time
+
+No `button.py`: there is no dedicated button entity anymore (the last one, Reset
+heating curve, was removed as redundant with editing the Heating Curve number
+directly). `homeassistant.update_entity` already does what a manual-refresh
+button did, for every entity, since they share one coordinator.
 
 ### Configuration
 

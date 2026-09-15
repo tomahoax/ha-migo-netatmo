@@ -27,7 +27,6 @@ EXPECTED_ENTITIES: list[tuple[str, str, str]] = [
     ("binary_sensor", "migo_netatmo_dhw_schedule_gateway_001", "binary_sensor.my_home_gateway_scheduled_dhw"),
     ("binary_sensor", "migo_netatmo_ebus_error_gateway_001", "binary_sensor.my_home_gateway_ebus_error"),
     ("binary_sensor", "migo_netatmo_reachable_module_789", "binary_sensor.my_home_thermostat_device_reachable"),
-    ("button", "migo_netatmo_reset_heating_curve_gateway_001", "button.my_home_thermostat_reset_heating_curve"),
     ("climate", "migo_netatmo_climate_room_456", "climate.my_home_thermostat_thermostat"),
     ("datetime", "migo_netatmo_away_until_gateway_001", "datetime.my_home_gateway_away_until"),
     ("number", "migo_netatmo_dhw_temperature_gateway_001", "number.my_home_gateway_dhw_temperature"),

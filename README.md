@@ -148,10 +148,6 @@ The four energy sensors are `device_class: energy` in kWh and go directly into t
 
 - Active schedule
 
-### Button
-
-- **Reset heating curve** - sets the heating curve to a fixed value (`DEFAULT_HEATING_CURVE` in `const.py`), not a true API-supplied default - see [entities](docs/entities.md#buttons)
-
 ## Configuration Options
 
 After installation, you can configure the integration options:

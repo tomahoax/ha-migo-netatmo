@@ -2,7 +2,7 @@
 
 Per-platform tests moved out to their own files: test_climate.py, test_switch.py,
 test_binary_sensor.py, test_sensor.py, test_datetime.py, test_entity.py,
-test_button.py, test_number.py.
+test_number.py.
 """
 
 from __future__ import annotations

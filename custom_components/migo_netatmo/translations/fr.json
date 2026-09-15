@@ -107,11 +107,6 @@
         "name": "ECS planifiée"
       }
     },
-    "button": {
-      "reset_heating_curve": {
-        "name": "Réinitialiser courbe de chauffe"
-      }
-    },
     "climate": {
       "thermostat": {
         "name": "Thermostat",

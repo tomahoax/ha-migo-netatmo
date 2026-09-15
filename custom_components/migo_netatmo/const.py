@@ -174,9 +174,8 @@ HEATING_CURVE_STEP: Final = 0.1
 # specific (heating type, radiator sizing, ...) and never echoed back by any
 # API endpoint this integration calls (homesdata/homestatus/getconfigs all
 # confirmed, via a live debug-log capture, not to carry it). This is simply
-# the value MigoResetHeatingCurveButton and MigoHeatingCurveNumber's no-data
-# fallback use - set per the user's own calibrated value, not a Netatmo/
-# Saunier Duval constant.
+# the value MigoHeatingCurveNumber's no-data fallback uses - set per the
+# user's own calibrated value, not a Netatmo/Saunier Duval constant.
 DEFAULT_HEATING_CURVE: Final = 2.6
 
 # =============================================================================

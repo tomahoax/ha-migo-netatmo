@@ -254,9 +254,9 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
 
         Shares the cache key format with `datetime.py`'s
         `MigoAwayReturnDateTime` (same device_id), the same cross-entity
-        coupling `MigoResetHeatingCurveButton`/`MigoHeatingCurveNumber`
-        already use for `heating_curve_{device_id}`. The actual clearing
-        happens server-side too, via `endtime=None` on the API call below.
+        cache-key-sharing pattern used elsewhere in this integration. The
+        actual clearing happens server-side too, via `endtime=None` on the
+        API call below.
 
         Passed as `_call_api_optimistically`'s `on_optimistic` hook, so it
         runs right after *this* switch's own optimistic cache is set - not

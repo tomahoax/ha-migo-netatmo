@@ -479,7 +479,7 @@ Sets the heating curve (slope).
 **Notes:**
 - `slope` value is 10x the displayed value (e.g., 14 = 1.4)
 - Range: 5-35 (0.5-3.5 in UI)
-- Default: 14 (1.4) as captured on the test installation this endpoint was traced from - **not a universal factory default**. This is an installation-specific calibration value (heating type, radiator sizing, ...) with no discoverable "true default": the API never echoes it back (see `docs/entities.md`'s note on `number.migo_{home}_heating_curve`), and a second real installation was confirmed at `2.6` instead during later development. `const.DEFAULT_HEATING_CURVE` (used by `button.migo_{home}_reset_heating_curve`) is a plain constant, not derived from this endpoint in any way - edit it to match your own installation
+- Default: 14 (1.4) as captured on the test installation this endpoint was traced from - **not a universal factory default**. This is an installation-specific calibration value (heating type, radiator sizing, ...) with no discoverable "true default": the API never echoes it back (see `docs/entities.md`'s note on `number.migo_{home}_heating_curve`), and a second real installation was confirmed at `2.6` instead during later development. `const.DEFAULT_HEATING_CURVE` (the heating curve number entity's no-data fallback) is a plain constant, not derived from this endpoint in any way - edit it to match your own installation
 
 ---
 

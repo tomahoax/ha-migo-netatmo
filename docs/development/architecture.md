@@ -176,7 +176,6 @@ All magic values are centralized in `const.py`:
 | `switch.py` | Toggle controls |
 | `select.py` | Dropdown selections |
 | `number.py` | Numeric inputs |
-| `button.py` | Action triggers |
 
 ## Error Handling
 

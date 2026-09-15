@@ -34,7 +34,7 @@ what kind of thing it is, not by matching a neighbor at random:
 | Card | `entity_category` | What belongs there |
 |------|--------------------|---------------------|
 | **Controls** | *(unset)*, writable domain | An operational toggle/action with an immediate, user-facing effect - something you'd actually flip day to day (DHW boost, Away mode, Away until, Heating anticipation, the active schedule, the climate entity itself). |
-| **Configuration** | `config` | A setpoint or tuning value you set occasionally and mostly leave alone (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset) - plus any button that directly acts on one of those (Reset heating curve). |
+| **Configuration** | `config` | A setpoint or tuning value you set occasionally and mostly leave alone (DHW temperature, heating curve, hysteresis, manual setpoint duration, temperature offset). |
 | **Sensors** | *(unset)*, read-only domain | A measured or derived value you monitor (temperatures, boiler mode, scheduled DHW state). |
 | **Diagnostic** | `diagnostic` | Read-only technical/troubleshooting data (signal strength, battery, error flags) - plus a read-only companion to a Controls entity, when its only purpose is history graphs or automation triggers rather than being the entity a user interacts with (Away mode's binary_sensor companion to its switch). |
 
@@ -245,14 +245,6 @@ instead; see
 | Entity ID Pattern | Name | Description |
 |-------------------|------|-------------|
 | `datetime.migo_{home}_away_until` | Away Until | Sets a return date/time when activating Away, matching the MiGo app's own option. Writes via `sethomedata`'s `therm_mode`/`therm_mode_endtime`, activating Away and setting the return time in one action - separate from `switch.migo_{home}_away_mode`, which stays on the simpler indefinite on/off call. `therm_mode_endtime` is echoed back on `homesdata`, so the value survives a Home Assistant restart and reflects a return time set directly in the MiGo app, as long as `therm_mode` is still `"away"`. Home Assistant's `datetime` platform has no way to clear a value back to empty from its own more-info dialog - toggling `switch.migo_{home}_away_mode` (either direction) clears it, server-side included. There is no way to clear just the return time while staying Away indefinitely (a dedicated button for that, `reset_away_until`, was removed as redundant) - toggling Away off and back on is the only way. |
-
----
-
-## Buttons
-
-| Entity ID Pattern | Name | Description |
-|-------------------|------|-------------|
-| `button.migo_{home}_reset_heating_curve` | Reset Heating Curve | Sets the heating curve to `DEFAULT_HEATING_CURVE` (`const.py`, currently `2.6`) - not a true "reset to factory default": no such concept exists in the API, and this value is installation-specific, not universal. Edit the constant to match your own installation if the shipped value doesn't match what the MiGo app shows |
 
 ---
 

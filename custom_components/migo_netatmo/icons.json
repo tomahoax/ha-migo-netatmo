@@ -46,14 +46,6 @@
       "anticipation": {
         "default": "mdi:clock-fast"
       }
-    },
-    "button": {
-      "refresh": {
-        "default": "mdi:refresh"
-      },
-      "reset_heating_curve": {
-        "default": "mdi:chart-bell-curve"
-      }
     }
   }
 }

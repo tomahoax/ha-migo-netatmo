@@ -107,11 +107,6 @@
         "name": "Scheduled DHW"
       }
     },
-    "button": {
-      "reset_heating_curve": {
-        "name": "Reset heating curve"
-      }
-    },
     "climate": {
       "thermostat": {
         "name": "Thermostat",
