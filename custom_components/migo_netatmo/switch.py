@@ -227,7 +227,10 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
     """
 
     _attr_translation_key = "away_mode"
-    _attr_icon = "mdi:home-export-outline"
+    # No _attr_icon here deliberately: a static icon set in code always wins
+    # over icons.json's per-state "state" mapping - this gets a distinct
+    # icon for on (away) vs off (home) from icons.json instead, matching
+    # the read-only binary_sensor companion.
 
     def __init__(
         self,
@@ -324,7 +327,9 @@ class MigoDHWAlwaysOnSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, Swi
     """
 
     _attr_translation_key = "dhw_always_on"
-    _attr_icon = "mdi:water-boiler-alert"
+    # No _attr_icon here deliberately: a static icon set in code always wins
+    # over icons.json's per-state "state" mapping - this gets a distinct
+    # icon for on (forced) vs off (normal schedule) from icons.json instead.
 
     def __init__(
         self,

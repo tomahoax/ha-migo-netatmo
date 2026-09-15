@@ -15,6 +15,30 @@
       },
       "thermostat_firmware": {
         "default": "mdi:chip"
+      },
+      "boiler_mode": {
+        "default": "mdi:radiator",
+        "state": {
+          "normal": "mdi:radiator",
+          "dhw_only": "mdi:water-boiler",
+          "frost_guard": "mdi:snowflake"
+        }
+      }
+    },
+    "binary_sensor": {
+      "away_mode": {
+        "default": "mdi:home-import-outline",
+        "state": {
+          "on": "mdi:home-export-outline",
+          "off": "mdi:home-import-outline"
+        }
+      },
+      "dhw_schedule": {
+        "default": "mdi:water-boiler",
+        "state": {
+          "on": "mdi:water-boiler-alert",
+          "off": "mdi:water-boiler"
+        }
       }
     },
     "select": {
@@ -45,6 +69,20 @@
       },
       "anticipation": {
         "default": "mdi:clock-fast"
+      },
+      "away_mode": {
+        "default": "mdi:home-import-outline",
+        "state": {
+          "on": "mdi:home-export-outline",
+          "off": "mdi:home-import-outline"
+        }
+      },
+      "dhw_always_on": {
+        "default": "mdi:water-boiler",
+        "state": {
+          "on": "mdi:water-boiler-alert",
+          "off": "mdi:water-boiler"
+        }
       }
     }
   }

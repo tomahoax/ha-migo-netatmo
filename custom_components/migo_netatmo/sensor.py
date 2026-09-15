@@ -474,7 +474,10 @@ class MigoBoilerModeSensor(MigoGatewayEntity, SensorEntity):
     _attr_translation_key = "boiler_mode"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [BOILER_MODE_NORMAL, BOILER_MODE_DHW_ONLY, BOILER_MODE_FROST_GUARD]
-    _attr_icon = "mdi:radiator"
+    # No _attr_icon here deliberately: a static icon set in code always wins
+    # over icons.json, including its per-state "state" mapping - this sensor
+    # gets a distinct icon per option (Normal/DHW only/Frost guard) from
+    # icons.json instead, which a fixed mdi:radiator would have blocked.
 
     def __init__(
         self,

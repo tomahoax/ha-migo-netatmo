@@ -203,8 +203,10 @@ class MigoAwayModeBinarySensor(MigoGatewayEntity, BinarySensorEntity):
     """
 
     _attr_translation_key = "away_mode"
-    _attr_icon = "mdi:home-export-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # No _attr_icon here deliberately: a static icon set in code always wins
+    # over icons.json's per-state "state" mapping - this gets a distinct
+    # icon for on (away) vs off (home) from icons.json instead.
 
     def __init__(self, coordinator: MigoDataUpdateCoordinator, device_id: str) -> None:
         """Initialize the away mode binary sensor."""
@@ -263,7 +265,9 @@ class MigoDHWScheduleBinarySensor(MigoGatewayEntity, BinarySensorEntity):
     """
 
     _attr_translation_key = "dhw_schedule"
-    _attr_icon = "mdi:water-boiler-alert"
+    # No _attr_icon here deliberately: a static icon set in code always wins
+    # over icons.json's per-state "state" mapping - this gets a distinct
+    # icon for on (DHW active this slot) vs off from icons.json instead.
 
     def __init__(self, coordinator: MigoDataUpdateCoordinator, device_id: str) -> None:
         """Initialize the DHW schedule binary sensor."""
