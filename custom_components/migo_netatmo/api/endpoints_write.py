@@ -174,6 +174,7 @@ class WriteEndpointsMixin:
         home_id: str,
         mode: str,
         endtime: int | None = None,
+        temperature_control_mode: str = "heating",
     ) -> dict[str, Any]:
         """Set the home-level therm_mode via sethomedata, optionally with an end time.
 
@@ -184,24 +185,34 @@ class WriteEndpointsMixin:
         for. `endtime` is always sent explicitly (including as `None`), so a
         call with no end time also clears out any previously-set one.
 
-        Always sends `temperature_control_mode: "heating"` too, matching
-        every `sethomedata` call the MiGo app itself makes (see
-        `docs/api/reference.md`'s captured request). Confirmed live: the API
+        Always sends `temperature_control_mode` too (defaulting to
+        `"heating"`), matching every `sethomedata` call the MiGo app itself
+        makes (see `docs/api/reference.md`'s captured request). The API
         rejects any `therm_mode` change with a 403 ("Cannot change
         therm_mode while being in temperature_control_mode cooling") if the
-        account's `temperature_control_mode` is `"cooling"` - a state this
-        integration never sets and never reads back, but which apparently
-        can end up set regardless. This boiler line (gas heating only, no
-        cooling capability) has no legitimate reason for this field to ever
-        be anything but `"heating"`, so it's sent unconditionally rather
-        than read back and passed through (which would just reproduce the
-        403 if the account happened to be in the broken "cooling" state).
+        account's `temperature_control_mode` is `"cooling"`, so every caller
+        that isn't explicitly entering DHW-only should stick to the default
+        - it resets a value left over from DHW-only rather than reproducing
+        that 403.
+
+        An earlier version of this docstring called `"cooling"` a state
+        "this integration never sets and never reads back, but which
+        apparently can end up set regardless" on a boiler line "with no
+        cooling capability" - both wrong. Confirmed via a live capture of
+        the MiGo app's own "Eau chaude seulement" (DHW only) quick action:
+        it sets `temperature_control_mode: "cooling"` home-wide. Despite the
+        name, this boiler line has no air conditioning - "cooling" is just
+        the flag this account's real DHW-only quick action happens to run
+        under, not a literal cooling mode. `climate.py`'s DHW-only write
+        passes `temperature_control_mode="cooling"` explicitly for this.
 
         Args:
             home_id: The home ID.
             mode: The mode (schedule, away, hg).
             endtime: Optional Unix timestamp when the mode should end.
                 None means indefinite.
+            temperature_control_mode: "heating" (every mode except DHW-only)
+                or "cooling" (DHW-only, despite the name - see above).
 
         Returns:
             The API response.
@@ -209,17 +220,18 @@ class WriteEndpointsMixin:
         data = {
             "home": {
                 "id": home_id,
-                "temperature_control_mode": "heating",
+                "temperature_control_mode": temperature_control_mode,
                 "therm_mode": mode,
                 "therm_mode_endtime": endtime,
             }
         }
 
         _LOGGER.debug(
-            "Setting home %s therm_mode=%s endtime=%s via sethomedata",
+            "Setting home %s therm_mode=%s endtime=%s temperature_control_mode=%s via sethomedata",
             home_id,
             mode,
             endtime,
+            temperature_control_mode,
         )
         return await self._api_request(API_SETHOMEDATA_URL, data)
 

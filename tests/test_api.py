@@ -406,10 +406,12 @@ class TestMigoApiSetHomeThermMode:
     Regression guard: reported live, turning Away mode on returned a 403
     ("Cannot change therm_mode while being in temperature_control_mode
     cooling") because the payload never included temperature_control_mode
-    at all, so the account's broken "cooling" state (this boiler line has
-    no cooling capability) blocked every therm_mode change. Fixed by always
-    sending "heating", matching every sethomedata call the MiGo app itself
-    makes (see docs/api/reference.md's captured request).
+    at all. Fixed by always sending it, defaulting to "heating", matching
+    every sethomedata call the MiGo app itself makes (see
+    docs/api/reference.md's captured request) - every caller except
+    DHW-only wants "heating"; "cooling" is not a broken/unsupported state,
+    it is the flag a later live capture confirmed the MiGo app's own
+    "Eau chaude seulement" (DHW only) quick action sets.
     """
 
     def _make_api(self) -> MigoApi:
@@ -447,6 +449,19 @@ class TestMigoApiSetHomeThermMode:
         home = self._sent_home_payload(api)
         assert home["temperature_control_mode"] == "heating"
         assert home["therm_mode_endtime"] == 1789568616
+
+    @pytest.mark.asyncio
+    async def test_temperature_control_mode_cooling_forwarded(self) -> None:
+        """DHW-only callers can explicitly request "cooling" instead of the default."""
+        api = self._make_api()
+
+        await api.set_home_therm_mode(
+            home_id="home_123", mode="schedule", endtime=None, temperature_control_mode="cooling"
+        )
+
+        home = self._sent_home_payload(api)
+        assert home["temperature_control_mode"] == "cooling"
+        assert home["therm_mode"] == "schedule"
 
 
 class TestMigoApiControlMethods:

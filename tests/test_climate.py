@@ -10,7 +10,6 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.migo_netatmo.api import MigoApi, MigoApiError, MigoAuthError
 from custom_components.migo_netatmo.climate import (
-    HVAC_TO_MIGO_MODE,
     MIGO_TO_HVAC_MODE,
     PRESET_DHW_ONLY,
     PRESET_FROST_GUARD,
@@ -160,32 +159,37 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_hvac_mode_auto(self, climate):
-        """Test setting HVAC mode to auto uses set_mode."""
+        """Auto writes home-level schedule via set_home_therm_mode directly.
+
+        Regression guard: it used to go through the generic set_mode()
+        dispatcher (via the bare setthermmode endpoint), which doesn't
+        reset temperature_control_mode - so a value left over from
+        DHW-only would keep producing the same "cooling" 403 Away's write
+        used to hit (see MigoApi.set_home_therm_mode's docstring).
+        """
         await climate.async_set_hvac_mode(HVACMode.AUTO)
 
-        climate._api.set_mode.assert_called_once()
-        call_kwargs = climate._api.set_mode.call_args.kwargs
-        assert call_kwargs["mode"] == MODE_SCHEDULE
+        climate._api.set_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
 
     @pytest.mark.asyncio
     async def test_set_hvac_mode_auto_clears_stuck_room_level_hg(self, climate, mock_coordinator):
         """Auto clears a leftover room-level "hg" left by a previous Off/DHW-only selection.
 
-        Regression guard: set_mode(mode="schedule") only reaches the
-        home-level setthermmode endpoint (schedule/away are global modes),
-        never this room's own therm_setpoint_mode - and hvac_mode's own
-        derivation checks the room-level mode before the home-level one, so
-        a stuck "hg" kept hvac_mode reporting Off no matter how many times
-        Auto was selected. Reported live and confirmed against a debug-log
-        capture: therm_setpoint_mode stayed "hg" through repeated Auto
-        clicks, only clearing once a room-level (Heat) write was tried.
+        Regression guard: the home-level write never touches this room's
+        own therm_setpoint_mode - and hvac_mode's own derivation checks the
+        room-level mode before the home-level one, so a stuck "hg" kept
+        hvac_mode reporting Off no matter how many times Auto was selected.
+        Reported live and confirmed against a debug-log capture:
+        therm_setpoint_mode stayed "hg" through repeated Auto clicks, only
+        clearing once a room-level (Heat) write was tried.
         """
         mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_FROST_GUARD
 
         await climate.async_set_hvac_mode(HVACMode.AUTO)
 
         climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
-        climate._api.set_mode.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_SCHEDULE)
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
 
     @pytest.mark.asyncio
     async def test_set_hvac_mode_auto_does_not_clear_room_when_not_overridden(self, climate):
@@ -196,12 +200,24 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_hvac_mode_off(self, climate):
-        """Test setting HVAC mode to off uses set_mode with frost guard."""
+        """Off writes the same DHW-only state the preset does.
+
+        Regression guard: writing only the room's "hg" (via the generic
+        set_mode() dispatcher) never flipped temperature_control_mode to
+        "cooling", so the MiGo app itself never showed it as active even
+        though it structurally matched what this integration reads back as
+        DHW-only. Confirmed via a live capture of the app's own "Eau chaude
+        seulement" action (see MigoApi.set_home_therm_mode's docstring).
+        """
         await climate.async_set_hvac_mode(HVACMode.OFF)
 
-        climate._api.set_mode.assert_called_once()
-        call_kwargs = climate._api.set_mode.call_args.kwargs
-        assert call_kwargs["mode"] == MODE_FROST_GUARD
+        climate._api.set_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(
+            home_id="home_123", mode=MODE_SCHEDULE, temperature_control_mode="cooling"
+        )
+        climate._api.set_room_state.assert_called_once_with(
+            home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
+        )
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_away(self, climate):
@@ -221,24 +237,29 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_frost_guard(self, climate):
-        """Frost guard (Veille) writes home-level hg via set_therm_mode directly.
+        """Frost guard (Veille) writes home-level hg via set_home_therm_mode.
 
         Regression guard: it used to go through the generic set_mode()
         dispatcher, which always routes "hg" to the room, silently producing
-        the DHW-only effect instead of real standby.
+        the DHW-only effect instead of real standby. It then used the bare
+        setthermmode endpoint directly instead of sethomedata, which
+        doesn't reset temperature_control_mode - a value left over from
+        DHW-only would keep producing the same "cooling" 403 Away's write
+        used to hit (see MigoApi.set_home_therm_mode's docstring).
         """
         await climate.async_set_preset_mode(PRESET_FROST_GUARD)
 
         climate._api.set_mode.assert_not_called()
-        climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
+        climate._api.set_therm_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
         climate._api.set_room_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_frost_guard_clears_stuck_room_level_manual(self, climate, mock_coordinator):
         """Frost guard clears a leftover room-level Manual/Boost override.
 
-        Regression guard: set_therm_mode only reaches the home-level
-        setthermmode endpoint, and preset_mode's own derivation checks a
+        Regression guard: the home-level write never touches this room's
+        own therm_setpoint_mode, and preset_mode's own derivation checks a
         room-level Manual/Boost override before the home-level mode - so a
         leftover Manual/Boost would otherwise keep preset_mode stuck
         reporting Boost/None no matter what was selected here. Same class
@@ -249,7 +270,7 @@ class TestMigoClimate:
         await climate.async_set_preset_mode(PRESET_FROST_GUARD)
 
         climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
-        climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_boost(self, climate):
@@ -354,53 +375,65 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_dhw_only_writes_room_level_hg(self, climate):
-        """DHW only (Eau chaude seulement) writes room-level hg via set_room_state directly.
+        """DHW only writes room-level hg plus home-wide cooling.
 
-        The same call HVACMode.OFF already makes - previously misdiagnosed
-        as "no known write path" and rejected outright.
+        Reported live: DHW only used to only write the room's "hg" (the
+        same call HVACMode.OFF already makes), so the MiGo app itself
+        never showed it as active. Confirmed via a live capture of the
+        app's own "Eau chaude seulement" action: temperature_control_mode
+        flips to "cooling" home-wide too (see
+        MigoApi.set_home_therm_mode's docstring).
         """
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
         climate._api.set_mode.assert_not_called()
+        climate._api.set_therm_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(
+            home_id="home_123", mode=MODE_SCHEDULE, temperature_control_mode="cooling"
+        )
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
-        climate._api.set_therm_mode.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_dhw_only_clears_stale_home_level_frost_guard(self, climate, mock_coordinator):
         """DHW only clears a leftover home-level real Frost guard first.
 
-        Regression guard: DHW-only's contract (see PRESET_DHW_ONLY's
-        docstring) is that the home stays "schedule" while only the room
-        goes to "hg" - but the write here only ever touched the room. If
-        the home was already in real Frost guard from an earlier selection,
-        preset_mode's own derivation (which checks the home-level mode
-        before the room-level one) kept reading DHW-only back as Frost
-        guard. Reported live and confirmed against a debug-log capture.
+        Regression guard: DHW-only and real Frost guard are mutually
+        exclusive quick actions, so if the home was already in real Frost
+        guard from an earlier selection, preset_mode's own derivation
+        (which checks the home-level mode before the room-level one) kept
+        reading DHW-only back as Frost guard. Reported live and confirmed
+        against a debug-log capture.
         """
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_FROST_GUARD
 
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
-        climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
+        climate._api.set_home_therm_mode.assert_called_once_with(
+            home_id="home_123", mode=MODE_SCHEDULE, temperature_control_mode="cooling"
+        )
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
 
     @pytest.mark.asyncio
-    async def test_set_preset_mode_dhw_only_does_not_clear_home_when_away(self, climate, mock_coordinator):
-        """DHW only doesn't clear an active Away - only a stale Frost guard.
+    async def test_set_preset_mode_dhw_only_preserves_away(self, climate, mock_coordinator):
+        """DHW only preserves an active Away's therm_mode instead of forcing schedule.
 
-        Away is meant to combine with DHW-only (preset_mode's own Away
-        check runs first, unconditionally), unlike real Frost guard which
-        DHW-only is mutually exclusive with.
+        Unlike the confirmed real-Frost-guard case above, there's no live
+        confirmation either way for what DHW-only does to an active Away -
+        the one capture this is based on already had therm_mode="schedule"
+        beforehand. Forcing "schedule" regardless would risk silently
+        canceling Away, so it's passed through unchanged instead.
         """
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
 
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
-        climate._api.set_therm_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(
+            home_id="home_123", mode=MODE_AWAY, temperature_control_mode="cooling"
+        )
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
@@ -441,12 +474,6 @@ class TestModeMapping:
         assert MIGO_TO_HVAC_MODE[MODE_FROST_GUARD] == HVACMode.OFF
         assert MIGO_TO_HVAC_MODE[MODE_AWAY] == HVACMode.AUTO
 
-    def test_hvac_to_migo_mode(self):
-        """Test HVAC to MiGO mode mapping."""
-        assert HVAC_TO_MIGO_MODE[HVACMode.AUTO] == MODE_SCHEDULE
-        assert HVAC_TO_MIGO_MODE[HVACMode.HEAT] == MODE_MANUAL
-        assert HVAC_TO_MIGO_MODE[HVACMode.OFF] == MODE_FROST_GUARD
-
 
 class TestClimateErrorSurfacing:
     """Tests for API errors surfacing as UI-visible exceptions."""
@@ -476,7 +503,7 @@ class TestClimateErrorSurfacing:
     @pytest.mark.asyncio
     async def test_auth_error_raises_home_assistant_error(self, climate):
         """Test an auth failure raises a translated HomeAssistantError."""
-        climate._api.set_mode.side_effect = MigoAuthError("expired")
+        climate._api.set_home_therm_mode.side_effect = MigoAuthError("expired")
 
         with pytest.raises(HomeAssistantError) as exc_info:
             await climate.async_set_hvac_mode(HVACMode.AUTO)

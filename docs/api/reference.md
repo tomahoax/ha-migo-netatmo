@@ -305,6 +305,21 @@ Changes the global home mode (used by the app for mode changes).
 | `away` | Away mode |
 | `hg` | Frost guard mode |
 
+**`temperature_control_mode`:** always `"heating"` except when entering the
+"Eau chaude seulement" (DHW only) boiler quick-action, which sets it to
+`"cooling"` - confirmed via a live capture of the MiGo app's own action.
+Despite the name, this boiler line has no air conditioning; `"cooling"` is
+just the flag DHW-only happens to run under, not a literal cooling mode. An
+earlier investigation found the API rejecting a `therm_mode` change with a
+403 ("Cannot change therm_mode while being in temperature_control_mode
+cooling") and treated a leftover `"cooling"` value as a broken/unreachable
+state to always override - it isn't; it's real, reachable state this
+integration's own DHW-only write now sets deliberately. Every other
+`sethomedata` call still sends `"heating"` unconditionally, both to match
+the app's own traffic for those modes and to reliably clear a `"cooling"`
+value left over from DHW-only, avoiding that same 403 on the next mode
+change (see `MigoApi.set_home_therm_mode`).
+
 ---
 
 ### POST `/api/setthermmode`

@@ -73,12 +73,6 @@ MIGO_TO_HVAC_MODE: dict[str, HVACMode] = {
     MODE_MAX: HVACMode.HEAT,
 }
 
-HVAC_TO_MIGO_MODE: dict[HVACMode, str] = {
-    HVACMode.AUTO: MODE_SCHEDULE,
-    HVACMode.HEAT: MODE_MANUAL,
-    HVACMode.OFF: MODE_FROST_GUARD,
-}
-
 # Map MiGO modes to preset names (None means no preset active)
 MIGO_MODE_TO_PRESET: dict[str, str | None] = {
     MODE_AWAY: PRESET_AWAY,
@@ -265,6 +259,51 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             return None
         return self.coordinator.devices.get(thermostat_id, {}).get("boiler_status")
 
+    async def _write_dhw_only(self, home_id: str, *, cache_key: str, optimistic_value: Any) -> None:
+        """Write MiGo's DHW-only quick action: cooling home-wide, plus this room's hg.
+
+        Reported live: after selecting DHW-only from Home Assistant, the
+        MiGo app itself didn't show it as active. Confirmed via a live
+        capture of the app's own "Eau chaude seulement" action:
+        `temperature_control_mode` flips to `"cooling"` home-wide (see
+        `MigoApi.set_home_therm_mode`'s docstring - despite the name, not a
+        literal cooling mode) alongside this room's `therm_setpoint_mode`
+        going to `"hg"`. Writing the room alone, which is all this used to
+        do, never touched that flag, so the app never showed it - even
+        though this integration's own optimistic UI did, since it only
+        ever checked the room-level value. Shared by `async_set_hvac_mode`'s
+        Off branch and the DHW-only preset, which write the identical
+        underlying state today, just reached through two different
+        controls.
+
+        `therm_mode` is passed through unchanged unless it's currently
+        real Frost guard ("hg"), the one case confirmed to need clearing
+        (DHW-only and real Frost guard are mutually exclusive quick
+        actions - see the Frost guard branch's own stale-state fix in
+        `async_set_preset_mode`). Not forced to "schedule" unconditionally:
+        the one live capture this is based on happened to already have
+        `therm_mode == "schedule"` beforehand, so there's no confirmation
+        either way for what DHW-only does to an active Away - forcing
+        "schedule" regardless would risk silently canceling it, so Away is
+        left untouched here rather than guessed at.
+        """
+        current_therm_mode = self._home_therm_mode
+        therm_mode = MODE_SCHEDULE if current_therm_mode in (MODE_FROST_GUARD, None) else current_therm_mode
+        await self._call_api(
+            self._api.set_home_therm_mode,
+            home_id=home_id,
+            mode=therm_mode,
+            temperature_control_mode="cooling",
+        )
+        await self._call_api_optimistically(
+            self._api.set_room_state,
+            cache_key=cache_key,
+            optimistic_value=optimistic_value,
+            home_id=home_id,
+            room_id=self._room_id,
+            mode=MODE_FROST_GUARD,
+        )
+
     @override
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
@@ -314,27 +353,15 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 temperature=temperature,
                 duration=duration,
             )
-        else:
-            # Auto or Off
-            migo_mode = HVAC_TO_MIGO_MODE.get(hvac_mode, MODE_SCHEDULE)
-            _LOGGER.debug(
-                "Setting room %s HVAC mode to %s (migo: %s)",
-                self._room_id,
-                hvac_mode,
-                migo_mode,
-            )
+        elif hvac_mode == HVACMode.AUTO:
             room_mode = self._room_data.get("therm_setpoint_mode")
-            if hvac_mode == HVACMode.AUTO and room_mode in (MODE_MANUAL, MODE_MAX, MODE_FROST_GUARD, MODE_OFF):
-                # set_mode(mode="schedule") only reaches the home-level
-                # setthermmode endpoint (see MigoApi.set_mode's docstring:
-                # "schedule"/"away" are global modes, everything else -
-                # manual/home/hg - is room-level via setstate). It never
-                # touches this room's own therm_setpoint_mode, so a
-                # room-level override left over from a previous Off/DHW-only
-                # selection (stuck at "hg") is never cleared by it - and
-                # `hvac_mode`'s own derivation checks the room-level mode
-                # before the home-level one, so it kept reporting Off no
-                # matter how many times Auto was selected afterward.
+            if room_mode in (MODE_MANUAL, MODE_MAX, MODE_FROST_GUARD, MODE_OFF):
+                # A room-level override left over from a previous Off/
+                # DHW-only/Heat/Boost selection (stuck at "hg"/"manual"/
+                # "max") is never cleared by the home-level call below -
+                # and `hvac_mode`'s own derivation checks the room-level
+                # mode before the home-level one, so it kept reporting Off
+                # no matter how many times Auto was selected afterward.
                 # Reported live and confirmed against a debug-log capture:
                 # therm_setpoint_mode stayed "hg" through repeated Auto
                 # clicks, only clearing once Heat (a room-level write) was
@@ -348,13 +375,32 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                     room_id=self._room_id,
                     mode=MODE_HOME,
                 )
+            _LOGGER.debug("Setting room %s HVAC mode to auto (migo: schedule)", self._room_id)
+            # set_home_therm_mode (sethomedata) directly, not the generic
+            # set_mode() dispatcher (which routes "schedule" to the bare
+            # setthermmode endpoint) - sethomedata also resets
+            # temperature_control_mode back to "heating", clearing a value
+            # left over from DHW-only. setthermmode alone doesn't touch
+            # that field, which would otherwise keep producing the same
+            # "cooling" 403 Away's write used to hit (see
+            # MigoApi.set_home_therm_mode's docstring).
             await self._call_api_optimistically(
-                self._api.set_mode,
+                self._api.set_home_therm_mode,
                 cache_key=self._hvac_mode_cache_key,
-                optimistic_value=hvac_mode.value,
+                optimistic_value=HVACMode.AUTO.value,
                 home_id=home_id,
-                room_id=self._room_id,
-                mode=migo_mode,
+                mode=MODE_SCHEDULE,
+            )
+        else:
+            # Off: MiGo's DHW-only quick action at the room level (see
+            # PRESET_DHW_ONLY's docstring and _write_dhw_only) - the same
+            # underlying state, just reached via the HVAC mode wheel
+            # instead of the preset dropdown.
+            _LOGGER.debug("Setting room %s HVAC mode to off (DHW-only)", self._room_id)
+            await self._write_dhw_only(
+                home_id,
+                cache_key=self._hvac_mode_cache_key,
+                optimistic_value=HVACMode.OFF.value,
             )
 
         _LOGGER.debug("Room %s HVAC mode set successfully", self._room_id)
@@ -443,52 +489,29 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 duration=DEFAULT_BOOST_DURATION,
             )
         elif preset_mode == PRESET_DHW_ONLY:
-            # Room-level "hg": MiGo's DHW-only quick action. The same call
-            # HVACMode.OFF already makes - see PRESET_DHW_ONLY's docstring.
-            if self._home_therm_mode == MODE_FROST_GUARD:
-                # DHW-only's own contract (see PRESET_DHW_ONLY's docstring)
-                # is that the home stays "schedule" while only this room
-                # goes to "hg" - but nothing enforced that if the home was
-                # already in real Frost guard from an earlier selection.
-                # preset_mode's own derivation checks the home-level mode
-                # before the room-level one, so DHW-only kept reading back
-                # as Frost guard whenever this was left over - same
-                # architectural gap as async_set_hvac_mode's Auto branch
-                # and this method's own Frost guard branch below, just
-                # discovered on this specific path afterward. Reported
-                # live and confirmed against a debug-log capture: home
-                # therm_mode stayed "hg" from an earlier Frost guard
-                # selection, so DHW-only still displayed as Frost guard.
-                # Not conditioned on Away too: unlike Frost guard, Away is
-                # meant to combine with DHW-only (preset_mode's own Away
-                # check runs first, unconditionally) - only a stale "hg"
-                # needs clearing here.
-                await self._call_api(
-                    self._api.set_therm_mode,
-                    home_id=home_id,
-                    mode=MODE_SCHEDULE,
-                )
-            _LOGGER.debug("Setting room %s to DHW-only (room-level hg)", self._room_id)
-            await self._call_api_optimistically(
-                self._api.set_room_state,
+            # The same underlying state HVACMode.OFF already writes - see
+            # PRESET_DHW_ONLY's docstring and _write_dhw_only.
+            _LOGGER.debug("Setting room %s to DHW-only", self._room_id)
+            await self._write_dhw_only(
+                home_id,
                 cache_key=self._preset_mode_cache_key,
                 optimistic_value=preset_mode,
-                home_id=home_id,
-                room_id=self._room_id,
-                mode=MODE_FROST_GUARD,
             )
         elif preset_mode == PRESET_FROST_GUARD:
-            # Home-level "hg": real standby. Distinct from DHW only above -
-            # MigoApi.set_mode() routes "hg" to the room unconditionally and
-            # never to the home-level endpoint, so this bypasses it and
-            # calls set_therm_mode (setthermmode) directly.
+            # Home-level "hg" via sethomedata (set_home_therm_mode) - not
+            # the generic set_mode() dispatcher, which routes "hg" to the
+            # room unconditionally, and not the bare setthermmode endpoint
+            # either: unlike sethomedata, it doesn't reset
+            # temperature_control_mode back to "heating", so a value left
+            # over from DHW-only would keep producing the same "cooling"
+            # 403 Away's write used to hit (see
+            # MigoApi.set_home_therm_mode's docstring).
             if self._room_data.get("therm_setpoint_mode") in (MODE_MANUAL, MODE_MAX):
                 # preset_mode's own derivation checks a room-level Manual/
                 # Boost override before the home-level mode (an active
                 # override shouldn't be silently hidden by an unrelated
                 # preset) - same gap as async_set_hvac_mode's Auto branch:
-                # set_therm_mode only reaches the home-level endpoint, so a
-                # leftover Manual/Boost override would otherwise keep
+                # a leftover Manual/Boost override would otherwise keep
                 # preset_mode stuck reporting Boost/None no matter what was
                 # selected here. Clear it first.
                 await self._call_api(
@@ -499,7 +522,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 )
             _LOGGER.debug("Setting home %s to Frost guard (home-level hg)", home_id)
             await self._call_api_optimistically(
-                self._api.set_therm_mode,
+                self._api.set_home_therm_mode,
                 cache_key=self._preset_mode_cache_key,
                 optimistic_value=preset_mode,
                 home_id=home_id,
