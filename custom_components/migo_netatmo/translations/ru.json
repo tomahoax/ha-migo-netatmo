@@ -99,14 +99,12 @@
       },
       "ebus_error": {
         "name": "Ошибка eBus"
-      }
-    },
-    "button": {
-      "refresh": {
-        "name": "Обновить"
       },
-      "reset_heating_curve": {
-        "name": "Сбросить кривую нагрева"
+      "away_mode": {
+        "name": "Режим отсутствия"
+      },
+      "dhw_schedule": {
+        "name": "ГВС по расписанию"
       }
     },
     "climate": {
@@ -115,12 +113,19 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
+              "normal": "Обычный",
               "away": "Нет дома",
               "frost_guard": "Защита от замерзания",
+              "dhw_only": "Только ГВС",
               "boost": "Boost"
             }
           }
         }
+      }
+    },
+    "datetime": {
+      "away_until": {
+        "name": "Отсутствие до"
       }
     },
     "number": {
@@ -164,6 +169,14 @@
       "energy_gas_hot_water": {
         "name": "Газ на горячую воду"
       },
+      "boiler_mode": {
+        "name": "Режим котла",
+        "state": {
+          "normal": "Обычный",
+          "dhw_only": "Только ГВС",
+          "frost_guard": "Защита от замерзания"
+        }
+      },
       "gateway_firmware": {
         "name": "Прошивка шлюза"
       },
@@ -192,6 +205,12 @@
       },
       "anticipation": {
         "name": "Упреждение отопления"
+      },
+      "away_mode": {
+        "name": "Режим отсутствия"
+      },
+      "dhw_always_on": {
+        "name": "ГВС всегда включено"
       }
     }
   }

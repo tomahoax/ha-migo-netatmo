@@ -21,14 +21,14 @@ from custom_components.migo_netatmo.const import DOMAIN
 # (domain, unique_id, entity_id) for the standard one-home, one-room,
 # gateway + thermostat setup from conftest fixtures.
 EXPECTED_ENTITIES: list[tuple[str, str, str]] = [
+    ("binary_sensor", "migo_netatmo_away_mode_gateway_001", "binary_sensor.my_home_gateway_away_mode"),
     ("binary_sensor", "migo_netatmo_boiler_error_gateway_001", "binary_sensor.my_home_gateway_boiler_error"),
     ("binary_sensor", "migo_netatmo_boiler_status_module_789", "binary_sensor.my_home_thermostat_boiler_status"),
+    ("binary_sensor", "migo_netatmo_dhw_schedule_gateway_001", "binary_sensor.my_home_gateway_scheduled_dhw"),
     ("binary_sensor", "migo_netatmo_ebus_error_gateway_001", "binary_sensor.my_home_gateway_ebus_error"),
     ("binary_sensor", "migo_netatmo_reachable_module_789", "binary_sensor.my_home_thermostat_device_reachable"),
-    ("button", "migo_netatmo_refresh_gateway_gateway_001", "button.my_home_gateway_refresh"),
-    ("button", "migo_netatmo_refresh_thermostat_module_789", "button.my_home_thermostat_refresh"),
-    ("button", "migo_netatmo_reset_heating_curve_gateway_001", "button.my_home_thermostat_reset_heating_curve"),
     ("climate", "migo_netatmo_climate_room_456", "climate.my_home_thermostat_thermostat"),
+    ("datetime", "migo_netatmo_away_until_gateway_001", "datetime.my_home_gateway_away_until"),
     ("number", "migo_netatmo_dhw_temperature_gateway_001", "number.my_home_gateway_dhw_temperature"),
     ("number", "migo_netatmo_heating_curve_gateway_001", "number.my_home_thermostat_heating_curve"),
     ("number", "migo_netatmo_hysteresis_gateway_001", "number.my_home_thermostat_hysteresis_threshold"),
@@ -36,6 +36,7 @@ EXPECTED_ENTITIES: list[tuple[str, str, str]] = [
     ("number", "migo_netatmo_temp_offset_room_456", "number.my_home_thermostat_temperature_offset"),
     ("select", "migo_netatmo_schedule_home_123", "select.my_home_gateway_active_schedule"),
     ("sensor", "migo_netatmo_battery_module_789", "sensor.my_home_thermostat_battery"),
+    ("sensor", "migo_netatmo_boiler_mode_gateway_001", "sensor.my_home_gateway_boiler_mode"),
     ("sensor", "migo_netatmo_boiler_runtime_gateway_001", "sensor.my_home_gateway_daily_boiler_runtime"),
     ("sensor", "migo_netatmo_energy_elec_heating_gateway_001", "sensor.my_home_gateway_electricity_for_heating"),
     ("sensor", "migo_netatmo_energy_elec_hot_water_gateway_001", "sensor.my_home_gateway_electricity_for_hot_water"),
@@ -48,6 +49,8 @@ EXPECTED_ENTITIES: list[tuple[str, str, str]] = [
     ("sensor", "migo_netatmo_thermostat_firmware_module_789", "sensor.my_home_thermostat_thermostat_firmware"),
     ("sensor", "migo_netatmo_wifi_gateway_001", "sensor.my_home_gateway_wifi_signal"),
     ("switch", "migo_netatmo_anticipation_home_123", "switch.my_home_thermostat_heating_anticipation"),
+    ("switch", "migo_netatmo_away_mode_gateway_001", "switch.my_home_gateway_away_mode"),
+    ("switch", "migo_netatmo_dhw_always_on_gateway_001", "switch.my_home_gateway_dhw_always_on"),
     ("switch", "migo_netatmo_dhw_gateway_001", "switch.my_home_gateway_dhw_boost"),
 ]
 

@@ -16,9 +16,25 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfEnergy, UnitOf
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, WH_PER_KWH
-from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity, register_dynamic_entities
-from .helpers import generate_unique_id, get_devices_by_type, safe_float
+from .const import (
+    BOILER_MODE_DHW_ONLY,
+    BOILER_MODE_FROST_GUARD,
+    BOILER_MODE_NORMAL,
+    DEVICE_TYPE_GATEWAY,
+    DEVICE_TYPE_THERMOSTAT,
+    WH_PER_KWH,
+)
+from .entity import MigoGatewayEntity, MigoRoomEntity, MigoThermostatEntity
+from .entity_descriptions import MigoEntityDescriptionMixin
+from .entity_mixin import _MigoDescriptionEntityMixin
+from .entity_setup import register_dynamic_entities
+from .helpers import (
+    derive_boiler_mode,
+    generate_unique_id,
+    get_devices_by_type,
+    get_rooms_for_home,
+    safe_float,
+)
 from .models import ConsumptionData, ModuleData
 
 if TYPE_CHECKING:
@@ -30,16 +46,13 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class MigoSensorEntityDescription(SensorEntityDescription):
+class MigoSensorEntityDescription(MigoEntityDescriptionMixin, SensorEntityDescription):
     """Describes a MiGO sensor entity.
 
-    The key field is cosmetic; unique_id_key feeds generate_unique_id and
-    must never change (users would lose recorder history).
+    data_key/unique_id_key/value_fn come from MigoEntityDescriptionMixin,
+    shared with binary_sensor.py's MigoBinarySensorEntityDescription.
     """
 
-    data_key: str
-    unique_id_key: str
-    value_fn: Callable[[Any], Any] | None = None
     extra_attrs_fn: Callable[[ModuleData], dict[str, Any]] | None = None
 
 
@@ -193,6 +206,7 @@ async def async_setup_entry(
                 for description in GATEWAY_SENSORS
             ),
             MigoBoilerRuntimeSensor(coordinator=coordinator, device_id=device_id),
+            MigoBoilerModeSensor(coordinator=coordinator, device_id=device_id),
             *(
                 MigoEnergySensor(coordinator=coordinator, device_id=device_id, description=description)
                 for description in ENERGY_SENSORS
@@ -240,35 +254,16 @@ class MigoRoomSensor(MigoRoomEntity, SensorEntity):
         return value
 
 
-class _MigoDeviceSensorMixin(SensorEntity):
-    """Mixin for device-based sensors with common functionality."""
+class _MigoDeviceSensorMixin(_MigoDescriptionEntityMixin, SensorEntity):
+    """Mixin for device-based sensors, described by a MigoSensorEntityDescription."""
 
     entity_description: MigoSensorEntityDescription
-
-    @property
-    def _device_data(self) -> ModuleData:
-        """Get current device data.
-
-        Read-only stub: the concrete entity's MRO always resolves this to
-        MigoDeviceEntity._device_data (see MigoGatewaySensor/MigoThermostatSensor
-        below). Declared here, matching that base's read-only property, so
-        static type checkers accept the multiple inheritance.
-        """
-        raise NotImplementedError
-
-    def _init_sensor(self, device_id: str, description: MigoSensorEntityDescription) -> None:
-        """Initialize sensor attributes from the entity description."""
-        self.entity_description = description
-        self._attr_unique_id = generate_unique_id(description.unique_id_key, device_id)
 
     @property
     @override
     def native_value(self) -> Any:
         """Return the sensor value."""
-        value = self._device_data.get(self.entity_description.data_key)
-        if self.entity_description.value_fn:
-            return self.entity_description.value_fn(value)
-        return value
+        return self._resolve_described_value()
 
     @property
     @override
@@ -290,7 +285,7 @@ class MigoGatewaySensor(MigoGatewayEntity, _MigoDeviceSensorMixin):
     ) -> None:
         """Initialize the gateway sensor."""
         super().__init__(coordinator, device_id)
-        self._init_sensor(device_id, description)
+        self._init_description_entity(device_id, description)
 
 
 class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
@@ -304,7 +299,7 @@ class MigoThermostatSensor(MigoThermostatEntity, _MigoDeviceSensorMixin):
     ) -> None:
         """Initialize the thermostat sensor."""
         super().__init__(coordinator, device_id)
-        self._init_sensor(device_id, description)
+        self._init_description_entity(device_id, description)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -465,3 +460,44 @@ class MigoBoilerRuntimeSensor(MigoGatewayEntity, SensorEntity):
                 "measurement_timestamp": consumption.get("timestamp"),
             }
         return {}
+
+
+class MigoBoilerModeSensor(MigoGatewayEntity, SensorEntity):
+    """MiGO boiler quick-action mode (Normal / DHW only / Frost guard).
+
+    MiGo does not return this as a single field: it is derived from the
+    home's `therm_mode` and its rooms' `therm_setpoint_mode`, see
+    `helpers.derive_boiler_mode`. Independent of the Away preset, which the
+    app lets you combine with any of these three.
+    """
+
+    _attr_translation_key = "boiler_mode"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [BOILER_MODE_NORMAL, BOILER_MODE_DHW_ONLY, BOILER_MODE_FROST_GUARD]
+    # No _attr_icon here deliberately: a static icon set in code always wins
+    # over icons.json, including its per-state "state" mapping - this sensor
+    # gets a distinct icon per option (Normal/DHW only/Frost guard) from
+    # icons.json instead, which a fixed mdi:radiator would have blocked.
+
+    def __init__(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        device_id: str,
+    ) -> None:
+        """Initialize the boiler mode sensor."""
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = generate_unique_id("boiler_mode", device_id)
+
+    @property
+    @override
+    def native_value(self) -> str | None:
+        """Return the current boiler mode."""
+        home_id = self._device_data.get("home_id")
+        if not home_id:
+            return None
+        home_data = self.coordinator.homes.get(home_id)
+        if home_data is None:
+            return None
+
+        room_modes = [room.get("therm_setpoint_mode") for room in get_rooms_for_home(self.coordinator, home_id)]
+        return derive_boiler_mode(home_data.get("therm_mode"), room_modes)

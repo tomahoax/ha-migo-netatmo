@@ -99,14 +99,12 @@
       },
       "ebus_error": {
         "name": "eBus error"
-      }
-    },
-    "button": {
-      "refresh": {
-        "name": "Refresh"
       },
-      "reset_heating_curve": {
-        "name": "Reset heating curve"
+      "away_mode": {
+        "name": "Away mode"
+      },
+      "dhw_schedule": {
+        "name": "Scheduled DHW"
       }
     },
     "climate": {
@@ -115,12 +113,19 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
+              "normal": "Normal",
               "away": "Away",
               "frost_guard": "Frost guard",
+              "dhw_only": "Hot water only",
               "boost": "Boost"
             }
           }
         }
+      }
+    },
+    "datetime": {
+      "away_until": {
+        "name": "Away until"
       }
     },
     "number": {
@@ -164,6 +169,14 @@
       "energy_gas_hot_water": {
         "name": "Gas for hot water"
       },
+      "boiler_mode": {
+        "name": "Boiler mode",
+        "state": {
+          "normal": "Normal",
+          "dhw_only": "Hot water only",
+          "frost_guard": "Frost guard"
+        }
+      },
       "gateway_firmware": {
         "name": "Gateway firmware"
       },
@@ -192,6 +205,12 @@
       },
       "anticipation": {
         "name": "Heating anticipation"
+      },
+      "away_mode": {
+        "name": "Away mode"
+      },
+      "dhw_always_on": {
+        "name": "DHW always on"
       }
     }
   }

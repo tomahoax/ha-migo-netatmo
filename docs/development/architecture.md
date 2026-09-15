@@ -143,6 +143,7 @@ Entities use Home Assistant's translation system:
 ```python
 _attr_translation_key = "thermostat"
 
+
 @property
 def translation_placeholders(self):
     return {"room_name": self._room_data.get("name")}
@@ -175,7 +176,6 @@ All magic values are centralized in `const.py`:
 | `switch.py` | Toggle controls |
 | `select.py` | Dropdown selections |
 | `number.py` | Numeric inputs |
-| `button.py` | Action triggers |
 
 ## Error Handling
 

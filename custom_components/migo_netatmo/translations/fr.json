@@ -99,14 +99,12 @@
       },
       "ebus_error": {
         "name": "Erreur eBus"
-      }
-    },
-    "button": {
-      "refresh": {
-        "name": "Rafraîchir"
       },
-      "reset_heating_curve": {
-        "name": "Réinitialiser courbe de chauffe"
+      "away_mode": {
+        "name": "Mode absent"
+      },
+      "dhw_schedule": {
+        "name": "ECS planifiée"
       }
     },
     "climate": {
@@ -115,12 +113,19 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
+              "normal": "Normal",
               "away": "Absent",
               "frost_guard": "Hors-gel",
+              "dhw_only": "Eau chaude seule",
               "boost": "Boost"
             }
           }
         }
+      }
+    },
+    "datetime": {
+      "away_until": {
+        "name": "Mode absent jusqu'à"
       }
     },
     "number": {
@@ -164,6 +169,14 @@
       "energy_gas_hot_water": {
         "name": "Gaz pour l'eau chaude"
       },
+      "boiler_mode": {
+        "name": "Mode chaudière",
+        "state": {
+          "normal": "Normal",
+          "dhw_only": "Eau chaude seule",
+          "frost_guard": "Hors-gel"
+        }
+      },
       "gateway_firmware": {
         "name": "Firmware passerelle"
       },
@@ -192,6 +205,12 @@
       },
       "anticipation": {
         "name": "Anticipation chauffage"
+      },
+      "away_mode": {
+        "name": "Mode absent"
+      },
+      "dhw_always_on": {
+        "name": "Eau chaude sanitaire toujours activée"
       }
     }
   }

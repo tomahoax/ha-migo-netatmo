@@ -2,227 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
-from homeassistant.core import callback
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import MigoApiError, MigoAuthError, MigoConnectionError
-from .const import DEVICE_TYPE_GATEWAY, DEVICE_TYPE_THERMOSTAT, DOMAIN, MANUFACTURER
+from .const import DEVICE_TYPE_THERMOSTAT
+from .entity_device_info import (
+    build_gateway_device_info,
+    build_home_fallback_device_info,
+    build_thermostat_device_info,
+)
+from .entity_mixin import MigoApiControlMixin
 from .helpers import get_gateway_mac_for_home, get_thermostat_for_room
 from .models import HomeConfig, ModuleData, RoomData
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
-
-    from homeassistant.helpers.entity import Entity
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-    from . import MigoConfigEntry
     from .api import MigoApi
     from .coordinator import MigoDataUpdateCoordinator
-
-
-def _home_name(coordinator: MigoDataUpdateCoordinator, home_id: str) -> str:
-    """Return the display name of a home."""
-    return coordinator.homes.get(home_id, {}).get("name", "MiGO")
-
-
-def _looks_like_mac(device_id: str) -> bool:
-    """Return True if device_id has the shape of a MAC address.
-
-    Device ids come straight from the API and are not validated by it. Home
-    Assistant merges device registry entries that share a connection tuple, so
-    registering an arbitrary string as a CONNECTION_NETWORK_MAC lets a wrong or
-    hostile value attach these entities to an unrelated device in the user's home
-    and overwrite its displayed name, manufacturer and model.
-
-    Args:
-        device_id: The identifier reported by the API.
-
-    Returns:
-        True for the aa:bb:cc:dd:ee:ff shape only.
-    """
-    parts = device_id.split(":")
-    return len(parts) == 6 and all(len(p) == 2 and all(c in "0123456789abcdefABCDEF" for c in p) for p in parts)
-
-
-def build_gateway_device_info(
-    coordinator: MigoDataUpdateCoordinator,
-    gateway_id: str,
-    home_id: str,
-) -> DeviceInfo:
-    """Build the DeviceInfo for a gateway (NAVaillant) device.
-
-    Single source of truth: every entity attached to the gateway device
-    must produce exactly this structure.
-    """
-    device_data = coordinator.devices.get(gateway_id, {})
-    info = DeviceInfo(
-        identifiers={(DOMAIN, gateway_id)},
-        name=f"{_home_name(coordinator, home_id)} Gateway",
-        manufacturer=MANUFACTURER,
-        model=DEVICE_TYPE_GATEWAY,
-    )
-    # Only when it really is a MAC. The thermostat builder below always checked;
-    # this one did not, and registered whatever the API returned.
-    if _looks_like_mac(gateway_id):
-        info["connections"] = {(CONNECTION_NETWORK_MAC, gateway_id)}
-    if firmware := device_data.get("firmware_revision"):
-        info["sw_version"] = str(firmware)
-    if hw_version := device_data.get("hardware_version"):
-        info["hw_version"] = str(hw_version)
-    if serial := device_data.get("oem_serial"):
-        info["serial_number"] = serial
-    return info
-
-
-def build_thermostat_device_info(
-    coordinator: MigoDataUpdateCoordinator,
-    thermostat_id: str,
-    home_id: str,
-) -> DeviceInfo:
-    """Build the DeviceInfo for a thermostat (NAThermVaillant) device.
-
-    Single source of truth: every entity attached to the thermostat
-    device must produce exactly this structure.
-    """
-    device_data = coordinator.devices.get(thermostat_id, {})
-    info = DeviceInfo(
-        identifiers={(DOMAIN, thermostat_id)},
-        name=f"{_home_name(coordinator, home_id)} Thermostat",
-        manufacturer=MANUFACTURER,
-        model=DEVICE_TYPE_THERMOSTAT,
-    )
-
-    # Add MAC address connection if the device_id looks like a MAC address
-    if _looks_like_mac(thermostat_id):
-        info["connections"] = {(CONNECTION_NETWORK_MAC, thermostat_id)}
-
-    # Link to the parent gateway device. `via_device` is the current,
-    # documented way to do this (DeviceInfo.via_device); the registry
-    # resolves it to the internal via_device_id itself.
-    if gateway_id := device_data.get("bridge"):
-        info["via_device"] = (DOMAIN, gateway_id)
-
-    if firmware := device_data.get("firmware_revision"):
-        info["sw_version"] = str(firmware)
-    return info
-
-
-def build_home_fallback_device_info(
-    coordinator: MigoDataUpdateCoordinator,
-    home_id: str,
-) -> DeviceInfo:
-    """Build the last-resort DeviceInfo when no physical device is known."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, home_id)},
-        name=_home_name(coordinator, home_id),
-        manufacturer=MANUFACTURER,
-    )
-
-
-def register_dynamic_entities(
-    entry: MigoConfigEntry,
-    coordinator: MigoDataUpdateCoordinator,
-    async_add_entities: AddEntitiesCallback,
-    get_current_ids: Callable[[], Iterable[str]],
-    create_entities: Callable[[str], Sequence[Entity]],
-) -> None:
-    """Create entities now, and again whenever new ids appear in coordinator data.
-
-    Satisfies the "dynamic-devices" quality-scale rule: a room or device that
-    appears in a later coordinator refresh gets its entities created live,
-    without requiring a config entry reload.
-
-    Args:
-        entry: The config entry, used to unregister the listener on unload.
-        coordinator: The data update coordinator to watch for new ids.
-        async_add_entities: The platform's entity-registration callback.
-        get_current_ids: Returns the current set of known ids (e.g.
-            `coordinator.rooms` or `get_devices_by_type(coordinator, ...)`).
-        create_entities: Builds the entities for one newly-seen id. Called
-            exactly once per id the first time it is seen, not on every
-            refresh for ids already known. May return an empty sequence
-            (e.g. a sub-entity gated on data not yet present for that id).
-    """
-    known_ids: set[str] = set()
-
-    @callback
-    def _check_new() -> None:
-        new_ids = set(get_current_ids()) - known_ids
-        if not new_ids:
-            return
-        known_ids.update(new_ids)
-        new_entities = [entity for id_ in new_ids for entity in create_entities(id_)]
-        if new_entities:
-            async_add_entities(new_entities)
-
-    _check_new()
-    entry.async_on_unload(coordinator.async_add_listener(_check_new))
-
-
-class MigoApiControlMixin:
-    """Mixin providing API control functionality.
-
-    This mixin provides common functionality for entities that need to
-    call API methods and refresh the coordinator after changes.
-    """
-
-    _api: MigoApi
-    coordinator: MigoDataUpdateCoordinator
-
-    async def _call_api(
-        self,
-        api_method: Callable[..., Awaitable[Any]],
-        **kwargs: Any,
-    ) -> Any:
-        """Call an API method, translating failures into UI-visible errors.
-
-        Args:
-            api_method: The async API method to call.
-            **kwargs: Arguments to pass to the API method.
-
-        Raises:
-            HomeAssistantError: On any API failure, with a translated message.
-        """
-        try:
-            return await api_method(**kwargs)
-        except MigoAuthError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="auth_failed",
-                translation_placeholders={"error": str(err)},
-            ) from err
-        except MigoConnectionError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="cannot_connect",
-                translation_placeholders={"error": str(err)},
-            ) from err
-        except MigoApiError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="api_error",
-                translation_placeholders={"error": str(err)},
-            ) from err
-
-    async def _call_api_and_refresh(
-        self,
-        api_method: Callable[..., Awaitable[Any]],
-        **kwargs: Any,
-    ) -> None:
-        """Call an API method and refresh the coordinator.
-
-        Args:
-            api_method: The async API method to call.
-            **kwargs: Arguments to pass to the API method.
-        """
-        await self._call_api(api_method, **kwargs)
-        await self.coordinator.async_request_refresh()
 
 
 class MigoEntity(CoordinatorEntity["MigoDataUpdateCoordinator"]):
@@ -334,7 +131,7 @@ class MigoThermostatEntity(MigoDeviceEntity):
 
     Thermostat entities are associated with the physical thermostat device
     and include sensors like battery, RF strength, temperature offset.
-    The thermostat is connected via the gateway (via_device).
+    The thermostat is connected via the gateway (via_device_id).
     """
 
     @property

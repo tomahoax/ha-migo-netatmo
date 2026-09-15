@@ -116,8 +116,10 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self.consumption: dict[str, ConsumptionData] = {}
         # Optimistic cache for config values the API does not echo back after a
         # write. Keys are interpolated (f"heating_curve_{device_id}"), so they
-        # cannot be a Literal union; the value union below is exhaustive.
-        self._config_cache: dict[str, bool | int | float] = {}
+        # cannot be a Literal union; the value union below is exhaustive. str
+        # covers climate.py's hvac_mode/preset_mode (HVACMode/preset string
+        # values), which have no single numeric/bool representation.
+        self._config_cache: dict[str, bool | int | float | str] = {}
 
     @override
     async def _async_update_data(self) -> CoordinatorData:
@@ -527,7 +529,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """
         return self.consumption.get(device_id)
 
-    def set_cached_value(self, key: str, value: bool | int | float) -> None:
+    def set_cached_value(self, key: str, value: bool | int | float | str) -> None:
         """Store a value in the optimistic cache.
 
         Used for config values that the API doesn't return after modification.
@@ -538,7 +540,9 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         """
         self._config_cache[key] = value
 
-    def get_cached_value(self, key: str, default: bool | int | float | None = None) -> bool | int | float | None:
+    def get_cached_value(
+        self, key: str, default: bool | int | float | str | None = None
+    ) -> bool | int | float | str | None:
         """Get a value from the optimistic cache.
 
         Args:
@@ -549,3 +553,16 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             The cached value, or default if not found.
         """
         return self._config_cache.get(key, default)
+
+    def clear_cached_value(self, key: str) -> None:
+        """Remove a value from the optimistic cache.
+
+        Used after a successful write-and-refresh so API data regains
+        authority instead of the cached value shadowing it indefinitely
+        (unlike `homes`/`rooms`/`devices`, `_config_cache` is never reset
+        wholesale between refreshes).
+
+        Args:
+            key: Cache key to remove.
+        """
+        self._config_cache.pop(key, None)

@@ -20,7 +20,8 @@ import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.migo_netatmo.api import MigoApi, _log_payload, _raw_logging_enabled
+from custom_components.migo_netatmo.api import MigoApi
+from custom_components.migo_netatmo.api.transport import _log_payload, _raw_logging_enabled
 from custom_components.migo_netatmo.redact import REDACTED
 from tests.test_api import (
     _create_mock_response,

@@ -12,7 +12,7 @@ Welcome to the MiGo (Netatmo) integration documentation for Home Assistant.
 
 ## Development
 
-- [Contributing](development/contributing.md) - How to contribute to the project
+- [Contributing](../CONTRIBUTING.md) - How to contribute to the project
 - [Architecture](development/architecture.md) - Code structure and design patterns
 - [Testing](development/testing.md) - How to run and write tests
 - [Publishing](development/publishing.md) - Submitting to the HACS default store

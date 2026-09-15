@@ -42,6 +42,14 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
+          # The home-assistant/brands submission for this integration
+          # (home-assistant/brands#8958) was rejected on substance (wrong
+          # logo) and hasn't been resubmitted. HACS validates brand assets
+          # against that external repo, not against the self-hosted
+          # custom_components/migo_netatmo/brand/ folder (which is correct
+          # for the running app - see docs/development/publishing.md on the
+          # dev branch), so this ignore has to stay until a corrected PR
+          # merges there.
           ignore: brands
 
   validate-hassfest:

@@ -9,6 +9,8 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/tomahoax/ha-migo-netatmo/issues",
-  "requirements": [],
-  "version": "0.41.0"
+  "requirements": [
+    "aiohttp>=3.8.0"
+  ],
+  "version": "1.0.0-beta3"
 }

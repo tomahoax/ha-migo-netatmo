@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import create_autospec
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 
@@ -41,7 +41,9 @@ class TestMigoManualSetpointDurationNumber:
     @pytest.fixture
     def entity(self, mock_coordinator, api):
         """Create the entity under test."""
-        return MigoManualSetpointDurationNumber(mock_coordinator, "home_123", api)
+        entity = MigoManualSetpointDurationNumber(mock_coordinator, "home_123", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     def test_native_value_uses_cache_when_present(self, entity, mock_coordinator) -> None:
         """A cached value takes priority over API data."""
@@ -72,7 +74,9 @@ class TestMigoTemperatureOffsetNumber:
     @pytest.fixture
     def entity(self, mock_coordinator, api):
         """Create the entity under test."""
-        return MigoTemperatureOffsetNumber(mock_coordinator, "room_456", "home_123", api)
+        entity = MigoTemperatureOffsetNumber(mock_coordinator, "room_456", "home_123", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     def test_native_value_uses_cache_when_present(self, entity, mock_coordinator) -> None:
         """A cached value takes priority over API data."""
@@ -103,7 +107,9 @@ class TestMigoDHWTemperatureNumber:
     @pytest.fixture
     def entity(self, mock_coordinator, api):
         """Create the entity under test."""
-        return MigoDHWTemperatureNumber(mock_coordinator, "gateway_001", api)
+        entity = MigoDHWTemperatureNumber(mock_coordinator, "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     def test_native_value_uses_cache_when_present(self, entity, mock_coordinator) -> None:
         """A cached value takes priority over API data."""
@@ -136,7 +142,9 @@ class TestMigoHysteresisNumber:
     @pytest.fixture
     def entity(self, mock_coordinator, api):
         """Create the entity under test."""
-        return MigoHysteresisNumber(mock_coordinator, "home_123", "gateway_001", api)
+        entity = MigoHysteresisNumber(mock_coordinator, "home_123", "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     def test_native_value_uses_cache_when_present(self, entity, mock_coordinator) -> None:
         """A cached value takes priority over API data."""
@@ -167,7 +175,9 @@ class TestMigoHeatingCurveNumber:
     @pytest.fixture
     def entity(self, mock_coordinator, api):
         """Create the entity under test."""
-        return MigoHeatingCurveNumber(mock_coordinator, "home_123", "gateway_001", api)
+        entity = MigoHeatingCurveNumber(mock_coordinator, "home_123", "gateway_001", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     def test_native_value_uses_cache_when_present(self, entity, mock_coordinator) -> None:
         """A cached value takes priority over API data."""
@@ -190,3 +200,18 @@ class TestMigoHeatingCurveNumber:
         entity._api.set_heating_curve.assert_awaited_once_with(device_id="gateway_001", slope=1.7)
         mock_coordinator.set_cached_value.assert_called_once_with("heating_curve_gateway_001", 1.7)
         mock_coordinator.async_request_refresh.assert_awaited_once()
+
+
+def test_default_heating_curve_is_2_6() -> None:
+    """Pins the constant so a future edit doesn't silently drift again.
+
+    Reported live: the heating curve number entity's no-data fallback showed
+    1.5, not the 2.6 shown in the MiGo app. Root cause investigated via a
+    live debug-log capture: `heating_curve` is never present in homesdata/
+    homestatus/getconfigs, so there is no API-discoverable "true default"
+    at all - it's an installation-specific calibration value. The user
+    chose to just update the constant to match their own installation
+    (2.6); this pins that constant's current value, not that 2.6 is itself
+    "correct" in any universal sense.
+    """
+    assert DEFAULT_HEATING_CURVE == 2.6

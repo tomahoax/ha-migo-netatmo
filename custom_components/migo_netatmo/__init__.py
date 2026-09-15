@@ -14,8 +14,9 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import MigoApi, MigoApiError, MigoAuthError
-from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX, DOMAIN
+from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USER_PREFIX, DEVICE_TYPE_GATEWAY, DOMAIN
 from .coordinator import MigoDataUpdateCoordinator
+from .helpers import get_devices_by_type
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -24,8 +25,8 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
-    Platform.BUTTON,
     Platform.CLIMATE,
+    Platform.DATETIME,
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
@@ -69,6 +70,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = MigoData(api=api, coordinator=coordinator)
+
+    # Register each gateway device up front, before platforms are forwarded.
+    # Home Assistant forwards all platforms concurrently
+    # (async_forward_entry_setups), so without this a thermostat/room-owning
+    # entity's device_info (which links to its parent gateway via
+    # `via_device`, an identifiers tuple Home Assistant itself resolves to
+    # the registry's internal device) could run before any gateway-owning
+    # platform has registered the gateway device - `via_device` referencing
+    # a not-yet-existing device is logged (and, per its own deprecation
+    # notice, may eventually be rejected) rather than silently omitted, so
+    # this avoids that entirely rather than relying on it staying a soft
+    # failure. The gateway platform's own entities still register the full
+    # DeviceInfo (name, model, connections, ...) afterwards - the registry
+    # merges it into this same device, matched by identifiers.
+    device_registry = dr.async_get(hass)
+    for gateway_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, gateway_id)},
+        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

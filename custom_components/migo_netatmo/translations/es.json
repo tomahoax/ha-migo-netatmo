@@ -99,14 +99,12 @@
       },
       "ebus_error": {
         "name": "Error eBus"
-      }
-    },
-    "button": {
-      "refresh": {
-        "name": "Actualizar"
       },
-      "reset_heating_curve": {
-        "name": "Reiniciar curva de calefacción"
+      "away_mode": {
+        "name": "Modo ausente"
+      },
+      "dhw_schedule": {
+        "name": "ACS programada"
       }
     },
     "climate": {
@@ -115,12 +113,19 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
+              "normal": "Normal",
               "away": "Ausente",
               "frost_guard": "Antihielo",
+              "dhw_only": "Solo agua caliente",
               "boost": "Boost"
             }
           }
         }
+      }
+    },
+    "datetime": {
+      "away_until": {
+        "name": "Ausente hasta"
       }
     },
     "number": {
@@ -164,6 +169,14 @@
       "energy_gas_hot_water": {
         "name": "Gas para agua caliente"
       },
+      "boiler_mode": {
+        "name": "Modo caldera",
+        "state": {
+          "normal": "Normal",
+          "dhw_only": "Solo agua caliente",
+          "frost_guard": "Antihielo"
+        }
+      },
       "gateway_firmware": {
         "name": "Firmware gateway"
       },
@@ -192,6 +205,12 @@
       },
       "anticipation": {
         "name": "Anticipación calefacción"
+      },
+      "away_mode": {
+        "name": "Modo ausente"
+      },
+      "dhw_always_on": {
+        "name": "ACS siempre activada"
       }
     }
   }

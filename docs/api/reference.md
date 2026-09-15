@@ -29,12 +29,12 @@ These endpoints are used by the MiGO app but are **not documented** in the offic
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/api/sethomedata` | Anticipation, manual setpoint duration |
+| `/api/sethomedata` | Anticipation, manual setpoint duration, Away mode with an optional return time (`therm_mode`/`therm_mode_endtime`) |
 | `/api/changeheatingcurve` | Heating curve (slope) adjustment |
 | `/api/setheatingsystem` | Heating type configuration |
 | `/api/changeheatingalgo` | Hysteresis threshold |
 | `/api/getmeasure` | Historical data and boiler consumption |
-| `/syncapi/v1/setconfigs` | DHW temperature, temperature offset |
+| `/syncapi/v1/setconfigs` | DHW temperature, temperature offset, DHW always-on |
 
 ### Why `/api/setstate` Instead of `/api/setroomthermpoint`?
 
@@ -107,12 +107,13 @@ Retrieves the static configuration of homes (structure, schedules, modules).
 | `id` | Unique home ID |
 | `name` | Home name |
 | `therm_mode` | Current mode: `schedule`, `away`, `hg` |
+| `therm_mode_endtime` | Unix timestamp when `therm_mode` (while `"away"`) automatically reverts. **Not documented by Netatmo**, confirmed via a live debug-log capture - matches the return time shown in the MiGo app when leaving with "indicate a return date/time". Set via `sethomedata` (see below); absent when no return time is set. |
 | `anticipation` | Heating anticipation enabled |
 | `therm_setpoint_default_duration` | Default duration for manual setpoints (minutes) |
 | `therm_heating_priority` | Heating priority: `eco`, `comfort` |
 | `outdoor_temperature_source` | Outdoor temperature source |
 | `capabilities` | Available features (e.g., `peak_and_off_peak_electricity_times`) |
-| `linked_schedules` | Links between therm and event schedules |
+| `linked_schedules` | Links between `therm` and `event` schedules. **Shape not documented by Netatmo** and not directly observed - the integration parses it defensively (mapping, list of pairs, or list of `{key: id, ...}` dicts) and falls back to picking the `event` schedule independently marked `selected` if it can't be resolved. See `helpers.get_event_schedule()`. |
 
 #### Modules (NAVaillant - Gateway)
 | Field | Description |
@@ -172,6 +173,45 @@ Retrieves the static configuration of homes (structure, schedules, modules).
 
 ---
 
+### Event (DHW) schedules
+
+Every home has two parallel families of schedules with the same names, zone
+ids and timetables, distinguished by `type`: `therm` (room temperatures,
+`zones[].rooms`) and `event` (DHW on/off per zone, `zones[].modules[].dhw_enabled`).
+Both a `therm` and an `event` schedule are typically marked `selected: true`
+at the same time - they are meant to be read together, not as alternatives.
+
+**Resolving the DHW state for "right now"** (used by
+`binary_sensor.migo_{home}_dhw_schedule`, see [entities](../entities.md#binary-sensors)):
+
+1. Pick the active `event` schedule: prefer the one paired to the selected
+   `therm` schedule via `linked_schedules` (shape not documented by Netatmo,
+   parsed defensively - see `helpers.get_event_schedule()`), falling back to
+   the `event` schedule independently marked `selected`.
+2. Compute minutes elapsed since Monday 00:00 in the local timezone
+   (`helpers.current_week_minutes()`).
+3. In the schedule's `timetable` (not guaranteed sorted - sort by `m_offset`
+   first), find the last entry whose `m_offset` is not in the future. If none
+   qualifies (e.g. early Monday morning, before the week's first slot), wrap
+   around to the timetable's last entry (`helpers.resolve_timetable_zone()`).
+4. Look up that `zone_id` in `zones`, then read `dhw_enabled` from the module
+   entry matching the gateway's `id` (falling back to the zone's single
+   module if there's exactly one, since the module entry's `id` field is not
+   always present in practice).
+5. Force the result to `off` while the home's `therm_mode` is `"away"`: the
+   Away temperature slot replaces the current schedule slot with hot water
+   production disabled, so a plain timetable lookup would otherwise be
+   misleading during Away.
+
+**A caveat found in community testing:** the legacy `getthermostatsdata`
+endpoint (see [Known limitations](#known-limitations-legacy-getthermostatsdata-endpoint)
+below) also carries a per-zone DHW flag, `hw`, directly in its own schedule
+data - but it is not kept in sync with the app once `event` schedules exist;
+only `homesdata`'s `dhw_enabled` matches what the app actually shows. Do not
+use `hw` for this.
+
+---
+
 ### POST `/api/homestatus` or `/syncapi/v1/homestatus`
 Retrieves real-time data (temperatures, states).
 
@@ -206,7 +246,7 @@ Retrieves real-time data (temperatures, states).
 | `dhw_enabled` | bool | DHW enabled |
 | `dhw_setpoint_endtime` | int | DHW boost end time (timestamp) |
 | `outdoor_temperature` | float | Outdoor temperature |
-| `simple_heating_algo_deadband` | int | Hysteresis deadband (see `/api/changeheatingalgo`) |
+| `simple_heating_algo_deadband` | int | Hysteresis deadband (see `/api/changeheatingalgo`) - documented, but **not seen in a live capture**; treat as unconfirmed |
 | `sequence_id` | int | Sequence ID |
 
 #### NAThermVaillant (Thermostat)
@@ -264,6 +304,28 @@ Changes the global home mode (used by the app for mode changes).
 | `schedule` | Schedule mode (Auto) |
 | `away` | Away mode |
 | `hg` | Frost guard mode |
+
+**`temperature_control_mode`:** always `"heating"` except when entering the
+"Eau chaude seulement" (DHW only) boiler quick-action, which sets it to
+`"cooling"` - confirmed via a live capture of the MiGo app's own action.
+Despite the name, this boiler line has no air conditioning; `"cooling"` is
+just the flag DHW-only happens to run under, not a literal cooling mode. An
+earlier investigation found the API rejecting a `therm_mode` change with a
+403 ("Cannot change therm_mode while being in temperature_control_mode
+cooling") and treated a leftover `"cooling"` value as a broken/unreachable
+state to always override - it isn't; it's real, reachable state this
+integration's own DHW-only write now sets deliberately.
+
+**Important: `temperature_control_mode: "cooling"` and `therm_mode` cannot
+be sent together in the same request.** Confirmed live: pairing them (as an
+early DHW-only fix attempt did, reusing the same request shape every other
+mode change uses) gets rejected with the identical 403 above, regardless of
+whether `therm_mode`'s value actually changes - the request either omits
+`therm_mode`/`therm_mode_endtime` entirely (`temperature_control_mode:
+"cooling"` alone, see `MigoApi.set_temperature_control_mode`), or it sends
+`temperature_control_mode: "heating"` alongside a `therm_mode` change (see
+`MigoApi.set_home_therm_mode`, used by every mode change except DHW-only) -
+never both a `therm_mode` and `"cooling"` in one call.
 
 ---
 
@@ -439,7 +501,7 @@ Sets the heating curve (slope).
 **Notes:**
 - `slope` value is 10x the displayed value (e.g., 14 = 1.4)
 - Range: 5-35 (0.5-3.5 in UI)
-- Default: 14 (1.4)
+- Default: 14 (1.4) as captured on the test installation this endpoint was traced from - **not a universal factory default**. This is an installation-specific calibration value (heating type, radiator sizing, ...) with no discoverable "true default": the API never echoes it back (see `docs/entities.md`'s note on `number.migo_{home}_heating_curve`), and a second real installation was confirmed at `2.6` instead during later development. `const.DEFAULT_HEATING_CURVE` (the heating curve number entity's no-data fallback) is a plain constant, not derived from this endpoint in any way - edit it to match your own installation
 
 ---
 
@@ -475,8 +537,15 @@ Sets the heating algorithm hysteresis threshold.
   - 1.6°C → `high_deadband = 15` (default)
   - 1.8°C → `high_deadband = 17`
   - 2.0°C → `high_deadband = 19`
-- The current value is returned in homestatus as `simple_heating_algo_deadband` on the gateway module
-- To convert back: hysteresis = (`simple_heating_algo_deadband` + 1) / 10
+- Documented (not independently confirmed) to be returned in homestatus as
+  `simple_heating_algo_deadband` on the gateway module - **not present in a
+  live homestatus capture taken during later development**, reported
+  alongside the hysteresis number entity's read side not reflecting a
+  change made from the MiGo app. If a future capture confirms where the
+  live value actually lives (homestatus, getconfigs, or elsewhere), update
+  `number.py`'s `MigoHysteresisNumber._native_value_fallback` accordingly -
+  until then, treat this endpoint and entity as write-only in practice
+- To convert back, if this field is ever found: hysteresis = (`simple_heating_algo_deadband` + 1) / 10
 
 ---
 
@@ -538,9 +607,23 @@ Sets module or room configuration.
 }
 ```
 
+**Request - Set DHW Always On:**
+```json
+{
+  "home_id": "<home_id>",
+  "home": {
+    "modules": [{
+      "id": "<gateway_module_id>",
+      "dhw_always_on": true
+    }]
+  }
+}
+```
+
 **Request - Set Temperature Offset:**
 ```json
 {
+  "home_id": "<home_id>",
   "home": {
     "id": "<home_id>",
     "rooms": [{
@@ -554,9 +637,23 @@ Sets module or room configuration.
 **Notes for DHW Temperature:**
 - Range: 45-65°C
 
+**Notes for DHW Always On:**
+- `dhw_always_on` is **not documented by Netatmo**, confirmed via a live
+  debug-log capture of `/syncapi/v1/getconfigs`'s response - it sits on the
+  same module entry as `dhw_setpoint_temperature`. Matches the MiGo app's
+  "Toujours activée" toggle: forces the boiler to never suspend DHW heating,
+  overriding the active schedule's per-slot production setting.
+
 **Notes for Temperature Offset:**
 - Range: -5.0 to +5.0°C
 - Step: 0.5°C
+- **`home_id` at the request root**, matching the DHW calls above - added
+  after a live report that an earlier build (`home.id` only, no root-level
+  `home_id`) neither set nor read back the real value: the request looked
+  structurally valid and got a 200, but the offset never actually took
+  effect server-side. Not independently confirmed by a fresh mitmproxy
+  capture the way the DHW calls were - if this still doesn't take effect,
+  that capture is the next step
 
 ---
 
@@ -680,7 +777,16 @@ Registers the context for push notifications.
 ---
 
 ### POST `/syncapi/v1/getconfigs`
-Retrieves synchronization configurations.
+Retrieves synchronization configurations, including per-module DHW settings
+not present in `homesdata`/`homestatus`.
+
+**Response - Key Data (per module, NAVaillant/Gateway):**
+| Field | Description |
+|-------|-------------|
+| `dhw_setpoint_temperature` | Hot water temperature setpoint (°C) |
+| `dhw_temperature_min` | Minimum allowed DHW setpoint (°C) |
+| `dhw_temperature_max` | Maximum allowed DHW setpoint (°C) |
+| `dhw_always_on` | Whether DHW production always stays on, overriding the schedule. **Not documented by Netatmo**, confirmed via a live debug-log capture - matches the MiGo app's "Toujours activée" toggle. |
 
 ---
 
@@ -769,35 +875,6 @@ integration requests `1day`.
 
 ---
 
-## Thresholds and Constants
-
-### WiFi Thresholds (NAVaillant)
-| Level | RSSI Threshold |
-|-------|----------------|
-| Excellent | > 56 |
-| Good | 56-71 |
-| Fair | 71-86 |
-| Poor | < 86 |
-
-### RF Radio Thresholds
-| Level | RSSI Threshold |
-|-------|----------------|
-| Excellent | < 60 |
-| Good | 60-70 |
-| Fair | 70-80 |
-| Poor | > 90 |
-
-### Thermostat Battery Thresholds
-| State | Level (mV) | Percentage |
-|-------|------------|------------|
-| Full | > 4100 | 100% |
-| High | 3600-4100 | 75% |
-| Medium | 3200-3600 | 50% |
-| Low | 3000-3200 | 25% |
-| Critical | < 3000 | 0% |
-
----
-
 ## Error Codes
 
 | Code | Name | Description |
@@ -815,6 +892,39 @@ integration requests `1day`.
 
 ---
 
+## Known Limitations: Legacy `getthermostatsdata` Endpoint
+
+Community forum testing (see project CHANGELOG for the thread reference)
+found that `POST https://api.netatmo.com/api/getthermostatsdata` - the
+legacy endpoint used by the older `vaillant-vsmart` integration, on a
+*different host* than everything else in this document (`api.netatmo.com`
+instead of `app.netatmo.net`) - accepts the same bearer token obtained via
+this integration's OAuth flow, and returns fields not present in
+`homesdata`/`homestatus`:
+
+| Field | Description |
+|-------|-------------|
+| `system_mode` | The boiler quick-action mode as a single value: `winter` / `summer` / `frostguard` |
+| `setpoint_away.setpoint_activate` | Boolean Away flag, radio-synced with the thermostat (can lag `homesdata`'s `therm_mode` by a few minutes right after a change) |
+| `setpoint_hwb` | DHW boost state |
+| `dhw`, `dhw_min`, `dhw_max` | DHW temperature and its configured range |
+
+**This integration does not call this endpoint.** `therm_mode` (home-level,
+already returned by `homesdata` at no extra API cost) and
+`therm_setpoint_mode` (room-level) are sufficient to derive the boiler mode
+and Away state used by `sensor.migo_{home}_boiler_mode`,
+`binary_sensor.migo_{home}_away_mode` and the climate preset - see
+`helpers.derive_boiler_mode()`. Calling a second, undocumented Netatmo host
+with a token minted for a different one was judged to need its own
+verification (real traffic capture, response envelope shape - this endpoint
+returns `body.devices[]` rather than `body.homes[]`) before depending on it.
+A throwaway probe script for that verification exists in this project's
+development history; revisit `dhw_min`/`dhw_max` (DHW temperature range) if
+that verification is done, since it is the one piece of data with no
+existing equivalent path.
+
+---
+
 ## Available Webhooks
 
 | Event | Description |
@@ -828,62 +938,3 @@ integration requests `1day`.
 | `refill_water` | Refill water |
 | `no_connect_24h` | No connection for 24h |
 | `state_changed` | State changed |
-
----
-
-## Identified Features for Home Assistant
-
-### Climate Entities (per room)
-- [x] Current temperature
-- [x] Setpoint temperature
-- [x] HVAC mode (Auto/Heat/Off)
-- [x] Preset modes (Away, Hot water only, Frost Guard)
-
-### Sensor Entities
-- [x] Measured temperature
-- [x] Thermostat battery (%)
-- [x] Thermostat RF signal
-- [x] Gateway WiFi signal
-- [x] Outdoor temperature
-- [x] Gateway firmware version
-- [x] Thermostat firmware version
-- [x] Room humidity
-- [x] Daily boiler runtime (Energy Dashboard compatible)
-
-### Binary Sensor Entities
-- [x] Boiler running
-- [x] Thermostat reachable
-- [x] Boiler error
-- [x] eBus error
-- [x] Anticipating (heating anticipation in progress)
-
-### Switch Entities
-- [x] Domestic Hot Water (DHW)
-- [x] Heating anticipation
-
-### Number Entities
-- [x] Heating curve (slope)
-- [x] DHW temperature
-- [x] Temperature offset
-- [x] Manual setpoint default duration
-- [x] Hysteresis threshold
-
-### Select Entities
-- [x] Active schedule
-- [x] Thermostat mode (schedule, away, hg)
-- [x] Heating type (radiator, convector, floor_heating)
-
-### Button Entities
-- [x] Refresh data
-
-### Services
-- [ ] `migo.set_schedule` - Change schedule
-- [ ] `migo.set_zone_temperature` - Modify zone temperature
-- [ ] `migo.boost_dhw` - Force DHW
-
-### Diagnostic Information
-- [x] Gateway firmware version
-- [x] Thermostat firmware version
-- [x] OEM serial number
-- [x] MAC address
-- [x] Hardware version

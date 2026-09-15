@@ -50,7 +50,7 @@ This guide helps you resolve common issues with the MiGo integration.
 1. Check your internet connection
 2. Verify the MiGO app can connect
 3. Check logs for API errors
-4. Use the Refresh button to force an update
+4. Use Home Assistant's **Update** action (`homeassistant.update_entity`) to force an update
 
 ### Temperature not updating
 
@@ -58,7 +58,7 @@ This guide helps you resolve common issues with the MiGo integration.
 
 **Solutions**:
 1. Data refreshes every 5 minutes by default
-2. Use the Refresh button for immediate update
+2. Use Home Assistant's **Update** action (`homeassistant.update_entity`) for an immediate update
 3. Check if the thermostat batteries are low
 4. Verify RF signal strength is adequate
 

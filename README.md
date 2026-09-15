@@ -74,7 +74,8 @@ This integration creates **two separate devices** in Home Assistant:
   - **Off** (Frost guard)
 - Preset modes:
   - **Away** - Away mode
-  - **Frost guard** - Minimum temperature protection
+  - **Frost guard** - Minimum temperature protection (real boiler standby)
+  - **Hot water only** - MiGo's "DHW only" quick action
   - **Boost** - Forces maximum temperature (30°C) for 1 hour
 
 ### Sensors
@@ -83,6 +84,7 @@ This integration creates **two separate devices** in Home Assistant:
 - Outdoor temperature
 - WiFi signal strength *(disabled by default)*
 - Gateway firmware version *(disabled by default)*
+- **Boiler mode** - Normal / DHW only / Frost guard quick-action mode (derived)
 
 #### Thermostat Sensors
 - Temperature sensor per room
@@ -111,6 +113,12 @@ The four energy sensors are `device_class: energy` in kWh and go directly into t
 
 - **DHW boost** (hot water boost) - Gateway
 - **Heating anticipation** (enable/disable) - Home setting
+- **Away mode** (enable/disable) - Gateway, writes the same home-level flag as the climate "Away" preset
+- **DHW always on** - Gateway, matches the MiGo app's "Toujours activée" DHW setting: forces the boiler to never suspend hot water heating, overriding the active schedule's per-slot production setting
+
+### Date/Time
+
+- **Away until** - set a return date/time when leaving, matching the MiGo app's own option. Activates Away and sets the return time in one action; separate from the plain Away switch above, which stays indefinite. Reads back from the API, so it survives a Home Assistant restart and reflects a return time set directly in the MiGo app. Toggling the Away switch (either direction) clears it back to empty (server-side too) - Home Assistant's date/time picker has no clear option of its own
 
 ### Number Controls (Configuration)
 
@@ -129,6 +137,8 @@ The four energy sensors are `device_class: energy` in kWh and go directly into t
 #### Gateway Binary Sensors
 - eBus error
 - Boiler error
+- **Away mode** (read-only)
+- **Scheduled DHW** - hot water state for the currently active schedule time slot
 
 #### Thermostat Binary Sensors
 - Boiler status (running/idle)
@@ -137,10 +147,6 @@ The four energy sensors are `device_class: energy` in kWh and go directly into t
 ### Select
 
 - Active schedule
-
-### Button
-
-- Manual refresh
 
 ## Configuration Options
 
@@ -176,7 +182,7 @@ This integration is **cloud polling**: it periodically calls the Netatmo API use
 
 The default interval is **5 minutes (300 seconds)**, configurable between 60 and 3600 seconds (see [Configuration Options](#configuration-options)). A shorter interval gives more responsive updates at the cost of more API calls; a longer interval reduces load on the (unofficial, reverse-engineered) API.
 
-Between scheduled refreshes, the **Manual refresh** button entity forces an immediate update - useful right after changing something in the MiGo app itself. If a refresh fails (network issue, expired token), affected entities go `unavailable` and the failure is logged once; they recover automatically on the next successful refresh.
+Between scheduled refreshes, Home Assistant's built-in **Update** action (`homeassistant.update_entity`, also available from any migo_netatmo entity's more-info dialog) forces an immediate update - useful right after changing something in the MiGo app itself. There is no dedicated refresh button entity: every entity shares one coordinator, so the built-in action already does the same thing for free. If a refresh fails (network issue, expired token), affected entities go `unavailable` and the failure is logged once; they recover automatically on the next successful refresh.
 
 ## Installation
 
@@ -255,7 +261,7 @@ Leave these empty to use the default MiGO app credentials.
 Development happens on the `dev` branch, and pre-releases are published from it so
 you can try changes before they reach a stable version. HACS cannot install a git
 branch directly, only published versions, so `dev` reaches you as a pre-release tag
-such as `v0.42.0-beta.1`.
+such as `v1.0.0-beta3`.
 
 Pre-releases are hidden by default, so nothing changes unless you opt in.
 
@@ -506,11 +512,15 @@ This integration uses the Netatmo API (`app.netatmo.net`) which is the backend f
 | `/api/homesdata` | Home structure and configuration |
 | `/api/homestatus` | Real-time status |
 | `/api/getmeasure` | Historical data and consumption |
+| `/syncapi/v1/getconfigs` | DHW temperature, hysteresis, heating curve, DHW always-on (config values not in homesdata/homestatus) |
 | `/api/setstate` | Control room temperature and DHW |
 | `/api/setthermmode` | Set global mode |
-| `/api/sethomedata` | Home settings (anticipation, duration) |
-| `/syncapi/v1/setconfigs` | DHW temperature, offsets |
+| `/api/sethomedata` | Home settings (anticipation, duration, Away with return time) |
+| `/api/switchhomeschedule` | Switch active schedule |
+| `/syncapi/v1/setconfigs` | DHW temperature, offsets, DHW always-on |
 | `/api/changeheatingalgo` | Hysteresis settings |
+| `/api/changeheatingcurve` | Heating curve (slope) |
+| `/api/setheatingsystem` | Heating system type (no entity exposes this yet) |
 
 ## Contributing
 
