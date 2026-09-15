@@ -1,9 +1,18 @@
 # MiGo (Netatmo) - Integration for Home Assistant
 
-[![GitHub Release](https://img.shields.io/github/v/release/tomahoax/ha-migo-netatmo?include_prereleases&sort=semver)](https://github.com/tomahoax/ha-migo-netatmo/releases)
 [![License](https://img.shields.io/github/license/tomahoax/ha-migo-netatmo.svg)](https://github.com/tomahoax/ha-migo-netatmo/blob/main/LICENSE)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![codecov](https://codecov.io/gh/tomahoax/ha-migo-netatmo/branch/dev/graph/badge.svg)](https://codecov.io/gh/tomahoax/ha-migo-netatmo/tree/dev)
+
+[![Stable](https://img.shields.io/github/v/release/tomahoax/ha-migo-netatmo?label=Stable&color=blue)](https://github.com/tomahoax/ha-migo-netatmo/releases/latest)
+[![Stable date](https://img.shields.io/github/release-date/tomahoax/ha-migo-netatmo?label=Stable&color=yellowgreen)](https://github.com/tomahoax/ha-migo-netatmo/releases/latest)
+[![Beta](https://img.shields.io/github/v/release/tomahoax/ha-migo-netatmo?include_prereleases&sort=semver&label=Beta&color=orange)](https://github.com/tomahoax/ha-migo-netatmo/releases)
+[![Beta date](https://img.shields.io/github/release-date-pre/tomahoax/ha-migo-netatmo?label=Beta&color=yellowgreen)](https://github.com/tomahoax/ha-migo-netatmo/releases)
+[![Open Bugs](https://img.shields.io/github/issues/tomahoax/ha-migo-netatmo/bug?label=Open%20Bugs&color=blue)](https://github.com/tomahoax/ha-migo-netatmo/issues?q=is%3Aissue+is%3Aopen+label%3Abug)
+[![Pull requests](https://img.shields.io/github/issues-pr/tomahoax/ha-migo-netatmo?label=pull%20requests&color=yellow)](https://github.com/tomahoax/ha-migo-netatmo/pulls)
+
+[![Validate](https://github.com/tomahoax/ha-migo-netatmo/actions/workflows/validate.yaml/badge.svg)](https://github.com/tomahoax/ha-migo-netatmo/actions/workflows/validate.yaml)
+[![Release](https://github.com/tomahoax/ha-migo-netatmo/actions/workflows/release.yaml/badge.svg)](https://github.com/tomahoax/ha-migo-netatmo/actions/workflows/release.yaml)
 
 Home Assistant integration for **Saunier Duval** thermostats controlled via the **MiGO** app (Netatmo API).
 
