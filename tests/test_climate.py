@@ -44,7 +44,12 @@ class TestMigoClimate:
         api = create_autospec(MigoApi, instance=True)
         api.set_temperature.return_value = {"status": "ok"}
         api.set_mode.return_value = {"status": "ok"}
-        return MigoClimate(mock_coordinator, "room_456", api)
+        api.set_room_state.return_value = {"status": "ok"}
+        api.set_therm_mode.return_value = {"status": "ok"}
+        api.set_home_therm_mode.return_value = {"status": "ok"}
+        entity = MigoClimate(mock_coordinator, "room_456", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     def test_current_temperature(self, climate):
         """Test current temperature property."""
@@ -163,6 +168,33 @@ class TestMigoClimate:
         assert call_kwargs["mode"] == MODE_SCHEDULE
 
     @pytest.mark.asyncio
+    async def test_set_hvac_mode_auto_clears_stuck_room_level_hg(self, climate, mock_coordinator):
+        """Auto clears a leftover room-level "hg" left by a previous Off/DHW-only selection.
+
+        Regression guard: set_mode(mode="schedule") only reaches the
+        home-level setthermmode endpoint (schedule/away are global modes),
+        never this room's own therm_setpoint_mode - and hvac_mode's own
+        derivation checks the room-level mode before the home-level one, so
+        a stuck "hg" kept hvac_mode reporting Off no matter how many times
+        Auto was selected. Reported live and confirmed against a debug-log
+        capture: therm_setpoint_mode stayed "hg" through repeated Auto
+        clicks, only clearing once a room-level (Heat) write was tried.
+        """
+        mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_FROST_GUARD
+
+        await climate.async_set_hvac_mode(HVACMode.AUTO)
+
+        climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
+        climate._api.set_mode.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_SCHEDULE)
+
+    @pytest.mark.asyncio
+    async def test_set_hvac_mode_auto_does_not_clear_room_when_not_overridden(self, climate):
+        """No extra call when the room isn't in a leftover override to begin with."""
+        await climate.async_set_hvac_mode(HVACMode.AUTO)
+
+        climate._api.set_room_state.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_set_hvac_mode_off(self, climate):
         """Test setting HVAC mode to off uses set_mode with frost guard."""
         await climate.async_set_hvac_mode(HVACMode.OFF)
@@ -198,6 +230,25 @@ class TestMigoClimate:
         await climate.async_set_preset_mode(PRESET_FROST_GUARD)
 
         climate._api.set_mode.assert_not_called()
+        climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
+        climate._api.set_room_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_preset_mode_frost_guard_clears_stuck_room_level_manual(self, climate, mock_coordinator):
+        """Frost guard clears a leftover room-level Manual/Boost override.
+
+        Regression guard: set_therm_mode only reaches the home-level
+        setthermmode endpoint, and preset_mode's own derivation checks a
+        room-level Manual/Boost override before the home-level mode - so a
+        leftover Manual/Boost would otherwise keep preset_mode stuck
+        reporting Boost/None no matter what was selected here. Same class
+        of bug as async_set_hvac_mode's Auto branch.
+        """
+        mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_MANUAL
+
+        await climate.async_set_preset_mode(PRESET_FROST_GUARD)
+
+        climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
         climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
 
     @pytest.mark.asyncio
@@ -367,7 +418,9 @@ class TestClimateErrorSurfacing:
         api = create_autospec(MigoApi, instance=True)
         api.set_temperature.return_value = {"status": "ok"}
         api.set_mode.return_value = {"status": "ok"}
-        return MigoClimate(mock_coordinator, "room_456", api)
+        entity = MigoClimate(mock_coordinator, "room_456", api)
+        entity.async_write_ha_state = MagicMock()
+        return entity
 
     @pytest.mark.asyncio
     async def test_api_error_raises_home_assistant_error(self, climate):

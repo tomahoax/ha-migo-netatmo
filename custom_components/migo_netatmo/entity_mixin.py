@@ -140,6 +140,15 @@ class MigoApiControlMixin:
             on_optimistic: Optional callback run right after the optimistic
                 write above, before the API call.
             **kwargs: Arguments to pass to the API method.
+
+        Raises:
+            HomeAssistantError: On any API failure, with a translated message
+                (via `_call_api` - this used to call `api_method` directly,
+                which skipped that translation and let a raw MigoApiError/
+                MigoAuthError/MigoConnectionError escape to Home Assistant
+                instead of the user-facing message every other write path
+                gives; caught by climate.py's error-surfacing tests once it
+                started using this helper too).
         """
         previous = self.coordinator.get_cached_value(cache_key)
         self.coordinator.set_cached_value(cache_key, optimistic_value)
@@ -148,7 +157,7 @@ class MigoApiControlMixin:
             on_optimistic()
 
         try:
-            await api_method(**kwargs)
+            await self._call_api(api_method, **kwargs)
         except Exception:
             if previous is None:
                 self.coordinator.clear_cached_value(cache_key)

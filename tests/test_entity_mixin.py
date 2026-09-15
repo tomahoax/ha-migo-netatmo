@@ -11,7 +11,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.migo_netatmo.api import MigoApiError
 from custom_components.migo_netatmo.entity_mixin import MigoApiControlMixin
 
 
@@ -130,4 +132,33 @@ class TestCallApiOptimistically:
 
         coordinator.clear_cached_value.assert_called_once_with("k")
         assert coordinator.get_cached_value("k") is None
+        coordinator.async_request_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_api_error_is_translated_to_home_assistant_error(self, coordinator):
+        """A MigoApiError surfaces as a translated HomeAssistantError, not raw.
+
+        Regression guard: this used to call `api_method` directly instead
+        of going through `_call_api`, which skipped `_call_api`'s
+        MigoApiError/MigoAuthError/MigoConnectionError -> HomeAssistantError
+        translation entirely - every entity using this helper (all number.py
+        and switch.py writes, and climate.py once it adopted it) would have
+        let a raw, untranslated API exception escape to Home Assistant
+        instead of the user-facing message every other write path gives.
+        Caught by climate.py's own error-surfacing tests once it started
+        using this helper.
+        """
+        entity = _FakeEntity(coordinator)
+
+        async def failing_api(**kwargs):
+            raise MigoApiError("boom")
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await entity._call_api_optimistically(
+                failing_api,
+                cache_key="k",
+                optimistic_value="new_value",
+            )
+
+        assert exc_info.value.translation_key == "api_error"
         coordinator.async_request_refresh.assert_not_called()
