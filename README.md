@@ -1,9 +1,9 @@
 # MiGo (Netatmo) - Integration for Home Assistant
 
-[![GitHub Release](https://img.shields.io/github/release/tomahoax/ha-migo-netatmo.svg)](https://github.com/tomahoax/ha-migo-netatmo/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/tomahoax/ha-migo-netatmo?include_prereleases&sort=semver)](https://github.com/tomahoax/ha-migo-netatmo/releases)
 [![License](https://img.shields.io/github/license/tomahoax/ha-migo-netatmo.svg)](https://github.com/tomahoax/ha-migo-netatmo/blob/main/LICENSE)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![codecov](https://codecov.io/gh/tomahoax/ha-migo-netatmo/graph/badge.svg)](https://codecov.io/gh/tomahoax/ha-migo-netatmo)
+[![codecov](https://codecov.io/gh/tomahoax/ha-migo-netatmo/branch/dev/graph/badge.svg)](https://codecov.io/gh/tomahoax/ha-migo-netatmo/tree/dev)
 
 Home Assistant integration for **Saunier Duval** thermostats controlled via the **MiGO** app (Netatmo API).
 
