@@ -489,6 +489,7 @@ class MigoBoilerModeSensor(MigoGatewayEntity, SensorEntity):
         self._attr_unique_id = generate_unique_id("boiler_mode", device_id)
 
     @property
+    @override
     def native_value(self) -> str | None:
         """Return the current boiler mode."""
         home_id = self._device_data.get("home_id")

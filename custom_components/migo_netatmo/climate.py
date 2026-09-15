@@ -204,7 +204,10 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         """
         cached = self.coordinator.get_cached_value(self._hvac_mode_cache_key)
         if cached is not None:
-            return HVACMode(cached)
+            # Always a str at runtime: this key is only ever written here
+            # with hvac_mode.value. get_cached_value's own return type is
+            # the union of everything any cache key can hold.
+            return HVACMode(str(cached))
 
         room_mode = self._room_data.get("therm_setpoint_mode", MODE_SCHEDULE)
 

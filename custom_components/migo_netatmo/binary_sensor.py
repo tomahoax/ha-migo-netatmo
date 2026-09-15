@@ -214,6 +214,7 @@ class MigoAwayModeBinarySensor(MigoGatewayEntity, BinarySensorEntity):
         self._attr_unique_id = generate_unique_id("away_mode", device_id)
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if away mode is active."""
         return is_home_away(self.coordinator, self._device_id, self._device_data)
@@ -233,7 +234,7 @@ def _zone_dhw_module(zone: dict[str, Any], device_id: str) -> dict[str, Any] | N
     Returns:
         The matching module dict, or None if it cannot be resolved.
     """
-    modules = zone.get("modules", [])
+    modules: list[dict[str, Any]] = zone.get("modules", [])
     for module in modules:
         if module.get("id") == device_id:
             return module
@@ -276,6 +277,7 @@ class MigoDHWScheduleBinarySensor(MigoGatewayEntity, BinarySensorEntity):
         self._resolved_cache: dict[str, Any] | None = None
 
     @callback
+    @override
     def _handle_coordinator_update(self) -> None:
         """Invalidate the cached resolution before the base class re-renders state."""
         self._resolved_cache = None
@@ -335,11 +337,13 @@ class MigoDHWScheduleBinarySensor(MigoGatewayEntity, BinarySensorEntity):
         return self._resolved_cache
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if scheduled DHW is enabled for the active time slot."""
         return self._resolve().get("enabled")
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return debug attributes: which schedule/zone was resolved."""
         resolved = dict(self._resolve())

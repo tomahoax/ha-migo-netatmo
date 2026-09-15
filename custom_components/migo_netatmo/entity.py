@@ -9,7 +9,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DEVICE_TYPE_THERMOSTAT
 from .entity_device_info import (
-    _entity_config_entry_id,
     build_gateway_device_info,
     build_home_fallback_device_info,
     build_thermostat_device_info,
@@ -71,13 +70,7 @@ class MigoRoomEntity(MigoEntity):
         home_id = self._room_data.get("home_id", "")
 
         if thermostat_id := get_thermostat_for_room(self.coordinator, self._room_id):
-            return build_thermostat_device_info(
-                self.coordinator,
-                thermostat_id,
-                home_id,
-                hass=self.hass,
-                config_entry_id=_entity_config_entry_id(self),
-            )
+            return build_thermostat_device_info(self.coordinator, thermostat_id, home_id)
 
         # Fallback: use gateway device if no thermostat found
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, home_id):
@@ -145,13 +138,7 @@ class MigoThermostatEntity(MigoDeviceEntity):
     @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the thermostat."""
-        return build_thermostat_device_info(
-            self.coordinator,
-            self._device_id,
-            self._home_id,
-            hass=self.hass,
-            config_entry_id=_entity_config_entry_id(self),
-        )
+        return build_thermostat_device_info(self.coordinator, self._device_id, self._home_id)
 
 
 class MigoGatewayControlEntity(MigoGatewayEntity, MigoApiControlMixin):
@@ -251,13 +238,7 @@ class MigoThermostatHomeEntity(MigoEntity):
         # Find the thermostat for this home
         for device_id, device_data in self.coordinator.devices.items():
             if device_data.get("type") == DEVICE_TYPE_THERMOSTAT and device_data.get("home_id") == self._home_id:
-                return build_thermostat_device_info(
-                    self.coordinator,
-                    device_id,
-                    self._home_id,
-                    hass=self.hass,
-                    config_entry_id=_entity_config_entry_id(self),
-                )
+                return build_thermostat_device_info(self.coordinator, device_id, self._home_id)
 
         # Fallback to gateway if no thermostat found
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, self._home_id):

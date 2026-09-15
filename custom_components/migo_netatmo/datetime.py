@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.core import HomeAssistant
@@ -83,6 +83,7 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
         return f"away_until_{self._device_id}"
 
     @property
+    @override
     def native_value(self) -> datetime | None:
         """Return the return time, from the optimistic cache or the API.
 
@@ -135,6 +136,7 @@ class MigoAwayReturnDateTime(MigoGatewayControlEntity, DateTimeEntity):
             return None
         return datetime.fromtimestamp(endtime, tz=UTC)
 
+    @override
     async def async_set_value(self, value: datetime) -> None:
         """Activate Away with a return time."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)

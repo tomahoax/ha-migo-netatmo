@@ -135,6 +135,7 @@ class MigoManualSetpointDurationNumber(_MigoCachedValueMixin, MigoThermostatHome
         self._attr_unique_id = generate_unique_id("manual_setpoint_duration", home_id)
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"manual_setpoint_duration_{self._home_id}"
@@ -199,6 +200,7 @@ class MigoTemperatureOffsetNumber(_MigoCachedValueMixin, MigoRoomControlEntity, 
         self._attr_unique_id = generate_unique_id("temp_offset", room_id)
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"temp_offset_{self._room_id}"
@@ -219,7 +221,7 @@ class MigoTemperatureOffsetNumber(_MigoCachedValueMixin, MigoRoomControlEntity, 
     @override
     def native_value(self) -> float | None:
         """Return the current temperature offset."""
-        return self._resolve_cached_value(self._native_value_fallback)
+        return float(self._resolve_cached_value(self._native_value_fallback))
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -258,6 +260,7 @@ class MigoDHWTemperatureNumber(_MigoCachedValueMixin, MigoGatewayControlEntity, 
         self._attr_unique_id = generate_unique_id("dhw_temperature", device_id)
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"dhw_temperature_{self._device_id}"
@@ -331,6 +334,7 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
         return self.coordinator.devices.get(self._device_id, {})
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"hysteresis_{self._device_id}"
@@ -363,7 +367,7 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
     @override
     def native_value(self) -> float | None:
         """Return the current hysteresis threshold."""
-        return self._resolve_cached_value(self._native_value_fallback)
+        return float(self._resolve_cached_value(self._native_value_fallback))
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -417,6 +421,7 @@ class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
         return self.coordinator.devices.get(self._device_id, {})
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"heating_curve_{self._device_id}"
@@ -444,7 +449,7 @@ class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
     @override
     def native_value(self) -> float | None:
         """Return the current heating curve slope."""
-        return self._resolve_cached_value(self._native_value_fallback)
+        return float(self._resolve_cached_value(self._native_value_fallback))
 
     @override
     async def async_set_native_value(self, value: float) -> None:

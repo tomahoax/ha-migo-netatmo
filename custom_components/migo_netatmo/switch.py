@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
@@ -100,6 +100,7 @@ class MigoDHWSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, SwitchEntit
         self._attr_unique_id = generate_unique_id("dhw", device_id)
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"dhw_{self._device_id}"
@@ -108,7 +109,9 @@ class MigoDHWSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, SwitchEntit
     @override
     def is_on(self) -> bool | None:
         """Return True if DHW is enabled."""
-        return self._resolve_cached_value(lambda: self._device_data.get("dhw_enabled"))
+        # cast, not bool(): dhw_enabled has no default, so the fallback can
+        # genuinely be None (unknown) - bool(None) would wrongly read as off.
+        return cast("bool | None", self._resolve_cached_value(lambda: self._device_data.get("dhw_enabled")))
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -163,6 +166,7 @@ class MigoAnticipationSwitch(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
         self._attr_unique_id = generate_unique_id("anticipation", home_id)
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"anticipation_{self._home_id}"
@@ -248,6 +252,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         return f"away_mode_{self._device_id}"
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if away mode is active."""
         return is_home_away(self.coordinator, self._device_id, self._device_data)
@@ -276,6 +281,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         self.coordinator.clear_cached_value(f"away_until_{self._device_id}")
         self.coordinator.async_update_listeners()
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable away mode."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
@@ -292,6 +298,7 @@ class MigoAwayModeSwitch(MigoGatewayControlEntity, SwitchEntity):
         )
         _LOGGER.debug("Away mode enabled for home %s", home_id)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable away mode (back to schedule)."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
@@ -342,15 +349,20 @@ class MigoDHWAlwaysOnSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, Swi
         self._attr_unique_id = generate_unique_id("dhw_always_on", device_id)
 
     @property
+    @override
     def _cache_key(self) -> str:
         """Return the cache key for this entity."""
         return f"dhw_always_on_{self._device_id}"
 
     @property
+    @override
     def is_on(self) -> bool | None:
         """Return True if DHW always-on is enabled."""
-        return self._resolve_cached_value(lambda: self._device_data.get("dhw_always_on"))
+        # cast, not bool(): dhw_always_on has no default, so the fallback
+        # can genuinely be None (unknown) - bool(None) would wrongly read as off.
+        return cast("bool | None", self._resolve_cached_value(lambda: self._device_data.get("dhw_always_on")))
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable DHW always-on."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)
@@ -366,6 +378,7 @@ class MigoDHWAlwaysOnSwitch(_MigoCachedValueMixin, MigoGatewayControlEntity, Swi
         )
         _LOGGER.debug("DHW always-on enabled for device %s", self._device_id)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable DHW always-on."""
         home_id = get_home_id_or_raise(self._device_data, "device", self._device_id)

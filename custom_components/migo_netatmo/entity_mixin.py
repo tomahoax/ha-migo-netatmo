@@ -203,6 +203,11 @@ class _MigoDescriptionEntityMixin:
     """
 
     entity_description: MigoEntityDescriptionMixin
+    # Declared explicitly as str | None, matching Entity's own type: without
+    # this, mypy infers a narrower `str` from the assignment below, which it
+    # then treats as incompatible with Entity's wider declaration once a
+    # concrete entity inherits from both this mixin and Entity.
+    _attr_unique_id: str | None
 
     if TYPE_CHECKING:
 

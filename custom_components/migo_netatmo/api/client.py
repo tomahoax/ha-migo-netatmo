@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import override
 
 import aiohttp
 
@@ -58,6 +59,7 @@ class MigoApi(AuthMixin, TransportMixin, ReadEndpointsMixin, WriteEndpointsMixin
         self._token_expiry: datetime | None = None
         self._timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
 
+    @override
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session.
 

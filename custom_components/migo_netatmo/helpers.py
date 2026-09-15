@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -151,7 +151,7 @@ def get_thermostat_for_room(
 def get_rooms_for_home(
     coordinator: MigoDataUpdateCoordinator,
     home_id: str,
-) -> list[dict[str, Any]]:
+) -> list[RoomData]:
     """Return the rooms belonging to a given home.
 
     Args:
@@ -167,7 +167,7 @@ def get_rooms_for_home(
 def is_home_away(
     coordinator: MigoDataUpdateCoordinator,
     device_id: str,
-    device_data: dict[str, Any],
+    device_data: Mapping[str, Any],
 ) -> bool | None:
     """Return whether Away mode is active for a gateway device's home.
 
@@ -188,7 +188,11 @@ def is_home_away(
     """
     cached = coordinator.get_cached_value(f"away_mode_{device_id}")
     if cached is not None:
-        return cached
+        # Always a bool at runtime: the only writer of this cache key
+        # (MigoAwayModeSwitch) only ever stores one. get_cached_value's own
+        # return type is the union of everything any cache key can hold
+        # (including climate.py's str-valued hvac_mode/preset_mode keys).
+        return bool(cached)
 
     home_id = device_data.get("home_id")
     if not home_id:
@@ -314,12 +318,15 @@ def _linked_event_schedule_id(linked_schedules: Any, therm_schedule_id: str) -> 
     Returns:
         The paired event schedule id, or None if it cannot be resolved.
     """
+    # IDs are strings throughout this API - the explicit str() calls below
+    # just prove that to mypy for a value that arrived as Any, not change
+    # behavior for the real, always-string-keyed data this handles.
     if isinstance(linked_schedules, dict):
         if therm_schedule_id in linked_schedules:
-            return linked_schedules[therm_schedule_id]
+            return str(linked_schedules[therm_schedule_id])
         for key, value in linked_schedules.items():
             if value == therm_schedule_id:
-                return key
+                return str(key)
         return None
 
     if isinstance(linked_schedules, list):
@@ -332,12 +339,12 @@ def _linked_event_schedule_id(linked_schedules: Any, therm_schedule_id: str) -> 
             if therm_schedule_id in ids:
                 others = [i for i in ids if i != therm_schedule_id]
                 if others:
-                    return others[0]
+                    return str(others[0])
 
     return None
 
 
-def get_event_schedule(home: dict[str, Any]) -> dict[str, Any] | None:
+def get_event_schedule(home: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return the DHW (event) schedule paired with the active heating schedule.
 
     Prefers the explicit `linked_schedules` pairing when present and
@@ -351,15 +358,16 @@ def get_event_schedule(home: dict[str, Any]) -> dict[str, Any] | None:
     Returns:
         The event schedule dict, or None if none can be resolved.
     """
-    schedules = home.get("schedules", [])
+    schedules: list[dict[str, Any]] = home.get("schedules", [])
     therm_schedules = [s for s in schedules if s.get("type") == SCHEDULE_TYPE_THERM]
     event_schedules = [s for s in schedules if s.get("type") == SCHEDULE_TYPE_EVENT]
 
     selected_therm = next((s for s in therm_schedules if s.get("selected")), None)
     linked_schedules = home.get("linked_schedules")
 
-    if selected_therm is not None and linked_schedules:
-        linked_id = _linked_event_schedule_id(linked_schedules, selected_therm.get("id"))
+    selected_therm_id = selected_therm.get("id") if selected_therm is not None else None
+    if selected_therm_id is not None and linked_schedules:
+        linked_id = _linked_event_schedule_id(linked_schedules, selected_therm_id)
         if linked_id is not None:
             for schedule in event_schedules:
                 if schedule.get("id") == linked_id:

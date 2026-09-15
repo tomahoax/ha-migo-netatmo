@@ -114,7 +114,7 @@ async def test_device_registry_contract(
     """Device identifiers, names, models and linking must stay stable."""
     device_registry = dr.async_get(hass)
 
-    gateway = device_registry.async_get_device_by_identifier((DOMAIN, "gateway_001"), init_integration.entry_id)
+    gateway = device_registry.async_get_device(identifiers={(DOMAIN, "gateway_001")})
     assert gateway is not None
     assert gateway.name == "My Home Gateway"
     assert gateway.model == "NAVaillant"
@@ -124,7 +124,7 @@ async def test_device_registry_contract(
     assert gateway.connections == set()
     assert gateway.via_device_id is None
 
-    thermostat = device_registry.async_get_device_by_identifier((DOMAIN, "module_789"), init_integration.entry_id)
+    thermostat = device_registry.async_get_device(identifiers={(DOMAIN, "module_789")})
     assert thermostat is not None
     assert thermostat.name == "My Home Thermostat"
     assert thermostat.model == "NAThermVaillant"
@@ -156,6 +156,6 @@ async def test_mac_shaped_ids_do_get_a_mac_connection(
     await hass.async_block_till_done()
 
     device_registry = dr.async_get(hass)
-    gateway = device_registry.async_get_device_by_identifier((DOMAIN, real_mac), mock_config_entry.entry_id)
+    gateway = device_registry.async_get_device(identifiers={(DOMAIN, real_mac)})
     assert gateway is not None
     assert gateway.connections == {(dr.CONNECTION_NETWORK_MAC, real_mac)}

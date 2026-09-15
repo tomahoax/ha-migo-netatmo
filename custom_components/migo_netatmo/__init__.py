@@ -75,12 +75,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: MigoConfigEntry) -> bool
     # Home Assistant forwards all platforms concurrently
     # (async_forward_entry_setups), so without this a thermostat/room-owning
     # entity's device_info (which links to its parent gateway via
-    # _resolve_via_device_id, looking the gateway up in the device registry)
-    # could run before any gateway-owning platform has registered the
-    # gateway device, silently omitting via_device_id for that session. The
-    # gateway platform's own entities still register the full DeviceInfo
-    # (name, model, connections, ...) afterwards - the registry merges it
-    # into this same device, matched by identifiers.
+    # `via_device`, an identifiers tuple Home Assistant itself resolves to
+    # the registry's internal device) could run before any gateway-owning
+    # platform has registered the gateway device - `via_device` referencing
+    # a not-yet-existing device is logged (and, per its own deprecation
+    # notice, may eventually be rejected) rather than silently omitted, so
+    # this avoids that entirely rather than relying on it staying a soft
+    # failure. The gateway platform's own entities still register the full
+    # DeviceInfo (name, model, connections, ...) afterwards - the registry
+    # merges it into this same device, matched by identifiers.
     device_registry = dr.async_get(hass)
     for gateway_id in get_devices_by_type(coordinator, DEVICE_TYPE_GATEWAY):
         device_registry.async_get_or_create(
