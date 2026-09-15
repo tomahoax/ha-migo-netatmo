@@ -124,7 +124,7 @@
     },
     "datetime": {
       "away_until": {
-        "name": "Absent jusqu'à"
+        "name": "Mode absent jusqu'à"
       }
     },
     "number": {
