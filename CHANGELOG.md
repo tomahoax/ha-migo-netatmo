@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta4] - 2026-09-15
+
 ### Changed
 - **Minimum supported Home Assistant version raised from 2025.8.0 to 2026.9.2**, and the minimum Python version from 3.13.2 to 3.14.2 (HA 2026.9.2's own floor). The thermostat-to-gateway device link now uses `via_device_id` again instead of `via_device`: the latter, reinstated in beta3 after `via_device_id` proved unavailable on HA 2025.8-2026.1, has since been removed from `DeviceInfo` entirely, while `via_device_id` is now the current, stable mechanism
 

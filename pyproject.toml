@@ -7,7 +7,7 @@ name = "ha-migo-netatmo"
 # Kept in sync with custom_components/migo_netatmo/manifest.json (source of
 # truth) at every "chore: prepare release" commit and re-stamped by
 # .github/workflows/release.yaml when a release is published.
-version = "1.0.0-beta3"
+version = "1.0.0-beta4"
 description = "Home Assistant integration for MiGO Netatmo thermostats"
 readme = "README.md"
 license = {text = "MIT"}
