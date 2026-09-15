@@ -445,6 +445,29 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         elif preset_mode == PRESET_DHW_ONLY:
             # Room-level "hg": MiGo's DHW-only quick action. The same call
             # HVACMode.OFF already makes - see PRESET_DHW_ONLY's docstring.
+            if self._home_therm_mode == MODE_FROST_GUARD:
+                # DHW-only's own contract (see PRESET_DHW_ONLY's docstring)
+                # is that the home stays "schedule" while only this room
+                # goes to "hg" - but nothing enforced that if the home was
+                # already in real Frost guard from an earlier selection.
+                # preset_mode's own derivation checks the home-level mode
+                # before the room-level one, so DHW-only kept reading back
+                # as Frost guard whenever this was left over - same
+                # architectural gap as async_set_hvac_mode's Auto branch
+                # and this method's own Frost guard branch below, just
+                # discovered on this specific path afterward. Reported
+                # live and confirmed against a debug-log capture: home
+                # therm_mode stayed "hg" from an earlier Frost guard
+                # selection, so DHW-only still displayed as Frost guard.
+                # Not conditioned on Away too: unlike Frost guard, Away is
+                # meant to combine with DHW-only (preset_mode's own Away
+                # check runs first, unconditionally) - only a stale "hg"
+                # needs clearing here.
+                await self._call_api(
+                    self._api.set_therm_mode,
+                    home_id=home_id,
+                    mode=MODE_SCHEDULE,
+                )
             _LOGGER.debug("Setting room %s to DHW-only (room-level hg)", self._room_id)
             await self._call_api_optimistically(
                 self._api.set_room_state,

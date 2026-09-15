@@ -365,6 +365,45 @@ class TestMigoClimate:
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
+        climate._api.set_therm_mode.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_preset_mode_dhw_only_clears_stale_home_level_frost_guard(self, climate, mock_coordinator):
+        """DHW only clears a leftover home-level real Frost guard first.
+
+        Regression guard: DHW-only's contract (see PRESET_DHW_ONLY's
+        docstring) is that the home stays "schedule" while only the room
+        goes to "hg" - but the write here only ever touched the room. If
+        the home was already in real Frost guard from an earlier selection,
+        preset_mode's own derivation (which checks the home-level mode
+        before the room-level one) kept reading DHW-only back as Frost
+        guard. Reported live and confirmed against a debug-log capture.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_FROST_GUARD
+
+        await climate.async_set_preset_mode(PRESET_DHW_ONLY)
+
+        climate._api.set_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
+        climate._api.set_room_state.assert_called_once_with(
+            home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_preset_mode_dhw_only_does_not_clear_home_when_away(self, climate, mock_coordinator):
+        """DHW only doesn't clear an active Away - only a stale Frost guard.
+
+        Away is meant to combine with DHW-only (preset_mode's own Away
+        check runs first, unconditionally), unlike real Frost guard which
+        DHW-only is mutually exclusive with.
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+
+        await climate.async_set_preset_mode(PRESET_DHW_ONLY)
+
+        climate._api.set_therm_mode.assert_not_called()
+        climate._api.set_room_state.assert_called_once_with(
+            home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
+        )
 
     def test_hvac_action_uses_real_boiler_status_when_available(self, climate, mock_coordinator):
         """boiler_status from the thermostat device takes priority over the temperature heuristic."""
