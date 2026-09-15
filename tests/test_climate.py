@@ -46,6 +46,7 @@ class TestMigoClimate:
         api.set_room_state.return_value = {"status": "ok"}
         api.set_therm_mode.return_value = {"status": "ok"}
         api.set_home_therm_mode.return_value = {"status": "ok"}
+        api.set_temperature_control_mode.return_value = {"status": "ok"}
         entity = MigoClimate(mock_coordinator, "room_456", api)
         entity.async_write_ha_state = MagicMock()
         return entity
@@ -207,14 +208,16 @@ class TestMigoClimate:
         "cooling", so the MiGo app itself never showed it as active even
         though it structurally matched what this integration reads back as
         DHW-only. Confirmed via a live capture of the app's own "Eau chaude
-        seulement" action (see MigoApi.set_home_therm_mode's docstring).
+        seulement" action (see MigoApi.set_temperature_control_mode's
+        docstring). temperature_control_mode is set via its own dedicated
+        call, not combined with a therm_mode change in the same request -
+        a first fix attempt tried that and got a live-confirmed 403.
         """
         await climate.async_set_hvac_mode(HVACMode.OFF)
 
         climate._api.set_mode.assert_not_called()
-        climate._api.set_home_therm_mode.assert_called_once_with(
-            home_id="home_123", mode=MODE_SCHEDULE, temperature_control_mode="cooling"
-        )
+        climate._api.set_home_therm_mode.assert_not_called()
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="cooling")
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
@@ -375,65 +378,68 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_dhw_only_writes_room_level_hg(self, climate):
-        """DHW only writes room-level hg plus home-wide cooling.
+        """DHW only writes room-level hg plus home-wide cooling, as two separate calls.
 
         Reported live: DHW only used to only write the room's "hg" (the
         same call HVACMode.OFF already makes), so the MiGo app itself
         never showed it as active. Confirmed via a live capture of the
         app's own "Eau chaude seulement" action: temperature_control_mode
         flips to "cooling" home-wide too (see
-        MigoApi.set_home_therm_mode's docstring).
+        MigoApi.set_temperature_control_mode's docstring). Sent as its own
+        request, not combined with a therm_mode change - a first fix
+        attempt tried that and got a live-confirmed 403.
         """
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
         climate._api.set_mode.assert_not_called()
         climate._api.set_therm_mode.assert_not_called()
-        climate._api.set_home_therm_mode.assert_called_once_with(
-            home_id="home_123", mode=MODE_SCHEDULE, temperature_control_mode="cooling"
-        )
+        climate._api.set_home_therm_mode.assert_not_called()
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="cooling")
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_dhw_only_clears_stale_home_level_frost_guard(self, climate, mock_coordinator):
-        """DHW only clears a leftover home-level real Frost guard first.
+        """DHW only clears a leftover home-level real Frost guard first, as its own call.
 
         Regression guard: DHW-only and real Frost guard are mutually
         exclusive quick actions, so if the home was already in real Frost
         guard from an earlier selection, preset_mode's own derivation
         (which checks the home-level mode before the room-level one) kept
         reading DHW-only back as Frost guard. Reported live and confirmed
-        against a debug-log capture.
+        against a debug-log capture. The clearing call uses
+        set_home_therm_mode (the confirmed-safe "heating" + therm_mode
+        combination) as its own separate request - never combined with the
+        temperature_control_mode="cooling" call that follows it, which is
+        the pairing confirmed to 403.
         """
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_FROST_GUARD
 
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
-        climate._api.set_home_therm_mode.assert_called_once_with(
-            home_id="home_123", mode=MODE_SCHEDULE, temperature_control_mode="cooling"
-        )
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="cooling")
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )
 
     @pytest.mark.asyncio
-    async def test_set_preset_mode_dhw_only_preserves_away(self, climate, mock_coordinator):
-        """DHW only preserves an active Away's therm_mode instead of forcing schedule.
+    async def test_set_preset_mode_dhw_only_does_not_clear_home_when_away(self, climate, mock_coordinator):
+        """DHW only doesn't touch therm_mode at all when the home isn't in real Frost guard.
 
-        Unlike the confirmed real-Frost-guard case above, there's no live
-        confirmation either way for what DHW-only does to an active Away -
-        the one capture this is based on already had therm_mode="schedule"
-        beforehand. Forcing "schedule" regardless would risk silently
-        canceling Away, so it's passed through unchanged instead.
+        In particular, an active Away is left alone: since therm_mode is
+        never sent unless clearing a stale real Frost guard, there's
+        nothing here that could accidentally overwrite it - sidesteps
+        needing to know what the real DHW-only quick action does to Away,
+        which no live capture has confirmed either way.
         """
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
 
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
-        climate._api.set_home_therm_mode.assert_called_once_with(
-            home_id="home_123", mode=MODE_AWAY, temperature_control_mode="cooling"
-        )
+        climate._api.set_home_therm_mode.assert_not_called()
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="cooling")
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
         )

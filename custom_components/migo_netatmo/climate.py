@@ -266,34 +266,46 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         MiGo app itself didn't show it as active. Confirmed via a live
         capture of the app's own "Eau chaude seulement" action:
         `temperature_control_mode` flips to `"cooling"` home-wide (see
-        `MigoApi.set_home_therm_mode`'s docstring - despite the name, not a
-        literal cooling mode) alongside this room's `therm_setpoint_mode`
-        going to `"hg"`. Writing the room alone, which is all this used to
-        do, never touched that flag, so the app never showed it - even
-        though this integration's own optimistic UI did, since it only
-        ever checked the room-level value. Shared by `async_set_hvac_mode`'s
-        Off branch and the DHW-only preset, which write the identical
-        underlying state today, just reached through two different
-        controls.
+        `MigoApi.set_temperature_control_mode`'s docstring - despite the
+        name, not a literal cooling mode) alongside this room's
+        `therm_setpoint_mode` going to `"hg"`. Writing the room alone,
+        which is all this used to do, never touched that flag, so the app
+        never showed it - even though this integration's own optimistic UI
+        did, since it only ever checked the room-level value. Shared by
+        `async_set_hvac_mode`'s Off branch and the DHW-only preset, which
+        write the identical underlying state today, just reached through
+        two different controls.
 
-        `therm_mode` is passed through unchanged unless it's currently
-        real Frost guard ("hg"), the one case confirmed to need clearing
-        (DHW-only and real Frost guard are mutually exclusive quick
-        actions - see the Frost guard branch's own stale-state fix in
-        `async_set_preset_mode`). Not forced to "schedule" unconditionally:
-        the one live capture this is based on happened to already have
-        `therm_mode == "schedule"` beforehand, so there's no confirmation
-        either way for what DHW-only does to an active Away - forcing
-        "schedule" regardless would risk silently canceling it, so Away is
-        left untouched here rather than guessed at.
+        Deliberately calls `set_temperature_control_mode` (no `therm_mode`
+        field at all) as its own separate request, not `set_home_therm_mode`
+        with `temperature_control_mode="cooling"` added to it. An earlier
+        version of this method paired them in one `sethomedata` call, which
+        is exactly the combination reported live (and confirmed against a
+        real attempt from this integration, not just theorized) to 403 -
+        see `MigoApi.set_temperature_control_mode`'s docstring. Leaving
+        `therm_mode` out of this call also sidesteps ever having to guess
+        what DHW-only does to an active Away: nothing here can accidentally
+        overwrite it either way.
+
+        A stale home-level real Frost guard ("hg") is still cleared first,
+        same as before - but now as its own separate `set_home_therm_mode`
+        call (the confirmed-safe "heating" + therm_mode combination), never
+        combined with the "cooling" call that follows it. Without this,
+        `preset_mode`'s own derivation (which checks the home-level mode
+        before the room-level one) would go back to reading DHW-only as
+        Frost guard whenever this was left over - the same bug already
+        fixed once on this exact path.
         """
-        current_therm_mode = self._home_therm_mode
-        therm_mode = MODE_SCHEDULE if current_therm_mode in (MODE_FROST_GUARD, None) else current_therm_mode
+        if self._home_therm_mode == MODE_FROST_GUARD:
+            await self._call_api(
+                self._api.set_home_therm_mode,
+                home_id=home_id,
+                mode=MODE_SCHEDULE,
+            )
         await self._call_api(
-            self._api.set_home_therm_mode,
+            self._api.set_temperature_control_mode,
             home_id=home_id,
-            mode=therm_mode,
-            temperature_control_mode="cooling",
+            mode="cooling",
         )
         await self._call_api_optimistically(
             self._api.set_room_state,

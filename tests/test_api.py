@@ -406,12 +406,13 @@ class TestMigoApiSetHomeThermMode:
     Regression guard: reported live, turning Away mode on returned a 403
     ("Cannot change therm_mode while being in temperature_control_mode
     cooling") because the payload never included temperature_control_mode
-    at all. Fixed by always sending it, defaulting to "heating", matching
-    every sethomedata call the MiGo app itself makes (see
-    docs/api/reference.md's captured request) - every caller except
-    DHW-only wants "heating"; "cooling" is not a broken/unsupported state,
-    it is the flag a later live capture confirmed the MiGo app's own
-    "Eau chaude seulement" (DHW only) quick action sets.
+    at all. Fixed by always sending "heating", matching every sethomedata
+    call the MiGo app itself makes for every mode except DHW-only (see
+    TestMigoApiSetTemperatureControlMode below - a live capture confirmed
+    the MiGo app's own "Eau chaude seulement" action sets "cooling"
+    instead, and a *separate* live attempt confirmed the API rejects
+    "cooling" and therm_mode combined in a single request, so this method
+    never accepts anything but "heating").
     """
 
     def _make_api(self) -> MigoApi:
@@ -450,18 +451,43 @@ class TestMigoApiSetHomeThermMode:
         assert home["temperature_control_mode"] == "heating"
         assert home["therm_mode_endtime"] == 1789568616
 
+
+class TestMigoApiSetTemperatureControlMode:
+    """Tests for set_temperature_control_mode payload building.
+
+    Regression guard: reported live, activating DHW-only from Home
+    Assistant returned the same 403 as the Away bug above ("Cannot change
+    therm_mode while being in temperature_control_mode cooling") - because
+    the first fix attempt paired temperature_control_mode="cooling" with a
+    therm_mode value in one set_home_therm_mode call. Confirmed against a
+    real attempt: that combination is rejected regardless of therm_mode's
+    actual value. This method omits therm_mode/therm_mode_endtime from the
+    payload entirely instead.
+    """
+
+    def _make_api(self) -> MigoApi:
+        """Create an API client with a mocked request layer."""
+        api = MigoApi(
+            username="test@example.com",
+            password="test_password",
+            session=MagicMock(),
+        )
+        api._api_request = AsyncMock(return_value={"status": "ok"})
+        return api
+
+    def _sent_home_payload(self, api: MigoApi) -> dict:
+        """Return the home dict sent to the sethomedata endpoint."""
+        data = api._api_request.call_args.args[1]
+        return data["home"]
+
     @pytest.mark.asyncio
-    async def test_temperature_control_mode_cooling_forwarded(self) -> None:
-        """DHW-only callers can explicitly request "cooling" instead of the default."""
+    async def test_sends_only_temperature_control_mode(self) -> None:
         api = self._make_api()
 
-        await api.set_home_therm_mode(
-            home_id="home_123", mode="schedule", endtime=None, temperature_control_mode="cooling"
-        )
+        await api.set_temperature_control_mode(home_id="home_123", mode="cooling")
 
         home = self._sent_home_payload(api)
-        assert home["temperature_control_mode"] == "cooling"
-        assert home["therm_mode"] == "schedule"
+        assert home == {"id": "home_123", "temperature_control_mode": "cooling"}
 
 
 class TestMigoApiControlMethods:

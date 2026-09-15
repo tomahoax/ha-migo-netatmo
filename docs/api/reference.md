@@ -314,11 +314,18 @@ earlier investigation found the API rejecting a `therm_mode` change with a
 403 ("Cannot change therm_mode while being in temperature_control_mode
 cooling") and treated a leftover `"cooling"` value as a broken/unreachable
 state to always override - it isn't; it's real, reachable state this
-integration's own DHW-only write now sets deliberately. Every other
-`sethomedata` call still sends `"heating"` unconditionally, both to match
-the app's own traffic for those modes and to reliably clear a `"cooling"`
-value left over from DHW-only, avoiding that same 403 on the next mode
-change (see `MigoApi.set_home_therm_mode`).
+integration's own DHW-only write now sets deliberately.
+
+**Important: `temperature_control_mode: "cooling"` and `therm_mode` cannot
+be sent together in the same request.** Confirmed live: pairing them (as an
+early DHW-only fix attempt did, reusing the same request shape every other
+mode change uses) gets rejected with the identical 403 above, regardless of
+whether `therm_mode`'s value actually changes - the request either omits
+`therm_mode`/`therm_mode_endtime` entirely (`temperature_control_mode:
+"cooling"` alone, see `MigoApi.set_temperature_control_mode`), or it sends
+`temperature_control_mode: "heating"` alongside a `therm_mode` change (see
+`MigoApi.set_home_therm_mode`, used by every mode change except DHW-only) -
+never both a `therm_mode` and `"cooling"` in one call.
 
 ---
 
