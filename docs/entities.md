@@ -72,13 +72,12 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 
 | Preset | Source | Description |
 |--------|--------|-------------|
-| **Away** | home `therm_mode == "away"` | Away mode - reduced temperature. Read/write, via `setthermmode` (no return-time support - see `datetime.migo_{home}_away_until` below for that). |
-| **Frost guard** | home `therm_mode == "hg"` | Real standby: the boiler is stopped. Read/write, via `setthermmode` directly (bypassing `set_mode()`, which always routes `"hg"` to the room). |
-| **Hot water only** | room `therm_setpoint_mode == "hg"` while home `therm_mode` is not `"hg"` | MiGo's "DHW only" quick-action. Read/write, via `setstate` at the room level - the same call selecting HVAC mode Off makes. |
+| **Normal** | nothing else applies | The baseline state: home `therm_mode == "schedule"`, `temperature_control_mode == "heating"`, room not overridden. Read/write, via `sethomedata` (clears the room to `"home"` and the home to `schedule`/`heating` unconditionally, including a stale `"cooling"` left over from Hot water only, and an active Away). |
+| **Away** | home `therm_mode == "away"` | Away mode - reduced temperature. Read/write, via `sethomedata` (no return-time support - see `datetime.migo_{home}_away_until` below for that). |
+| **Frost guard** | home `therm_mode == "hg"` | Real standby: the boiler is stopped. Read/write, via `sethomedata` directly (bypassing `set_mode()`, which always routes `"hg"` to the room). |
+| **Hot water only** | room `therm_setpoint_mode == "hg"` while home `therm_mode` is not `"hg"` | MiGo's "DHW only" quick-action. Read/write: `therm_setpoint_mode == "hg"` at the room level (`setstate`, the same call selecting HVAC mode Off makes) plus `temperature_control_mode == "cooling"` home-wide (`sethomedata`, its own separate request - the API rejects combining a `therm_mode` change with `"cooling"` in one call). Preserves an active Away rather than clearing it, unlike Normal. |
 | **Boost** | room `therm_setpoint_mode == "manual"` at max temperature | Forces maximum temperature (30°C) for 1 hour |
 
-> **Note:** The preset is cleared (set to None) when switching back to Auto mode.
->
 > **Note:** When Away is combined with any room-level override (DHW only,
 > Frost guard, a manual setpoint, or Boost - the app allows all of these),
 > the climate preset shows Away - it takes priority since it is the more
@@ -93,7 +92,7 @@ see `climate.MigoClimate._home_therm_mode` for the exact precedence.
 - `temperature`: Target temperature
 - `hvac_mode`: Current mode (off, heat, auto)
 - `hvac_action`: Current action (off, heating, idle)
-- `preset_mode`: Active preset (away, frost_guard, boost, or None)
+- `preset_mode`: Active preset (normal, away, frost_guard, dhw_only, boost)
 
 ### Services
 

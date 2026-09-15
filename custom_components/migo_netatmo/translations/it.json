@@ -113,6 +113,7 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
+              "normal": "Normale",
               "away": "Assente",
               "frost_guard": "Antigelo",
               "dhw_only": "Solo acqua calda",

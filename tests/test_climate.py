@@ -13,6 +13,7 @@ from custom_components.migo_netatmo.climate import (
     MIGO_TO_HVAC_MODE,
     PRESET_DHW_ONLY,
     PRESET_FROST_GUARD,
+    PRESET_NORMAL,
     MigoClimate,
 )
 from custom_components.migo_netatmo.const import (
@@ -90,9 +91,9 @@ class TestMigoClimate:
         mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_FROST_GUARD
         assert climate.hvac_action == HVACAction.OFF
 
-    def test_preset_mode_none(self, climate):
-        """Test preset mode when in schedule."""
-        assert climate.preset_mode is None
+    def test_preset_mode_normal(self, climate):
+        """Test preset mode when in schedule - the baseline Normal state."""
+        assert climate.preset_mode == PRESET_NORMAL
 
     def test_preset_mode_away(self, climate, mock_coordinator):
         """Test preset mode when away."""
@@ -223,6 +224,34 @@ class TestMigoClimate:
         )
 
     @pytest.mark.asyncio
+    async def test_set_preset_mode_normal(self, climate):
+        """Normal clears the room to "home" and the home to schedule, unconditionally.
+
+        Unlike Auto (HVACMode.AUTO), which only clears the room when it
+        detects a specific leftover override, Normal always writes both -
+        selecting it is a deliberate reset, not a mode switch that happens
+        to need cleanup as a side effect.
+        """
+        await climate.async_set_preset_mode(PRESET_NORMAL)
+
+        climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
+
+    @pytest.mark.asyncio
+    async def test_set_preset_mode_normal_clears_active_away(self, climate, mock_coordinator):
+        """Normal clears an active Away, unlike DHW-only which preserves it.
+
+        Normal is meant as a full reset to the baseline state - matching
+        HVACMode.AUTO's existing behavior of unconditionally forcing
+        therm_mode back to "schedule".
+        """
+        mock_coordinator.homes["home_123"]["therm_mode"] = MODE_AWAY
+
+        await climate.async_set_preset_mode(PRESET_NORMAL)
+
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
+
+    @pytest.mark.asyncio
     async def test_set_preset_mode_away(self, climate):
         """Away writes home-level Away via set_home_therm_mode directly.
 
@@ -333,7 +362,7 @@ class TestMigoClimate:
         mock_coordinator.rooms["room_456"]["therm_setpoint_mode"] = MODE_HOME
         mock_coordinator.homes["home_123"]["therm_mode"] = MODE_SCHEDULE
         assert climate.hvac_mode == HVACMode.AUTO
-        assert climate.preset_mode is None
+        assert climate.preset_mode == PRESET_NORMAL
 
     def test_state_away(self, climate, mock_coordinator):
         """State 2 - Away: room mode 'home', home therm_mode 'away'.

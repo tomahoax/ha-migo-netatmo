@@ -46,6 +46,12 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
 
 # Custom preset mode names for MiGO-specific states
+# MiGo's "Normal" boiler quick-action: the baseline state (home-level
+# schedule/heating, no room override) - the third option alongside DHW
+# only and Frost guard in the app's own "Actions rapides". Added so
+# leaving either of those, or Away, is reachable directly from the preset
+# selector, without also needing the separate HVAC mode wheel.
+PRESET_NORMAL = "normal"
 PRESET_FROST_GUARD = "frost_guard"
 # MiGo's "DHW only" boiler quick-action: the room's therm_setpoint_mode is
 # "hg" while the home's therm_mode stays "schedule" (as opposed to real
@@ -71,17 +77,6 @@ MIGO_TO_HVAC_MODE: dict[str, HVACMode] = {
     MODE_MANUAL: HVACMode.HEAT,
     MODE_OFF: HVACMode.OFF,
     MODE_MAX: HVACMode.HEAT,
-}
-
-# Map MiGO modes to preset names (None means no preset active)
-MIGO_MODE_TO_PRESET: dict[str, str | None] = {
-    MODE_AWAY: PRESET_AWAY,
-    MODE_FROST_GUARD: PRESET_FROST_GUARD,
-    MODE_SCHEDULE: None,
-    MODE_MANUAL: None,  # Could be boost, checked separately
-    MODE_HOME: None,
-    MODE_MAX: None,
-    MODE_OFF: None,
 }
 
 
@@ -114,7 +109,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.PRESET_MODE
     )
-    _attr_preset_modes = [PRESET_AWAY, PRESET_FROST_GUARD, PRESET_DHW_ONLY, PRESET_BOOST]
+    _attr_preset_modes = [PRESET_NORMAL, PRESET_AWAY, PRESET_FROST_GUARD, PRESET_DHW_ONLY, PRESET_BOOST]
     _attr_min_temp = TEMP_MIN
     _attr_max_temp = TEMP_MAX
     _attr_target_temperature_step = TEMP_STEP
@@ -476,14 +471,43 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         if room_mode == MODE_FROST_GUARD:
             return PRESET_DHW_ONLY
 
-        return MIGO_MODE_TO_PRESET.get(room_mode)
+        # Nothing else applies: no Away, no room-level override, no active
+        # boiler quick-action (Frost guard, DHW-only) - the baseline state,
+        # the third option in the app's own "Actions rapides" alongside
+        # those two.
+        return PRESET_NORMAL
 
     @override
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
         home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
-        if preset_mode == PRESET_BOOST:
+        if preset_mode == PRESET_NORMAL:
+            # Clears any active boiler quick-action (Frost guard, DHW-only,
+            # which also clears a stale "cooling" temperature_control_mode
+            # - see MigoApi.set_home_therm_mode) and this room's own
+            # override back to the baseline state. Unlike Auto (HVACMode.
+            # AUTO), which only clears the room when it detects a specific
+            # leftover override, this always clears both explicitly:
+            # selecting Normal is a deliberate "reset everything" action,
+            # not a mode switch that happens to need cleanup as a side
+            # effect. Also clears Away, unlike DHW-only above - Normal is
+            # meant as a full reset, matching Auto's existing behavior.
+            _LOGGER.debug("Setting room %s to Normal (home schedule, room home)", self._room_id)
+            await self._call_api(
+                self._api.set_room_state,
+                home_id=home_id,
+                room_id=self._room_id,
+                mode=MODE_HOME,
+            )
+            await self._call_api_optimistically(
+                self._api.set_home_therm_mode,
+                cache_key=self._preset_mode_cache_key,
+                optimistic_value=preset_mode,
+                home_id=home_id,
+                mode=MODE_SCHEDULE,
+            )
+        elif preset_mode == PRESET_BOOST:
             # Boost = force heating at max temperature for 1 hour
             _LOGGER.debug(
                 "Setting boost mode for room %s: temp=%s°C, duration=%s min",
@@ -556,9 +580,10 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 endtime=None,
             )
         else:
-            # Every entry in _attr_preset_modes (Away, Frost guard, DHW only,
-            # Boost) is handled by an explicit branch above, so this is only
-            # reached for a preset Home Assistant shouldn't ever pass.
+            # Every entry in _attr_preset_modes (Normal, Away, Frost guard,
+            # DHW only, Boost) is handled by an explicit branch above, so
+            # this is only reached for a preset Home Assistant shouldn't
+            # ever pass.
             _LOGGER.error("Unknown preset mode: %s", preset_mode)
             return
 
