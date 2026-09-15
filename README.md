@@ -272,20 +272,27 @@ you can try changes before they reach a stable version. HACS cannot install a gi
 branch directly, only published versions, so `dev` reaches you as a pre-release tag
 such as `v1.0.0-beta3`.
 
-Pre-releases are hidden by default, so nothing changes unless you opt in.
+Pre-releases are hidden by default, so nothing changes unless you opt in. Since
+HACS 2.0, that opt-in is a disabled Home Assistant **switch entity** HACS creates
+for every tracked repository - not a toggle inside the HACS dialog itself, so it
+will not show up there no matter how long you look.
 
 **To switch to a pre-release:**
 
-1. Go to **HACS** → **Integrations** and click **MiGo (Netatmo)**
-2. Open the **⋮** menu (top right) and enable the option to show beta or
-   pre-release versions
-3. Open the **⋮** menu again and choose **Redownload**
-4. Pick the pre-release version (the one with a `-beta` suffix) and confirm
+1. Go to **Settings** → **Devices & services** → **Entities** and search for
+   `migo` (or `pre_release`) to find the disabled switch entity for this
+   integration, something like `switch.migo_netatmo_pre_release`
+2. Open it, then its settings (gear icon) → **Enable**, and give Home Assistant
+   a few seconds to register the change
+3. In **HACS** → **Integrations** → **MiGo (Netatmo)**, open the **⋮** menu and
+   choose **Redownload** so HACS re-checks releases with the switch now on
+4. Under **Need a different version?**, the **Version** dropdown should now list
+   the pre-release tags (the ones with a `-beta` suffix) - pick one and confirm
 5. **Restart Home Assistant**
 
-**To go back to a stable build**, repeat the same steps and pick the highest version
-without a `-beta` suffix. Turning the beta option back off stops new pre-releases
-from being offered, but does not by itself downgrade what you already installed.
+**To go back to a stable build**, repeat step 3-5 and pick the highest version
+without a `-beta` suffix. Turning the switch back off stops new pre-releases from
+being offered, but does not by itself downgrade what you already installed.
 
 > [!NOTE]
 > Your configuration, entities and history are untouched by switching versions: only
