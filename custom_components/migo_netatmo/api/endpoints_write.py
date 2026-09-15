@@ -479,7 +479,14 @@ class WriteEndpointsMixin:
         Returns:
             The API response.
         """
+        # setconfigs's other calls (set_dhw_temperature, set_dhw_always_on) were
+        # confirmed via mitmproxy capture to need home_id at the root level, not
+        # just nested under home.id - this call was missing that root-level key,
+        # which is the likely reason it silently failed to take effect server-side
+        # (reported live: neither sets nor reads back the real value). home.id is
+        # kept too, matching the shape captured for this specific rooms variant.
         data = {
+            "home_id": home_id,
             "home": {
                 "id": home_id,
                 "rooms": [
@@ -488,7 +495,7 @@ class WriteEndpointsMixin:
                         "therm_setpoint_offset": offset,
                     }
                 ],
-            }
+            },
         }
 
         _LOGGER.debug("Setting temperature offset=%s for room %s", offset, room_id)

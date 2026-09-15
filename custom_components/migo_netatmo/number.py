@@ -339,6 +339,19 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
         """Return the API-derived value, falling back to the documented default.
 
         Hysteresis in Celsius is the deadband value plus one, over ten.
+
+        Reported live: this entity doesn't pick up a hysteresis change made
+        from the MiGo app, even though writing from Home Assistant does
+        reach the API correctly. Investigated: `simple_heating_algo_deadband`
+        is documented (see docs/api/reference.md) to be echoed back on
+        homestatus, but a live homestatus capture taken during later
+        development didn't actually contain it for this gateway module -
+        `self._device_data.get(...)` below has, in practice, never had
+        anything to return. Kept in case a future capture proves the field
+        does show up under some condition; until then this always falls
+        through to the optimistic cache (right after a write from Home
+        Assistant) or DEFAULT_HYSTERESIS - same write-only situation as
+        `MigoHeatingCurveNumber` below.
         """
         deadband = self._device_data.get("simple_heating_algo_deadband")
         if deadband is not None:
@@ -417,9 +430,9 @@ class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
         below never actually has anything to return - it's kept in case a
         future capture ever finds it echoed back somewhere, but in practice
         this always falls through to the optimistic cache (right after a
-        write from Home Assistant) or DEFAULT_HEATING_CURVE (everywhere
-        else, including right after the reset button - see its own
-        docstring on why that's not a real factory default).
+        write from Home Assistant) or DEFAULT_HEATING_CURVE otherwise - see
+        the constant's own comment in const.py on why that's not a real
+        factory default, just this installation's calibrated value.
         """
         # slope in UI = api_slope / 10
         api_slope = self._device_data.get("heating_curve")

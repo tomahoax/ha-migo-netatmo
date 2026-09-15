@@ -243,8 +243,13 @@ class ModuleData(TypedDict):
     dhw_enabled: NotRequired[bool]
     outdoor_temperature: NotRequired[float]
     # dhw_always_on is undocumented by Netatmo, confirmed via a live
-    # debug-log capture. dhw_setpoint_temperature/simple_heating_algo_deadband/
-    # heating_curve below share the same /syncapi/v1/getconfigs source.
+    # debug-log capture, and does share /syncapi/v1/getconfigs with
+    # dhw_setpoint_temperature below. simple_heating_algo_deadband and
+    # heating_curve were assumed to share that same source, but a later
+    # live getconfigs capture didn't actually contain either of them -
+    # kept declared here in case a future capture proves otherwise, but
+    # in practice neither is populated by any endpoint this integration
+    # calls today (see docs/api/reference.md's note on both).
     dhw_always_on: NotRequired[bool]
 
     # Thermostat specific

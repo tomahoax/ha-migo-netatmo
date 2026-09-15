@@ -246,7 +246,7 @@ Retrieves real-time data (temperatures, states).
 | `dhw_enabled` | bool | DHW enabled |
 | `dhw_setpoint_endtime` | int | DHW boost end time (timestamp) |
 | `outdoor_temperature` | float | Outdoor temperature |
-| `simple_heating_algo_deadband` | int | Hysteresis deadband (see `/api/changeheatingalgo`) |
+| `simple_heating_algo_deadband` | int | Hysteresis deadband (see `/api/changeheatingalgo`) - documented, but **not seen in a live capture**; treat as unconfirmed |
 | `sequence_id` | int | Sequence ID |
 
 #### NAThermVaillant (Thermostat)
@@ -515,8 +515,15 @@ Sets the heating algorithm hysteresis threshold.
   - 1.6°C → `high_deadband = 15` (default)
   - 1.8°C → `high_deadband = 17`
   - 2.0°C → `high_deadband = 19`
-- The current value is returned in homestatus as `simple_heating_algo_deadband` on the gateway module
-- To convert back: hysteresis = (`simple_heating_algo_deadband` + 1) / 10
+- Documented (not independently confirmed) to be returned in homestatus as
+  `simple_heating_algo_deadband` on the gateway module - **not present in a
+  live homestatus capture taken during later development**, reported
+  alongside the hysteresis number entity's read side not reflecting a
+  change made from the MiGo app. If a future capture confirms where the
+  live value actually lives (homestatus, getconfigs, or elsewhere), update
+  `number.py`'s `MigoHysteresisNumber._native_value_fallback` accordingly -
+  until then, treat this endpoint and entity as write-only in practice
+- To convert back, if this field is ever found: hysteresis = (`simple_heating_algo_deadband` + 1) / 10
 
 ---
 
@@ -594,6 +601,7 @@ Sets module or room configuration.
 **Request - Set Temperature Offset:**
 ```json
 {
+  "home_id": "<home_id>",
   "home": {
     "id": "<home_id>",
     "rooms": [{
@@ -617,6 +625,13 @@ Sets module or room configuration.
 **Notes for Temperature Offset:**
 - Range: -5.0 to +5.0°C
 - Step: 0.5°C
+- **`home_id` at the request root**, matching the DHW calls above - added
+  after a live report that an earlier build (`home.id` only, no root-level
+  `home_id`) neither set nor read back the real value: the request looked
+  structurally valid and got a 200, but the offset never actually took
+  effect server-side. Not independently confirmed by a fresh mitmproxy
+  capture the way the DHW calls were - if this still doesn't take effect,
+  that capture is the next step
 
 ---
 

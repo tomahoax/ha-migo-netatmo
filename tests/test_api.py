@@ -579,13 +579,14 @@ class TestMigoApiControlMethods:
 
     @pytest.mark.asyncio
     async def test_set_temperature_offset(self) -> None:
-        """set_temperature_offset nests the offset under home.rooms."""
+        """set_temperature_offset sends home_id at root and nests the offset under home.rooms."""
         api = self._make_api()
 
         await api.set_temperature_offset(home_id="home_123", room_id="room_456", offset=-1.5)
 
         url, data = api._api_request.call_args.args
         assert url == API_SETCONFIGS_URL
+        assert data["home_id"] == "home_123"
         assert data["home"]["rooms"][0] == {"id": "room_456", "therm_setpoint_offset": -1.5}
 
     @pytest.mark.asyncio
