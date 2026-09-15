@@ -11,7 +11,7 @@ version = "1.0.0-beta3"
 description = "Home Assistant integration for MiGO Netatmo thermostats"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.13.2"
+requires-python = ">=3.14.2"
 authors = [
     {name = "tomahoax"}
 ]
@@ -20,7 +20,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
@@ -29,7 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "homeassistant>=2025.8.0",
+    "homeassistant>=2026.9.2",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
@@ -54,7 +53,7 @@ where = ["."]
 include = ["custom_components*"]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
@@ -100,7 +99,13 @@ known-first-party = ["custom_components.migo_netatmo"]
 # Note there is deliberately no ignore_missing_imports and no per-module
 # override: homeassistant, aiohttp and voluptuous all ship py.typed, and
 # disable_error_code below is core's own safety net for untyped dependencies.
-python_version = "3.13"
+python_version = "3.14"
+# Must match requires-python's floor, not just "whatever mypy happens to run
+# under": this used to say "3.13" while CI's mypy job already ran Python
+# 3.14, harmlessly until homeassistant's own source started using Python
+# 3.14-only syntax (a bare multi-except without parentheses) - mypy then
+# failed to parse it at all under a 3.13 target, a syntax error rather than
+# a type error, easy to mistake for an environment problem instead of this.
 platform = "linux"
 show_error_codes = true
 follow_imports = "normal"

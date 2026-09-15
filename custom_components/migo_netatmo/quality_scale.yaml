@@ -201,10 +201,10 @@ rules:
       disallow_any_generics, which core scopes to homeassistant.* rather than to
       integrations, since it costs nothing here.
 
-      Evidence, measured with mypy 2.3.0 against homeassistant 2026.1.0 on
-      Python 3.14.6: 0 errors in 16 source files, 0 "type: ignore", 0 Any
-      suppressions. cast() appears at 6 sites, all in api.py, each one line from
-      the await that produced the untrusted JSON payload. models.py now types
+      Evidence, measured with mypy 2.3.0 against homeassistant 2026.9.2 on
+      Python 3.14.7: 0 errors in 27 source files, 0 "type: ignore", 0 Any
+      suppressions. cast() appears at 2 sites, both in switch.py, each narrowing
+      a cached DHW value read through the same lambda-based helper. models.py now types
       coordinator.homes/rooms/devices as
       dict[str, HomeConfig | RoomData | ModuleData] and the whole entity read
       path is narrowed accordingly. helpers.safe_get is gone; it could not be

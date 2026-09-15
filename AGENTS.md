@@ -63,7 +63,7 @@ button did, for every entity, since they share one coordinator.
 
 ### Code Style
 
-- Python 3.13+ (see `pyproject.toml` `requires-python`)
+- Python 3.14+ (see `pyproject.toml` `requires-python`)
 - Follow Home Assistant coding standards
 - Use async/await for all I/O operations
 - Lint/format with `ruff` (`ruff check` / `ruff format --check`), type-check with `mypy`

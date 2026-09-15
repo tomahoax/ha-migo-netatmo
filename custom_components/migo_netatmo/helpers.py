@@ -44,7 +44,7 @@ def safe_float(value: Any, default: float | None = None) -> float | None:
         return default
     try:
         return float(value)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         _LOGGER.debug("Failed to convert %r to float", value)
         return default
 

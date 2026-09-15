@@ -116,9 +116,11 @@ jobs:
           - python-version: "3.14"
             ha: "latest"
           # Minimum supported HA (matches hacs.json), pinned via the
-          # pytest-homeassistant-custom-component release for HA 2025.8
-          - python-version: "3.13"
-            ha: "2025.8"
+          # pytest-homeassistant-custom-component release for HA 2026.9.
+          # No older Python is left to pair it with: HA 2026.9.2 itself
+          # requires Python >=3.14.2.
+          - python-version: "3.14"
+            ha: "2026.9"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -136,13 +138,14 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Pin Home Assistant to minimum supported version
-        if: matrix.ha == '2025.8'
+        if: matrix.ha == '2026.9'
         # This leg deliberately steps below the lockfile: pinning HA down is its
         # entire purpose, so it cannot itself be locked. Everything else still
-        # comes from uv.lock.
-        # pycares<5: pycares 5.0 (2025-12) drops the API used by the
-        # aiodns 3.5.0 release that HA 2025.8 pins
-        run: uv pip install "pytest-homeassistant-custom-component==0.13.270" "pycares<5"
+        # comes from uv.lock. No extra pycares/aiodns pin needed here (unlike the
+        # HA 2025.8 leg this replaced): this release resolves the same aiodns
+        # 4.0.4 / pycares 5.0.1 pair as the "latest" leg, re-verified empirically
+        # rather than assumed - re-check this note at the next floor bump.
+        run: uv pip install "pytest-homeassistant-custom-component==0.13.365"
 
       - name: Run tests with pytest
         run: |
