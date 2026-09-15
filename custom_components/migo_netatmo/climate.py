@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any, override
 
@@ -57,8 +58,9 @@ PRESET_FROST_GUARD = "frost_guard"
 # "hg" while the home's therm_mode stays "schedule" (as opposed to real
 # frost guard/standby, where therm_mode itself is "hg"). Both share the same
 # underlying MiGo mode value ("hg") but at different API levels - see
-# async_set_preset_mode, which writes each one explicitly rather than
-# through the ambiguous generic dispatcher (MigoApi.set_mode()).
+# async_set_preset_mode, which writes each one explicitly via its own
+# specific endpoint (set_room_state for the room level, set_home_therm_mode
+# for the home level) rather than through an ambiguous generic dispatcher.
 PRESET_DHW_ONLY = "dhw_only"
 
 # Map MiGO room-level modes to HVAC modes.
@@ -257,7 +259,15 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             return None
         return self.coordinator.devices.get(thermostat_id, {}).get("boiler_status")
 
-    async def _write_dhw_only(self, home_id: str, *, cache_key: str, optimistic_value: Any) -> None:
+    async def _write_dhw_only(
+        self,
+        home_id: str,
+        *,
+        cache_key: str,
+        optimistic_value: Any,
+        secondary_cache_key: str,
+        secondary_optimistic_value: Any,
+    ) -> None:
         """Write MiGo's DHW-only quick action: cooling home-wide, plus this room's hg.
 
         Reported live: after selecting DHW-only from Home Assistant, the
@@ -286,15 +296,37 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         overwrite it either way.
 
         A stale home-level real Frost guard ("hg") is still cleared first,
-        same as before - but now as its own separate `set_home_therm_mode`
-        call (the confirmed-safe "heating" + therm_mode combination), never
-        combined with the "cooling" call that follows it. Without this,
-        `preset_mode`'s own derivation (which checks the home-level mode
-        before the room-level one) would go back to reading DHW-only as
-        Frost guard whenever this was left over - the same bug already
-        fixed once on this exact path.
+        same as before - but now unconditionally (unless Away is active)
+        rather than only when a *raw* read of `_home_therm_mode` currently
+        shows Frost guard. `PARALLEL_UPDATES = 1` fully serialises this
+        entity's write calls, so a Frost guard selection immediately
+        followed by DHW-only always finishes clearing its own optimistic
+        cache before this call starts - but the raw `coordinator.homes`
+        data `_home_therm_mode` reads can still lag that by up to the
+        coordinator's ~10s debounce window (see `_call_api_optimistically`'s
+        own docstring on coalesced refreshes), so a check against either the
+        cache or the raw value alone can miss a Frost guard that really was
+        just set, leaving `therm_mode: "hg"` + `temperature_control_mode:
+        "cooling"` both active - `preset_mode`'s own derivation (which
+        checks the home-level mode before the room-level one) then goes
+        back to reading DHW-only as Frost guard, the same bug already fixed
+        once on this exact path. `_home_is_away` sidesteps needing to
+        detect Frost guard specifically at all: since Away and DHW-only can
+        be combined, Away is the only state this clear must not disturb,
+        and `_home_is_away` (unlike a raw home-level `therm_mode` read) is
+        already built to stay correct through exactly this kind of
+        staleness window. Sending `mode=MODE_SCHEDULE` when the home is
+        already on schedule is a harmless no-op.
+
+        On a failure of the final (room-level) call below, the
+        `temperature_control_mode="cooling"` call above - which by then has
+        already succeeded - is best-effort reverted back to "heating"
+        before the exception propagates: without this, a transient failure
+        on just the last call left the whole home with heating silently
+        disabled, with nothing in the UI showing why until the user
+        happened to notice via the MiGo app or the boiler mode sensor.
         """
-        if self._home_therm_mode == MODE_FROST_GUARD:
+        if not self._home_is_away:
             await self._call_api(
                 self._api.set_home_therm_mode,
                 home_id=home_id,
@@ -305,13 +337,47 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             home_id=home_id,
             mode="cooling",
         )
-        await self._call_api_optimistically(
+        try:
+            await self._call_api_optimistically(
+                self._api.set_room_state,
+                cache_key=cache_key,
+                optimistic_value=optimistic_value,
+                secondary_cache_key=secondary_cache_key,
+                secondary_optimistic_value=secondary_optimistic_value,
+                home_id=home_id,
+                room_id=self._room_id,
+                mode=MODE_FROST_GUARD,
+            )
+        except Exception:
+            with contextlib.suppress(Exception):
+                await self._call_api(
+                    self._api.set_temperature_control_mode,
+                    home_id=home_id,
+                    mode="heating",
+                )
+            raise
+
+    async def _clear_room_override(self, home_id: str) -> None:
+        """Clear this room's therm_setpoint_mode back to "home" (not overridden).
+
+        Called unconditionally by the branches below, rather than only when
+        a check of this room's *current* mode happens to show an override:
+        `PARALLEL_UPDATES = 1` fully serialises this entity's write calls,
+        so a Manual/Boost/DHW-only/Off selection immediately followed by
+        Auto or Frost guard always finishes clearing its own optimistic
+        cache before the next call starts, while the raw `coordinator.rooms`
+        data a "is this room currently overridden?" check would read can
+        still lag that by up to the coordinator's ~10s debounce window - a
+        real, reported bug (therm_setpoint_mode stayed "hg" through
+        repeated Auto clicks, only clearing once a room-level write was
+        tried instead). Sending "home" again when the room is already
+        "home" is a harmless no-op.
+        """
+        await self._call_api(
             self._api.set_room_state,
-            cache_key=cache_key,
-            optimistic_value=optimistic_value,
             home_id=home_id,
             room_id=self._room_id,
-            mode=MODE_FROST_GUARD,
+            mode=MODE_HOME,
         )
 
     @override
@@ -328,6 +394,13 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             self._api.set_temperature,
             cache_key=self._target_temperature_cache_key,
             optimistic_value=temperature,
+            # set_temperature always switches the room to manual mode
+            # server-side (see MigoApi.set_temperature's docstring), but
+            # only the temperature itself used to be reflected optimistically
+            # - hvac_mode kept showing the previous mode (e.g. Auto) until
+            # the next refresh.
+            secondary_cache_key=self._hvac_mode_cache_key,
+            secondary_optimistic_value=HVACMode.HEAT.value,
             home_id=home_id,
             room_id=self._room_id,
             temperature=temperature,
@@ -354,37 +427,41 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 temperature,
                 duration,
             )
+            # Unlike Auto/Normal/Frost guard/Away, which all write through
+            # set_home_therm_mode (always resetting temperature_control_mode
+            # back to "heating" as part of the same call), this branch only
+            # ever called set_temperature - a value left over from a prior
+            # DHW-only selection kept the boiler unable to heat anywhere in
+            # the home even though this room's manual override was written
+            # and shown as active. Sent unconditionally, not gated on a raw
+            # read of home_data showing "cooling" first: same staleness gap
+            # as _clear_room_override/_write_dhw_only's home-level clear -
+            # `coordinator.homes` can still show the pre-write value for up
+            # to the debounce window right after a DHW-only write, so a
+            # rapid DHW-only-then-Heat could otherwise skip this reset.
+            # Sending "heating" when already "heating" is a harmless no-op.
+            await self._call_api(
+                self._api.set_temperature_control_mode,
+                home_id=home_id,
+                mode="heating",
+            )
+            # Mirrors preset_mode's own Boost detection (manual at/near max
+            # temperature) so the preset button doesn't lag behind the mode
+            # wheel after this write.
+            preset_value = PRESET_BOOST if temperature >= TEMP_MAX - 0.5 else None
             await self._call_api_optimistically(
                 self._api.set_temperature,
                 cache_key=self._hvac_mode_cache_key,
                 optimistic_value=HVACMode.HEAT.value,
+                secondary_cache_key=self._preset_mode_cache_key,
+                secondary_optimistic_value=preset_value,
                 home_id=home_id,
                 room_id=self._room_id,
                 temperature=temperature,
                 duration=duration,
             )
         elif hvac_mode == HVACMode.AUTO:
-            room_mode = self._room_data.get("therm_setpoint_mode")
-            if room_mode in (MODE_MANUAL, MODE_MAX, MODE_FROST_GUARD, MODE_OFF):
-                # A room-level override left over from a previous Off/
-                # DHW-only/Heat/Boost selection (stuck at "hg"/"manual"/
-                # "max") is never cleared by the home-level call below -
-                # and `hvac_mode`'s own derivation checks the room-level
-                # mode before the home-level one, so it kept reporting Off
-                # no matter how many times Auto was selected afterward.
-                # Reported live and confirmed against a debug-log capture:
-                # therm_setpoint_mode stayed "hg" through repeated Auto
-                # clicks, only clearing once Heat (a room-level write) was
-                # tried instead. Explicitly clear the room back to "home"
-                # (not overridden - the API's own term for this, confirmed
-                # to be what a cleared override settles back to on its own)
-                # before the home-level call below.
-                await self._call_api(
-                    self._api.set_room_state,
-                    home_id=home_id,
-                    room_id=self._room_id,
-                    mode=MODE_HOME,
-                )
+            await self._clear_room_override(home_id)
             _LOGGER.debug("Setting room %s HVAC mode to auto (migo: schedule)", self._room_id)
             # set_home_therm_mode (sethomedata) directly, not the generic
             # set_mode() dispatcher (which routes "schedule" to the bare
@@ -398,6 +475,8 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 self._api.set_home_therm_mode,
                 cache_key=self._hvac_mode_cache_key,
                 optimistic_value=HVACMode.AUTO.value,
+                secondary_cache_key=self._preset_mode_cache_key,
+                secondary_optimistic_value=PRESET_NORMAL,
                 home_id=home_id,
                 mode=MODE_SCHEDULE,
             )
@@ -411,6 +490,8 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 home_id,
                 cache_key=self._hvac_mode_cache_key,
                 optimistic_value=HVACMode.OFF.value,
+                secondary_cache_key=self._preset_mode_cache_key,
+                secondary_optimistic_value=PRESET_DHW_ONLY,
             )
 
         _LOGGER.debug("Room %s HVAC mode set successfully", self._room_id)
@@ -497,16 +578,13 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             # effect. Also clears Away, unlike DHW-only above - Normal is
             # meant as a full reset, matching Auto's existing behavior.
             _LOGGER.debug("Setting room %s to Normal (home schedule, room home)", self._room_id)
-            await self._call_api(
-                self._api.set_room_state,
-                home_id=home_id,
-                room_id=self._room_id,
-                mode=MODE_HOME,
-            )
+            await self._clear_room_override(home_id)
             await self._call_api_optimistically(
                 self._api.set_home_therm_mode,
                 cache_key=self._preset_mode_cache_key,
                 optimistic_value=preset_mode,
+                secondary_cache_key=self._hvac_mode_cache_key,
+                secondary_optimistic_value=HVACMode.AUTO.value,
                 home_id=home_id,
                 mode=MODE_SCHEDULE,
             )
@@ -518,10 +596,23 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 TEMP_MAX,
                 DEFAULT_BOOST_DURATION,
             )
+            # Same gap as async_set_hvac_mode's Heat branch: unlike
+            # Auto/Normal/Frost guard/Away, this only ever called
+            # set_temperature, so a value left over from a prior DHW-only
+            # selection kept the boiler unable to heat anywhere in the home.
+            # Sent unconditionally rather than gated on a raw read, for the
+            # same staleness reason documented on the Heat branch.
+            await self._call_api(
+                self._api.set_temperature_control_mode,
+                home_id=home_id,
+                mode="heating",
+            )
             await self._call_api_optimistically(
                 self._api.set_temperature,
                 cache_key=self._preset_mode_cache_key,
                 optimistic_value=preset_mode,
+                secondary_cache_key=self._hvac_mode_cache_key,
+                secondary_optimistic_value=HVACMode.HEAT.value,
                 home_id=home_id,
                 room_id=self._room_id,
                 temperature=TEMP_MAX,
@@ -535,6 +626,8 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
                 home_id,
                 cache_key=self._preset_mode_cache_key,
                 optimistic_value=preset_mode,
+                secondary_cache_key=self._hvac_mode_cache_key,
+                secondary_optimistic_value=HVACMode.OFF.value,
             )
         elif preset_mode == PRESET_FROST_GUARD:
             # Home-level "hg" via sethomedata (set_home_therm_mode) - not
@@ -545,25 +638,24 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             # over from DHW-only would keep producing the same "cooling"
             # 403 Away's write used to hit (see
             # MigoApi.set_home_therm_mode's docstring).
-            if self._room_data.get("therm_setpoint_mode") in (MODE_MANUAL, MODE_MAX):
-                # preset_mode's own derivation checks a room-level Manual/
-                # Boost override before the home-level mode (an active
-                # override shouldn't be silently hidden by an unrelated
-                # preset) - same gap as async_set_hvac_mode's Auto branch:
-                # a leftover Manual/Boost override would otherwise keep
-                # preset_mode stuck reporting Boost/None no matter what was
-                # selected here. Clear it first.
-                await self._call_api(
-                    self._api.set_room_state,
-                    home_id=home_id,
-                    room_id=self._room_id,
-                    mode=MODE_HOME,
-                )
+            #
+            # Clearing the room unconditionally (see _clear_room_override),
+            # rather than only when a raw read of this room's current mode
+            # happens to show Manual/Boost: preset_mode's own derivation
+            # checks a room-level Manual/Boost override before the
+            # home-level mode (an active override shouldn't be silently
+            # hidden by an unrelated preset) - same staleness gap as
+            # async_set_hvac_mode's Auto branch, a leftover Manual/Boost
+            # override could otherwise keep preset_mode stuck reporting
+            # Boost/None no matter what was selected here.
+            await self._clear_room_override(home_id)
             _LOGGER.debug("Setting home %s to Frost guard (home-level hg)", home_id)
             await self._call_api_optimistically(
                 self._api.set_home_therm_mode,
                 cache_key=self._preset_mode_cache_key,
                 optimistic_value=preset_mode,
+                secondary_cache_key=self._hvac_mode_cache_key,
+                secondary_optimistic_value=HVACMode.OFF.value,
                 home_id=home_id,
                 mode=MODE_FROST_GUARD,
             )

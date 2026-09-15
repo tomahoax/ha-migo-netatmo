@@ -43,9 +43,7 @@ class TestMigoClimate:
         """
         api = create_autospec(MigoApi, instance=True)
         api.set_temperature.return_value = {"status": "ok"}
-        api.set_mode.return_value = {"status": "ok"}
         api.set_room_state.return_value = {"status": "ok"}
-        api.set_therm_mode.return_value = {"status": "ok"}
         api.set_home_therm_mode.return_value = {"status": "ok"}
         api.set_temperature_control_mode.return_value = {"status": "ok"}
         entity = MigoClimate(mock_coordinator, "room_456", api)
@@ -160,18 +158,28 @@ class TestMigoClimate:
         assert call_kwargs["duration"] == DEFAULT_MANUAL_SETPOINT_DURATION
 
     @pytest.mark.asyncio
-    async def test_set_hvac_mode_auto(self, climate):
-        """Auto writes home-level schedule via set_home_therm_mode directly.
+    async def test_set_hvac_mode_heat_resets_temperature_control_mode(self, climate):
+        """Heat resets a stale temperature_control_mode="cooling" left over from DHW-only.
 
-        Regression guard: it used to go through the generic set_mode()
-        dispatcher (via the bare setthermmode endpoint), which doesn't
-        reset temperature_control_mode - so a value left over from
-        DHW-only would keep producing the same "cooling" 403 Away's write
-        used to hit (see MigoApi.set_home_therm_mode's docstring).
+        Regression guard: unlike Auto/Normal/Frost guard/Away (all of which
+        write through set_home_therm_mode, resetting this field as part of
+        the same call), Heat only ever called set_temperature - a value
+        left over from DHW-only kept the boiler unable to heat anywhere in
+        the home even though this room's manual override was written and
+        shown as active. Sent unconditionally (not gated on a raw read of
+        coordinator.homes, which can still show the pre-write value for up
+        to the debounce window right after a DHW-only write) - same
+        staleness reasoning as _clear_room_override/_write_dhw_only.
         """
+        await climate.async_set_hvac_mode(HVACMode.HEAT)
+
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="heating")
+
+    @pytest.mark.asyncio
+    async def test_set_hvac_mode_auto(self, climate):
+        """Auto writes home-level schedule via set_home_therm_mode directly."""
         await climate.async_set_hvac_mode(HVACMode.AUTO)
 
-        climate._api.set_mode.assert_not_called()
         climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
 
     @pytest.mark.asyncio
@@ -194,30 +202,33 @@ class TestMigoClimate:
         climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
 
     @pytest.mark.asyncio
-    async def test_set_hvac_mode_auto_does_not_clear_room_when_not_overridden(self, climate):
-        """No extra call when the room isn't in a leftover override to begin with."""
+    async def test_set_hvac_mode_auto_clears_room_unconditionally(self, climate):
+        """The room clear runs even when this room isn't currently overridden.
+
+        Regression guard: this used to be conditional on a *raw* read of
+        this room's current therm_setpoint_mode, which can still lag a very
+        recent Manual/Boost/DHW-only/Off write to the *same* room by up to
+        the coordinator's debounce window (PARALLEL_UPDATES=1 means that
+        prior write's own optimistic cache is already gone by the time this
+        one runs) - so the stale-looking raw read let the leftover override
+        survive an Auto click that should have cleared it. Sending "home"
+        again when the room is already "home" is a harmless no-op.
+        """
         await climate.async_set_hvac_mode(HVACMode.AUTO)
 
-        climate._api.set_room_state.assert_not_called()
+        climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
 
     @pytest.mark.asyncio
     async def test_set_hvac_mode_off(self, climate):
         """Off writes the same DHW-only state the preset does.
 
-        Regression guard: writing only the room's "hg" (via the generic
-        set_mode() dispatcher) never flipped temperature_control_mode to
-        "cooling", so the MiGo app itself never showed it as active even
-        though it structurally matched what this integration reads back as
-        DHW-only. Confirmed via a live capture of the app's own "Eau chaude
-        seulement" action (see MigoApi.set_temperature_control_mode's
-        docstring). temperature_control_mode is set via its own dedicated
-        call, not combined with a therm_mode change in the same request -
-        a first fix attempt tried that and got a live-confirmed 403.
+        temperature_control_mode is set via its own dedicated call, not
+        combined with a therm_mode change in the same request - a first fix
+        attempt tried that and got a live-confirmed 403.
         """
         await climate.async_set_hvac_mode(HVACMode.OFF)
 
-        climate._api.set_mode.assert_not_called()
-        climate._api.set_home_therm_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
         climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="cooling")
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
@@ -253,38 +264,22 @@ class TestMigoClimate:
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_away(self, climate):
-        """Away writes home-level Away via set_home_therm_mode directly.
-
-        Regression guard: it used to go through the generic set_mode()
-        dispatcher (via setthermmode, with no endtime parameter), so it
-        could never clear a return time left over from a previous Away
-        period - unlike switch.migo_{home}_away_mode and
-        button.migo_{home}_reset_away_until, which already clear it via an
-        explicit endtime=None.
-        """
+        """Away writes home-level Away via set_home_therm_mode directly, clearing any return time."""
         await climate.async_set_preset_mode(PRESET_AWAY)
 
-        climate._api.set_mode.assert_not_called()
         climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_AWAY, endtime=None)
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_frost_guard(self, climate):
         """Frost guard (Veille) writes home-level hg via set_home_therm_mode.
 
-        Regression guard: it used to go through the generic set_mode()
-        dispatcher, which always routes "hg" to the room, silently producing
-        the DHW-only effect instead of real standby. It then used the bare
-        setthermmode endpoint directly instead of sethomedata, which
-        doesn't reset temperature_control_mode - a value left over from
-        DHW-only would keep producing the same "cooling" 403 Away's write
-        used to hit (see MigoApi.set_home_therm_mode's docstring).
+        Also clears the room unconditionally (see _clear_room_override) -
+        a harmless no-op here since the room isn't overridden to begin with.
         """
         await climate.async_set_preset_mode(PRESET_FROST_GUARD)
 
-        climate._api.set_mode.assert_not_called()
-        climate._api.set_therm_mode.assert_not_called()
         climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_FROST_GUARD)
-        climate._api.set_room_state.assert_not_called()
+        climate._api.set_room_state.assert_called_once_with(home_id="home_123", room_id="room_456", mode=MODE_HOME)
 
     @pytest.mark.asyncio
     async def test_set_preset_mode_frost_guard_clears_stuck_room_level_manual(self, climate, mock_coordinator):
@@ -314,6 +309,17 @@ class TestMigoClimate:
         call_kwargs = climate._api.set_temperature.call_args.kwargs
         assert call_kwargs["temperature"] == TEMP_MAX
         assert call_kwargs["duration"] == DEFAULT_BOOST_DURATION
+
+    @pytest.mark.asyncio
+    async def test_set_preset_mode_boost_resets_temperature_control_mode(self, climate):
+        """Boost resets a stale temperature_control_mode="cooling", same as Heat.
+
+        Regression guard: same gap as async_set_hvac_mode's Heat branch,
+        sent unconditionally for the same staleness reason.
+        """
+        await climate.async_set_preset_mode(PRESET_BOOST)
+
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="heating")
 
     def test_preset_mode_boost_detected(self, climate, mock_coordinator):
         """Test that boost preset is detected when manual at max temp."""
@@ -409,20 +415,16 @@ class TestMigoClimate:
     async def test_set_preset_mode_dhw_only_writes_room_level_hg(self, climate):
         """DHW only writes room-level hg plus home-wide cooling, as two separate calls.
 
-        Reported live: DHW only used to only write the room's "hg" (the
-        same call HVACMode.OFF already makes), so the MiGo app itself
-        never showed it as active. Confirmed via a live capture of the
-        app's own "Eau chaude seulement" action: temperature_control_mode
-        flips to "cooling" home-wide too (see
-        MigoApi.set_temperature_control_mode's docstring). Sent as its own
-        request, not combined with a therm_mode change - a first fix
-        attempt tried that and got a live-confirmed 403.
+        Also unconditionally clears home-level therm_mode back to schedule
+        first, unless Away is active (see _write_dhw_only) - a harmless
+        no-op here since the home isn't in real Frost guard to begin with.
+        temperature_control_mode is sent as its own separate request, not
+        combined with the therm_mode change - a first fix attempt tried
+        that and got a live-confirmed 403.
         """
         await climate.async_set_preset_mode(PRESET_DHW_ONLY)
 
-        climate._api.set_mode.assert_not_called()
-        climate._api.set_therm_mode.assert_not_called()
-        climate._api.set_home_therm_mode.assert_not_called()
+        climate._api.set_home_therm_mode.assert_called_once_with(home_id="home_123", mode=MODE_SCHEDULE)
         climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="cooling")
         climate._api.set_room_state.assert_called_once_with(
             home_id="home_123", room_id="room_456", mode=MODE_FROST_GUARD
@@ -518,7 +520,6 @@ class TestClimateErrorSurfacing:
         """Create a climate entity with an autospecced API mock."""
         api = create_autospec(MigoApi, instance=True)
         api.set_temperature.return_value = {"status": "ok"}
-        api.set_mode.return_value = {"status": "ok"}
         entity = MigoClimate(mock_coordinator, "room_456", api)
         entity.async_write_ha_state = MagicMock()
         return entity

@@ -135,6 +135,121 @@ class TestCallApiOptimistically:
         coordinator.async_request_refresh.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_clear_cache_on_success_false_keeps_optimistic_value(self, coordinator):
+        """clear_cache_on_success=False leaves the cache populated after a successful call.
+
+        Regression guard: for a value the API never echoes back on any read
+        endpoint (e.g. number.py's heating_curve/hysteresis), the default
+        (clear on success) makes native_value fall straight through to a
+        hardcoded default right after a successful, confirmed write.
+        """
+        entity = _FakeEntity(coordinator)
+
+        async def api_method(**kwargs):
+            return None
+
+        await entity._call_api_optimistically(
+            api_method,
+            cache_key="heating_curve_gateway_001",
+            optimistic_value=3.4,
+            clear_cache_on_success=False,
+        )
+
+        assert coordinator.get_cached_value("heating_curve_gateway_001") == 3.4
+        coordinator.async_request_refresh.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_secondary_cache_key_set_and_cleared_on_success(self, coordinator):
+        """secondary_cache_key gets the same set-before-call, clear-on-success treatment.
+
+        Used where a single write changes two different read-side
+        properties, each tracked with its own cache key (see climate.py's
+        hvac_mode vs preset_mode).
+        """
+        entity = _FakeEntity(coordinator)
+
+        async def api_method(**kwargs):
+            # Both should already be set before the API call runs.
+            assert coordinator.get_cached_value("hvac_mode_room_456") == "off"
+            assert coordinator.get_cached_value("preset_mode_room_456") == "dhw_only"
+
+        await entity._call_api_optimistically(
+            api_method,
+            cache_key="hvac_mode_room_456",
+            optimistic_value="off",
+            secondary_cache_key="preset_mode_room_456",
+            secondary_optimistic_value="dhw_only",
+        )
+
+        assert coordinator.get_cached_value("hvac_mode_room_456") is None
+        assert coordinator.get_cached_value("preset_mode_room_456") is None
+
+    @pytest.mark.asyncio
+    async def test_secondary_cache_key_rolled_back_on_failure(self, coordinator):
+        """On failure, secondary_cache_key is restored to its previous value too."""
+        coordinator.set_cached_value("preset_mode_room_456", "boost")
+        entity = _FakeEntity(coordinator)
+
+        async def failing_api(**kwargs):
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            await entity._call_api_optimistically(
+                failing_api,
+                cache_key="hvac_mode_room_456",
+                optimistic_value="off",
+                secondary_cache_key="preset_mode_room_456",
+                secondary_optimistic_value="dhw_only",
+            )
+
+        assert coordinator.get_cached_value("hvac_mode_room_456") is None
+        assert coordinator.get_cached_value("preset_mode_room_456") == "boost"
+
+    @pytest.mark.asyncio
+    async def test_on_optimistic_rebroadcasts_listeners_on_failure(self, coordinator):
+        """A premature on_optimistic broadcast is corrected via a second broadcast on failure.
+
+        Regression guard: on_optimistic runs before the API call and can
+        push a *different* entity's state (e.g. MigoAwayModeSwitch clearing
+        MigoAwayReturnDateTime's cache). Before this, only this entity's own
+        async_write_ha_state ran on rollback - any entity that reacted to
+        the premature broadcast stayed wrong until the next real refresh.
+        """
+        entity = _FakeEntity(coordinator)
+        on_optimistic = MagicMock()
+
+        async def failing_api(**kwargs):
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            await entity._call_api_optimistically(
+                failing_api,
+                cache_key="k",
+                optimistic_value="new_value",
+                on_optimistic=on_optimistic,
+            )
+
+        on_optimistic.assert_called_once()
+        coordinator.async_update_listeners.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_rebroadcast_on_failure_without_on_optimistic(self, coordinator):
+        """No listener re-broadcast on failure when on_optimistic wasn't used - nothing to correct."""
+        entity = _FakeEntity(coordinator)
+
+        async def failing_api(**kwargs):
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            await entity._call_api_optimistically(
+                failing_api,
+                cache_key="k",
+                optimistic_value="new_value",
+            )
+
+        coordinator.async_update_listeners.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_api_error_is_translated_to_home_assistant_error(self, coordinator):
         """A MigoApiError surfaces as a translated HomeAssistantError, not raw.
 

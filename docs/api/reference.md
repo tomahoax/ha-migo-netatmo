@@ -18,7 +18,7 @@ This integration uses the same base API as the [official Netatmo Energy API](htt
 |---------------------|------------------|-------|
 | `/api/homesdata` | ✅ Used | Same endpoint |
 | `/api/homestatus` | ✅ Used | Same endpoint |
-| `/api/setthermmode` | ✅ Used | Same endpoint |
+| `/api/setthermmode` | ❌ Not used | Replaced by `/api/sethomedata`, which also resets `temperature_control_mode` (see below) - `setthermmode` doesn't touch that field at all, which caused a real bug when a value left over from DHW-only made a later mode change 403 |
 | `/api/switchhomeschedule` | ✅ Used | Same endpoint |
 | `/api/setroomthermpoint` | ❌ Not used | Replaced by `/api/setstate` |
 | `/api/setstate` | ✅ Used | More flexible than `setroomthermpoint` |
@@ -329,8 +329,14 @@ never both a `therm_mode` and `"cooling"` in one call.
 
 ---
 
-### POST `/api/setthermmode`
-Changes the global home mode (alternative API).
+### POST `/api/setthermmode` (Not Used)
+
+> **Note:** Documented for completeness - this integration no longer calls
+> it. It changes the global home mode but, unlike `/api/sethomedata` above,
+> has no `temperature_control_mode` field at all, so it can't reset a value
+> left over from DHW-only - a real bug (a later Auto/Frost guard/Away
+> change would 403) fixed by routing every mode change through
+> `sethomedata` instead.
 
 **Request:**
 ```json

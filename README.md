@@ -514,8 +514,7 @@ This integration uses the Netatmo API (`app.netatmo.net`) which is the backend f
 | `/api/getmeasure` | Historical data and consumption |
 | `/syncapi/v1/getconfigs` | DHW temperature, hysteresis, heating curve, DHW always-on (config values not in homesdata/homestatus) |
 | `/api/setstate` | Control room temperature and DHW |
-| `/api/setthermmode` | Set global mode |
-| `/api/sethomedata` | Home settings (anticipation, duration, Away with return time) |
+| `/api/sethomedata` | Home settings (anticipation, duration, global mode, Away with return time, `temperature_control_mode`) |
 | `/api/switchhomeschedule` | Switch active schedule |
 | `/syncapi/v1/setconfigs` | DHW temperature, offsets, DHW always-on |
 | `/api/changeheatingalgo` | Hysteresis settings |

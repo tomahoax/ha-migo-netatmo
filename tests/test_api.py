@@ -17,13 +17,9 @@ from custom_components.migo_netatmo.const import (
     API_SETHEATINGSYSTEM_URL,
     API_SETHOMEDATA_URL,
     API_SETSTATE_URL,
-    API_SETTHERMMODE_URL,
     API_SWITCHHOMESCHEDULE_URL,
     GRANT_TYPE_REFRESH,
-    MODE_AWAY,
-    MODE_HOME,
     MODE_MANUAL,
-    MODE_SCHEDULE,
 )
 
 
@@ -502,35 +498,6 @@ class TestMigoApiControlMethods:
         )
         api._api_request = AsyncMock(return_value={"status": "ok"})
         return api
-
-    @pytest.mark.asyncio
-    async def test_set_mode_global_mode_uses_therm_mode_endpoint(self) -> None:
-        """schedule/away are home-wide modes routed through setthermmode."""
-        api = self._make_api()
-
-        await api.set_mode(home_id="home_123", room_id="room_456", mode=MODE_SCHEDULE)
-
-        api._api_request.assert_awaited_once_with(API_SETTHERMMODE_URL, {"home_id": "home_123", "mode": MODE_SCHEDULE})
-
-    @pytest.mark.asyncio
-    async def test_set_mode_room_mode_uses_setstate_endpoint(self) -> None:
-        """manual/home/hg are room-level modes routed through setstate."""
-        api = self._make_api()
-
-        await api.set_mode(home_id="home_123", room_id="room_456", mode=MODE_HOME)
-
-        url, data = api._api_request.call_args.args
-        assert url == API_SETSTATE_URL
-        assert data["home"]["rooms"][0] == {"id": "room_456", "therm_setpoint_mode": MODE_HOME}
-
-    @pytest.mark.asyncio
-    async def test_set_therm_mode(self) -> None:
-        """set_therm_mode posts home_id and mode to setthermmode."""
-        api = self._make_api()
-
-        await api.set_therm_mode(home_id="home_123", mode=MODE_AWAY)
-
-        api._api_request.assert_awaited_once_with(API_SETTHERMMODE_URL, {"home_id": "home_123", "mode": MODE_AWAY})
 
     @pytest.mark.asyncio
     async def test_set_dhw_enabled(self) -> None:
