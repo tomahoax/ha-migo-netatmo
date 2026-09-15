@@ -23,7 +23,7 @@ This integration connects your Saunier Duval thermostat (controlled via the MiGO
 
 ### Requirements
 
-- Home Assistant 2025.8.0 or later (the floor declared in `hacs.json`)
+- Home Assistant 2026.9.2 or later (the floor declared in `hacs.json`)
 - A Saunier Duval thermostat compatible with the **MiGO** app
 - Valid MiGO app credentials (email and password)
 

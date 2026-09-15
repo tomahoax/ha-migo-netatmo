@@ -107,7 +107,7 @@ async def test_remove_stale_device(
     """Test that only devices unknown to the API can be removed."""
     device_registry = dr.async_get(hass)
 
-    live_device = device_registry.async_get_device(identifiers={(DOMAIN, "gateway_001")})
+    live_device = device_registry.async_get_device_by_identifier((DOMAIN, "gateway_001"), init_integration.entry_id)
     assert live_device is not None
     assert not await async_remove_config_entry_device(hass, init_integration, live_device)
 
@@ -207,7 +207,7 @@ async def test_no_device_removal_while_caches_are_empty(
     guard, every device would look unreported and a live one could be deleted.
     """
     device_registry = dr.async_get(hass)
-    live_device = device_registry.async_get_device(identifiers={(DOMAIN, "gateway_001")})
+    live_device = device_registry.async_get_device_by_identifier((DOMAIN, "gateway_001"), init_integration.entry_id)
     assert live_device is not None
 
     coordinator = init_integration.runtime_data.coordinator

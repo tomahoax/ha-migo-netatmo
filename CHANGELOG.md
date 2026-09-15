@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Minimum supported Home Assistant version raised from 2025.8.0 to 2026.9.2**, and the minimum Python version from 3.13.2 to 3.14.2 (HA 2026.9.2's own floor). The thermostat-to-gateway device link now uses `via_device_id` again instead of `via_device`: the latter, reinstated in beta3 after `via_device_id` proved unavailable on HA 2025.8-2026.1, has since been removed from `DeviceInfo` entirely, while `via_device_id` is now the current, stable mechanism
+
 ### Fixed
 - **Selecting DHW-only, then Heat or Boost on any room, could leave the whole home silently unable to heat.** A stale `temperature_control_mode: "cooling"` left over from DHW-only was only ever reset by Auto/Normal/Frost guard/Away (all of which write through `sethomedata`); Heat and Boost only ever called `set_temperature`, which never touches that field. Both now reset it unconditionally
 - **`hvac_mode` and `preset_mode` could each show a different mode/preset than the other for a few seconds after a write**, since each had its own optimistic-cache key but a setter only ever populated the one it was named after. Every climate write now updates both together
