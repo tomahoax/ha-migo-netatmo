@@ -98,6 +98,11 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
+          # Without a suffix this job's cache key is identical to the test
+          # job's "latest" leg (same OS/arch/Python version/lockfile hash),
+          # and whichever job saves second fails with "Unable to reserve
+          # cache" - harmless, but a needless warning on every run.
+          cache-suffix: mypy
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
@@ -129,6 +134,11 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # Both matrix legs otherwise resolve to the same cache key (same
+          # OS/arch/Python version/lockfile hash) and run in parallel, so
+          # whichever saves second fails with "Unable to reserve cache" -
+          # harmless, but a needless warning on every run.
+          cache-suffix: ${{ matrix.ha }}
 
       # --frozen resolves from uv.lock, which pins every package with a sha256.
       # The previous `pip install -e ".[dev]"` did a fresh unhashed resolve of
