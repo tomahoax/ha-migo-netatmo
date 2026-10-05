@@ -1005,7 +1005,7 @@ wheels = [
 
 [[package]]
 name = "ha-migo-netatmo"
-version = "1.0.0b3"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

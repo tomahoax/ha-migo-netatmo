@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-05
+
+First stable release since 0.40.2. It gathers everything published in the betas, whose sections below list each change in detail. This summary is for people updating from 0.40.2.
+
+### Breaking changes
+- Home Assistant 2026.9.2 or later is now required, together with Python 3.14.2 or later (the floor of Home Assistant 2026.9.2 itself).
+- Four buttons are gone: the Gateway and Thermostat refresh buttons, the reset heating curve button and the reset Away until button. Home Assistant's own update action refreshes any entity.
+- Some entities moved between the Controls, Configuration and Diagnostic cards. Existing installations keep the old cards until you change each entity category by hand (see the [1.0.0-beta3](#100-beta3---2026-09-15) upgrade note).
+
+### Fixed
+- The deprecated `via_device` parameter no longer appears in the Home Assistant logs (issue #36). The thermostat is linked to its gateway with `via_device_id`, and the gateway device is registered before the platforms are set up.
+- Away mode, Hot water only and Frost guard now switch on and read back correctly. The climate card no longer lags or gets stuck after a change.
+- The request timeout is now applied (30 seconds instead of up to 5 minutes), and a malformed measurement no longer fails a whole refresh.
+
+### Added
+- Measured gas and electricity consumption sensors (kWh) that work in the Energy dashboard.
+- Away mode switch and sensor, Away return time, boiler mode sensor, scheduled hot water sensor, hot water always on switch and a Normal climate preset.
+- Devices the MiGO account stops reporting are removed automatically.
+- A SHA-256 checksum is published next to the release archive.
+
+### Security
+- Personal data (email, GPS position, city, invitation code) is no longer written to debug logs, and diagnostics downloads redact more fields. Delete any old debug log that was captured before this release before sharing it.
+- The Reconfigure dialog no longer pre-fills the stored password or client secret.
+
+See [1.0.0-beta3](#100-beta3---2026-09-15) and [1.0.0-beta4](#100-beta4---2026-09-15) for the complete list.
+
 ## [1.0.0-beta4] - 2026-09-15
 
 ### Changed
