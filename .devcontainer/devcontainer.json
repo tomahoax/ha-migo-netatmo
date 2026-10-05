@@ -29,6 +29,6 @@
             }
         }
     },
-    "postCreateCommand": "pip install -r requirements_dev.txt && pre-commit install",
+    "postCreateCommand": "pip install -e '.[dev]' && pre-commit install",
     "remoteUser": "vscode"
 }

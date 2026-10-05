@@ -71,12 +71,16 @@ Hierarchical entity classes for code reuse.
 
 ```
 MigoEntity (CoordinatorEntity)
-├── MigoRoomEntity          # Room-based entities
-│   └── MigoRoomControlEntity   # With API control
-├── MigoDeviceEntity        # Device-based entities
-│   └── MigoControlEntity       # With API control
-└── MigoHomeEntity          # Home-based entities
-    └── MigoHomeControlEntity   # With API control
+├── MigoRoomEntity                        # Room-based entities
+│   └── MigoRoomControlEntity             # + MigoApiControlMixin
+├── MigoDeviceEntity                      # Device-based entities
+│   ├── MigoGatewayEntity                 # Gateway (NAVaillant)
+│   │   └── MigoGatewayControlEntity      # + MigoApiControlMixin
+│   └── MigoThermostatEntity              # Thermostat (NAThermVaillant)
+├── MigoHomeEntity                        # Home-based entities
+│   └── MigoHomeControlEntity             # + MigoApiControlMixin
+└── MigoThermostatHomeEntity              # Home settings shown on the thermostat
+    └── MigoThermostatHomeControlEntity   # + MigoApiControlMixin
 ```
 
 ### MigoApiControlMixin
@@ -139,6 +143,7 @@ Entities use Home Assistant's translation system:
 ```python
 _attr_translation_key = "thermostat"
 
+
 @property
 def translation_placeholders(self):
     return {"room_name": self._room_data.get("name")}
@@ -171,7 +176,6 @@ All magic values are centralized in `const.py`:
 | `switch.py` | Toggle controls |
 | `select.py` | Dropdown selections |
 | `number.py` | Numeric inputs |
-| `button.py` | Action triggers |
 
 ## Error Handling
 

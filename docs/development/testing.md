@@ -9,7 +9,7 @@ This guide covers how to run and write tests for the MiGo integration.
 Install development dependencies:
 
 ```bash
-pip install -r requirements_dev.txt
+pip install -e ".[dev]"
 ```
 
 ### Run All Tests
@@ -61,6 +61,7 @@ Common fixtures are defined in `conftest.py`:
 def mock_api():
     """Return a mock API client."""
     ...
+
 
 @pytest.fixture
 def coordinator(mock_api):
@@ -119,9 +120,7 @@ async def test_coordinator_update(hass, mock_api):
 ```python
 async def test_config_flow_success(hass):
     """Test successful config flow."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
 
     assert result["type"] == FlowResultType.FORM
 
@@ -146,18 +145,24 @@ Create fixtures with realistic API responses:
 def homes_data():
     return {
         "body": {
-            "homes": [{
-                "id": "home_1",
-                "name": "My Home",
-                "rooms": [{
-                    "id": "room_1",
-                    "name": "Living Room",
-                }],
-                "modules": [{
-                    "id": "device_1",
-                    "type": "NAVaillant",
-                }],
-            }],
+            "homes": [
+                {
+                    "id": "home_1",
+                    "name": "My Home",
+                    "rooms": [
+                        {
+                            "id": "room_1",
+                            "name": "Living Room",
+                        }
+                    ],
+                    "modules": [
+                        {
+                            "id": "device_1",
+                            "type": "NAVaillant",
+                        }
+                    ],
+                }
+            ],
         }
     }
 ```

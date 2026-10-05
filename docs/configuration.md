@@ -13,7 +13,19 @@ The integration is configured through the UI. During setup, you'll need:
 
 ## Integration Options
 
-Currently, the integration has no additional configurable options after setup. All settings are managed through the created entities.
+Open **Settings** → **Devices & services** → **MiGo (Netatmo)** → **Configure**:
+
+| Option | Description | Range | Default |
+|--------|-------------|-------|---------|
+| Update interval | How often to poll the API | 60 - 3600 seconds | 300 seconds |
+
+Changing the interval reloads the integration automatically.
+
+## Changing credentials
+
+Use **Reconfigure** from the integration entry menu (three dots) to update the email, password or optional OAuth settings. The flow only accepts the account the entry was created for. If authentication expires, Home Assistant starts a **Reauthenticate** repair automatically.
+
+Device-level settings (DHW temperature, hysteresis, heating curve, offsets) are managed through the created entities.
 
 ## Entity Configuration
 
@@ -24,7 +36,7 @@ The climate entity provides thermostat control:
 | Feature | Description |
 |---------|-------------|
 | HVAC Modes | Off, Heat, Auto |
-| Preset Modes | Away, Frost guard, Boost |
+| Preset Modes | Away, Frost guard, Hot water only, Boost |
 | Temperature Range | 7°C - 30°C |
 | Temperature Step | 0.5°C |
 
@@ -47,6 +59,8 @@ Toggle controls:
 |--------|-------------|
 | DHW Boost | Temporarily boost hot water temperature |
 | Heating Anticipation | Enable/disable predictive heating |
+| Away Mode | Home-wide Away flag, the same field the climate "Away" preset reads |
+| DHW Always On | Forces the boiler to never suspend hot water heating |
 
 ### Select Entities
 
@@ -71,4 +85,4 @@ This will log all API calls and entity updates, useful for troubleshooting.
 
 ## Data Refresh
 
-The integration polls the API every 5 minutes by default. You can force a refresh using the "Refresh" button entity.
+The integration polls the API every 5 minutes by default. Between polls, use Home Assistant's built-in **Update** action (`homeassistant.update_entity`, also available from any migo_netatmo entity's more-info dialog) to force an immediate refresh - there is no dedicated refresh button entity, since every entity shares one coordinator and the built-in action already does the same thing for free.
