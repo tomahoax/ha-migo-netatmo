@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from custom_components.migo_netatmo.entity import MigoThermostatEntity
+from custom_components.migo_netatmo.entity import (
+    MigoDeviceEntity,
+    MigoHomeEntity,
+    MigoRoomEntity,
+    MigoThermostatEntity,
+    MigoThermostatHomeEntity,
+)
 from custom_components.migo_netatmo.entity_device_info import _entity_config_entry_id, _resolve_via_device_id
 
 # mock_coordinator fixture lives in conftest.py, shared across test modules.
@@ -100,3 +106,45 @@ class TestThermostatEntityDeviceInfo:
             info = entity.device_info
 
         assert info["via_device_id"] == "internal_gateway_id"
+
+
+class TestAvailabilityWhenVanished:
+    """An entity whose room/device/home left the coordinator data is unavailable."""
+
+    @staticmethod
+    def _coordinator(mock_coordinator: MagicMock) -> MagicMock:
+        mock_coordinator.last_update_success = True
+        return mock_coordinator
+
+    def test_room_entity(self, mock_coordinator: MagicMock) -> None:
+        coordinator = self._coordinator(mock_coordinator)
+        entity = MigoRoomEntity(coordinator, "room_456")
+        assert entity.available
+        saved = coordinator.rooms.pop("room_456")
+        assert not entity.available
+        # Checked before _ignore_reachable: a vanished room is not "unreachable".
+        entity._ignore_reachable = True
+        assert not entity.available
+        coordinator.rooms["room_456"] = saved
+        assert entity.available
+
+    def test_device_entity(self, mock_coordinator: MagicMock) -> None:
+        coordinator = self._coordinator(mock_coordinator)
+        entity = MigoDeviceEntity(coordinator, "module_789")
+        assert entity.available
+        saved = coordinator.devices.pop("module_789")
+        assert not entity.available
+        entity._ignore_reachable = True
+        assert not entity.available
+        coordinator.devices["module_789"] = saved
+        assert entity.available
+
+    def test_home_entities(self, mock_coordinator: MagicMock) -> None:
+        coordinator = self._coordinator(mock_coordinator)
+        for cls in (MigoHomeEntity, MigoThermostatHomeEntity):
+            entity = cls(coordinator, "home_123")
+            assert entity.available
+            saved = coordinator.homes.pop("home_123")
+            assert not entity.available
+            coordinator.homes["home_123"] = saved
+            assert entity.available

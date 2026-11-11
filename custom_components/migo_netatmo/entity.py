@@ -57,8 +57,12 @@ class MigoRoomEntity(MigoEntity):
     @property
     @override
     def available(self) -> bool:
-        """Return False when the room's thermostat is unreachable."""
+        """Return False when the room is gone or its thermostat is unreachable."""
         if not super().available:
+            return False
+        # Checked before _ignore_reachable: a room the API stopped reporting is
+        # not "reporting unreachable", it is simply gone.
+        if self._room_id not in self.coordinator.rooms:
             return False
         if self._ignore_reachable:
             return True
@@ -111,8 +115,11 @@ class MigoDeviceEntity(MigoEntity):
     @property
     @override
     def available(self) -> bool:
-        """Return False when the device reports itself unreachable."""
+        """Return False when the device is gone or reports itself unreachable."""
         if not super().available:
+            return False
+        # Checked before _ignore_reachable, same as for rooms.
+        if self._device_id not in self.coordinator.devices:
             return False
         if self._ignore_reachable:
             return True
@@ -194,6 +201,12 @@ class MigoHomeEntity(MigoEntity):
 
     @property
     @override
+    def available(self) -> bool:
+        """Return False when the home is no longer reported by the API."""
+        return super().available and self._home_id in self.coordinator.homes
+
+    @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device info for the Gateway device."""
         if gateway_mac := get_gateway_mac_for_home(self.coordinator, self._home_id):
@@ -243,6 +256,12 @@ class MigoThermostatHomeEntity(MigoEntity):
     def _home_data(self) -> HomeConfig:
         """Get current home data."""
         return self.coordinator.homes.get(self._home_id, {})
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return False when the home is no longer reported by the API."""
+        return super().available and self._home_id in self.coordinator.homes
 
     @property
     @override
