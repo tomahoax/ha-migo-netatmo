@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A Netatmo outage (HTTP 5xx or 429 on sign-in) no longer starts a re-authentication flow: the integration retries later instead. Only a rejection of the credentials (HTTP 400, 401 or 403) asks for a new password.
+- A request timeout during sign-in or a refresh is now handled as a connection error, and a response that is not valid JSON no longer escapes as an unhandled error.
+
 ## [1.0.0] - 2026-10-05
 
 First stable release since 0.40.2. It gathers everything published in the betas, whose sections below list each change in detail. This summary is for people updating from 0.40.2.

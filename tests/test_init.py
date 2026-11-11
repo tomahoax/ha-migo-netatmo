@@ -10,7 +10,7 @@ from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.migo_netatmo import async_remove_config_entry_device
-from custom_components.migo_netatmo.api import MigoApiError, MigoAuthError
+from custom_components.migo_netatmo.api import MigoApiError, MigoAuthError, MigoConnectionError
 from custom_components.migo_netatmo.const import DOMAIN
 
 
@@ -83,6 +83,22 @@ async def test_setup_entry_auth_error_starts_reauth(
     assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress()
     assert any(flow["handler"] == "migo_netatmo" and flow["context"]["source"] == "reauth" for flow in flows)
+
+
+async def test_setup_entry_auth_outage_retries_without_reauth(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    patch_migo_api: MagicMock,
+) -> None:
+    """A connection failure (e.g. HTTP 503 on auth) retries and starts no reauth."""
+    patch_migo_api.authenticate.side_effect = MigoConnectionError("Authentication unavailable: HTTP 503")
+    mock_config_entry.add_to_hass(hass)
+
+    assert not await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert not any(flow["context"]["source"] == "reauth" for flow in hass.config_entries.flow.async_progress())
 
 
 async def test_setup_entry_api_error_retries(

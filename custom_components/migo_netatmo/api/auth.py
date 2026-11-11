@@ -18,7 +18,7 @@ from ..const import (
 from ..models import TokenResponse
 from ..redact import mask_email
 from .exceptions import MigoAuthError, MigoConnectionError
-from .transport import _as_json_object
+from .transport import _as_json_object, _read_json
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,18 +89,29 @@ class AuthMixin:
                 timeout=self._timeout,
             ) as response:
                 if response.status == 400:
-                    error_data = await response.json()
-                    error_msg = error_data.get("error", "Authentication failed")
+                    error_msg = "Authentication failed"
+                    try:
+                        error_data = await response.json()
+                    except ValueError, aiohttp.ContentTypeError:
+                        error_data = None
+                    if isinstance(error_data, dict):
+                        error_msg = str(error_data.get("error", error_msg))
                     _LOGGER.error("Authentication failed: %s", error_msg)
                     raise MigoAuthError(error_msg)
 
-                if response.status != 200:
-                    _LOGGER.error("Authentication failed with status: %d", response.status)
+                if response.status in (401, 403):
+                    _LOGGER.error("Authentication rejected with status: %d", response.status)
                     raise MigoAuthError(f"Authentication failed: HTTP {response.status}")
+
+                if response.status != 200:
+                    # 5xx, 429...: the service is unavailable, the credentials
+                    # are not at fault - must not start a reauth flow.
+                    _LOGGER.error("Authentication unavailable, status: %d", response.status)
+                    raise MigoConnectionError(f"Authentication unavailable: HTTP {response.status}")
 
                 # _as_json_object checks it really is an object; the cast then
                 # asserts the field shape, same as the other JSON boundaries.
-                result = cast(TokenResponse, _as_json_object(await response.json()))
+                result = cast(TokenResponse, _as_json_object(await _read_json(response)))
                 self._store_tokens(result)
 
                 _LOGGER.debug(
@@ -109,7 +120,7 @@ class AuthMixin:
                 )
                 return True
 
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.error("Connection error during authentication: %s", err)
             raise MigoConnectionError(f"Connection error: {err}") from err
 
@@ -122,7 +133,8 @@ class AuthMixin:
             True if token refresh was successful.
 
         Raises:
-            MigoAuthError: If token refresh and re-authentication both fail.
+            MigoAuthError: If re-authentication is rejected.
+            MigoConnectionError: If re-authentication hits a network error or an outage.
         """
         if not self._refresh_token:
             _LOGGER.debug("No refresh token available, performing full authentication")
@@ -153,13 +165,13 @@ class AuthMixin:
                     )
                     return await self.authenticate()
 
-                result = cast(TokenResponse, _as_json_object(await response.json()))
+                result = cast(TokenResponse, _as_json_object(await _read_json(response)))
                 self._store_tokens(result, preserve_refresh=True)
 
                 _LOGGER.debug("Token refreshed successfully")
                 return True
 
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.warning("Error refreshing token: %s, re-authenticating", err)
             return await self.authenticate()
 
