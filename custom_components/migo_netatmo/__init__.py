@@ -120,10 +120,10 @@ def _register_stale_device_removal(
 
     @callback
     def _remove_stale_devices() -> None:
-        # Three guards against deleting everything on a bad refresh.
-        # _async_update_data clears homes/rooms/devices before repopulating, and
-        # an auth failure part-way through aborts into ConfigEntryAuthFailed
-        # while leaving the entry loaded with empty stores.
+        # Guards against deleting everything on a bad refresh. The coordinator
+        # publishes homes/rooms/devices only once a refresh fully succeeded, so
+        # a failed refresh keeps the previous data; these checks stay as defence
+        # in depth (e.g. a first refresh that failed leaves the stores empty).
         if not coordinator.last_update_success:
             return
         known_ids = set(coordinator.devices) | set(coordinator.homes)
@@ -166,11 +166,10 @@ async def async_remove_config_entry_device(
     """Allow removing a device that the API no longer reports."""
     coordinator = entry.runtime_data.coordinator
 
-    # Refuse while the caches cannot be trusted. _async_update_data clears
-    # homes/rooms/devices before repopulating them, and an auth failure part-way
-    # through aborts into ConfigEntryAuthFailed while leaving the entry loaded
-    # with empty stores. Without this guard, every device looks unreported during
-    # a password-expiry window and a user could delete a live one.
+    # Refuse while the caches cannot be trusted. The coordinator keeps the
+    # previous data when a refresh fails, but the stores are empty if no refresh
+    # ever succeeded. Without this guard, every device would look unreported
+    # then, and a user could delete a live one.
     if not coordinator.last_update_success or not (coordinator.devices or coordinator.homes):
         return False
 

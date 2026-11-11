@@ -33,6 +33,46 @@ class TestMigoDataUpdateCoordinator:
         assert len(coordinator.devices) == 2
 
     @pytest.mark.asyncio
+    async def test_failed_refresh_keeps_previous_data(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """A refresh failing mid-way leaves the previous homes/rooms/devices intact."""
+        await coordinator._async_update_data()
+        homes, rooms, devices = coordinator.homes, coordinator.rooms, coordinator.devices
+        snapshot = (dict(homes), dict(rooms), dict(devices))
+        assert rooms and devices
+
+        mock_api.get_home_status = AsyncMock(side_effect=MigoAuthError("expired"))
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+
+        assert (coordinator.homes, coordinator.rooms, coordinator.devices) == snapshot
+
+    @pytest.mark.asyncio
+    async def test_stores_unchanged_while_refresh_in_flight(
+        self,
+        coordinator: MigoDataUpdateCoordinator,
+        mock_api: MagicMock,
+    ) -> None:
+        """Entities reading between the refresh's awaits still see the previous data."""
+        await coordinator._async_update_data()
+        before = (coordinator.homes, coordinator.rooms, coordinator.devices)
+        seen: list[tuple[int, int, int]] = []
+        original = mock_api.get_configs
+
+        async def spy(*args, **kwargs):
+            seen.append((len(coordinator.homes), len(coordinator.rooms), len(coordinator.devices)))
+            return await original(*args, **kwargs)
+
+        mock_api.get_configs = spy
+        await coordinator._async_update_data()
+
+        assert seen == [(1, 1, 2)]
+        assert coordinator.rooms is not before[1]  # swapped for the new dict afterwards
+
+    @pytest.mark.asyncio
     async def test_update_data_invalid_response(
         self,
         coordinator: MigoDataUpdateCoordinator,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A failed refresh no longer leaves entities with partial or empty data: the previous data is kept until a refresh fully succeeds.
+- Entities whose room, device or home is no longer reported by the MiGO account now show as unavailable instead of keeping their last state.
+
 ## [1.0.0] - 2026-10-05
 
 First stable release since 0.40.2. It gathers everything published in the betas, whose sections below list each change in detail. This summary is for people updating from 0.40.2.

@@ -202,9 +202,8 @@ async def test_no_device_removal_while_caches_are_empty(
 ) -> None:
     """Test nothing is removable when the coordinator caches cannot be trusted.
 
-    _async_update_data clears the stores before repopulating them, and an auth
-    failure part-way through leaves the entry loaded with them empty. Without a
-    guard, every device would look unreported and a live one could be deleted.
+    The stores are empty when no refresh ever succeeded. Without a guard, every
+    device would look unreported and a live one could be deleted.
     """
     device_registry = dr.async_get(hass)
     live_device = device_registry.async_get_device_by_identifier((DOMAIN, "gateway_001"), init_integration.entry_id)
