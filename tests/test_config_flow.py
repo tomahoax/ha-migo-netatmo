@@ -274,6 +274,38 @@ class TestReconfigureFlow:
         assert result["reason"] == "reconfigure_successful"
         assert mock_config_entry.data["password"] == "brand_new_password"
 
+    async def test_reconfigure_validates_with_stored_custom_client_secret(
+        self,
+        hass: HomeAssistant,
+        patch_migo_api: MagicMock,
+        mock_setup_entry: MagicMock,
+    ) -> None:
+        """Validation uses the stored custom client_id/secret, absent from the form."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id="test@example.com",
+            data={
+                "username": "test@example.com",
+                "password": "old_password",
+                "client_id": "custom_id",
+                "client_secret": "custom_secret",
+            },
+        )
+        entry.add_to_hass(hass)
+
+        result = await entry.start_reconfigure_flow(hass)
+        new_input = {"username": "test@example.com", "password": "brand_new_password"}
+        with patch("custom_components.migo_netatmo.config_flow.MigoApi", return_value=patch_migo_api) as api_cls:
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], new_input)
+            await hass.async_block_till_done()
+
+        assert result["reason"] == "reconfigure_successful"
+        kwargs = api_cls.call_args.kwargs
+        assert kwargs["password"] == "brand_new_password"
+        assert kwargs["client_id"] == "custom_id"
+        assert kwargs["client_secret"] == "custom_secret"
+        assert entry.data["client_secret"] == "custom_secret"
+
     async def test_reconfigure_account_mismatch_aborts(
         self,
         hass: HomeAssistant,

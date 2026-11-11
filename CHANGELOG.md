@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Reconfiguring the account now checks the new password against the custom client ID and secret you saved, instead of the default ones.
+
 ## [1.0.0] - 2026-10-05
 
 First stable release since 0.40.2. It gathers everything published in the betas, whose sections below list each change in detail. This summary is for people updating from 0.40.2.
