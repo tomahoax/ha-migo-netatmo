@@ -73,6 +73,21 @@ def _as_json_object(payload: object) -> dict[str, Any]:
     return payload
 
 
+async def _read_json(response: aiohttp.ClientResponse) -> object:
+    """Decode a response body as JSON, mapping a decode failure to MigoApiError.
+
+    aiohttp raises ValueError (JSONDecodeError) on a non-JSON body, for example
+    an HTML error page served with a 200 status.
+
+    Raises:
+        MigoApiError: If the body is not valid JSON.
+    """
+    try:
+        return await response.json()
+    except ValueError as err:
+        raise MigoApiError(f"Invalid JSON in API response: {err}") from err
+
+
 def _summarise_error_body(body: str) -> str:
     """Return a short, safe form of a server error body for a user-facing error.
 
@@ -194,7 +209,7 @@ class TransportMixin:
                             raise MigoApiError(
                                 f"API returned {retry_response.status}: {_summarise_error_body(error_text)}"
                             )
-                        result = _as_json_object(await retry_response.json())
+                        result = _as_json_object(await _read_json(retry_response))
                         _log_payload("API response data", result)
                         return result
 
@@ -209,7 +224,7 @@ class TransportMixin:
                     )
                     raise MigoApiError(f"API returned {response.status}: {_summarise_error_body(error_text)}")
 
-                result = _as_json_object(await response.json())
+                result = _as_json_object(await _read_json(response))
                 _log_payload("API response data", result)
                 return result
 
@@ -222,6 +237,6 @@ class TransportMixin:
                 err.message,
             )
             raise MigoApiError(f"API request failed: {err}") from err
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.debug("API connection error: %s %s - %s", method, url, err)
             raise MigoConnectionError(f"Connection error: {err}") from err

@@ -85,6 +85,76 @@ class TestMigoApiAuthentication:
         with pytest.raises(MigoAuthError):
             await api.authenticate()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", [401, 403])
+    async def test_authenticate_rejected_status_is_auth_error(self, status: int) -> None:
+        """401/403 are credentials rejections."""
+        session = _create_mock_session(_create_mock_response(status=status))
+        api = MigoApi(username="test@example.com", password="pw", session=session)
+        with pytest.raises(MigoAuthError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", [500, 502, 503, 429])
+    async def test_authenticate_outage_is_connection_error(self, status: int) -> None:
+        """A server outage or rate limit must not look like bad credentials."""
+        session = _create_mock_session(_create_mock_response(status=status))
+        api = MigoApi(username="test@example.com", password="pw", session=session)
+        with pytest.raises(MigoConnectionError) as exc_info:
+            await api.authenticate()
+        assert not isinstance(exc_info.value, MigoAuthError)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("body", [None, ["unexpected"]])
+    async def test_authenticate_400_with_odd_body_is_auth_error(self, body) -> None:
+        """A 400 whose body is not a JSON object still yields MigoAuthError."""
+        session = _create_mock_session(_create_mock_response(status=400, json_data=body))
+        api = MigoApi(username="test@example.com", password="pw", session=session)
+        with pytest.raises(MigoAuthError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_400_with_invalid_json_is_auth_error(self) -> None:
+        """A 400 with a non-JSON body still yields MigoAuthError."""
+        response = _create_mock_response(status=400)
+        response.json = AsyncMock(side_effect=ValueError("not json"))
+        api = MigoApi(username="test@example.com", password="pw", session=_create_mock_session(response))
+        with pytest.raises(MigoAuthError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_timeout_is_connection_error(self) -> None:
+        """A timeout during authentication is a connection error."""
+        session = MagicMock()
+        session.closed = False
+        session.post.side_effect = TimeoutError()
+        api = MigoApi(username="test@example.com", password="pw", session=session)
+        with pytest.raises(MigoConnectionError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_invalid_json_is_api_error(self) -> None:
+        """A 200 with a non-JSON body is a MigoApiError."""
+        response = _create_mock_response(status=200)
+        response.json = AsyncMock(side_effect=ValueError("not json"))
+        api = MigoApi(username="test@example.com", password="pw", session=_create_mock_session(response))
+        with pytest.raises(MigoApiError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_refresh_timeout_falls_back_to_authenticate(self, token_response) -> None:
+        """A timeout during refresh triggers a full re-authentication."""
+        session = MagicMock()
+        session.closed = False
+        session.post.side_effect = [
+            TimeoutError(),
+            _response_as_context_manager(_create_mock_response(status=200, json_data=token_response)),
+        ]
+        api = MigoApi(username="test@example.com", password="pw", session=session)
+        api._refresh_token = "existing_refresh_token"
+        assert await api.refresh_access_token() is True
+        assert session.post.call_count == 2
+
 
 class TestMigoApiTokenRefresh:
     """Tests for refresh_access_token and _ensure_token_valid."""
@@ -222,6 +292,25 @@ class TestMigoApiRequest:
         api._access_token = "current_token"
         api._token_expiry = datetime.now(UTC) + timedelta(hours=1)
         return api
+
+    @pytest.mark.asyncio
+    async def test_api_request_timeout_is_connection_error(self) -> None:
+        """A request timeout surfaces as MigoConnectionError."""
+        session = MagicMock()
+        session.closed = False
+        session.request.side_effect = TimeoutError()
+        api = self._make_authenticated_api(session)
+        with pytest.raises(MigoConnectionError):
+            await api._api_request("https://example.test/api")
+
+    @pytest.mark.asyncio
+    async def test_api_request_invalid_json_is_api_error(self) -> None:
+        """A non-JSON 200 body surfaces as MigoApiError."""
+        response = _create_mock_response(status=200)
+        response.json = AsyncMock(side_effect=ValueError("not json"))
+        api = self._make_authenticated_api(_create_mock_session(response))
+        with pytest.raises(MigoApiError):
+            await api._api_request("https://example.test/api")
 
     @pytest.mark.asyncio
     async def test_api_request_401_reauthenticates_and_retries(self, token_response) -> None:
