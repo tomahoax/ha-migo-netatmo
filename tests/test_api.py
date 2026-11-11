@@ -123,6 +123,24 @@ class TestMigoApiAuthentication:
             await api.authenticate()
 
     @pytest.mark.asyncio
+    async def test_authenticate_400_with_non_json_content_type_is_auth_error(self) -> None:
+        """A 400 served with a non-JSON Content-Type still yields MigoAuthError."""
+        response = _create_mock_response(status=400)
+        response.json = AsyncMock(side_effect=aiohttp.ContentTypeError(MagicMock(), ()))
+        api = MigoApi(username="test@example.com", password="pw", session=_create_mock_session(response))
+        with pytest.raises(MigoAuthError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_non_json_content_type_is_api_error(self) -> None:
+        """A 200 served with a non-JSON Content-Type is a MigoApiError."""
+        response = _create_mock_response(status=200)
+        response.json = AsyncMock(side_effect=aiohttp.ContentTypeError(MagicMock(), ()))
+        api = MigoApi(username="test@example.com", password="pw", session=_create_mock_session(response))
+        with pytest.raises(MigoApiError):
+            await api.authenticate()
+
+    @pytest.mark.asyncio
     async def test_authenticate_timeout_is_connection_error(self) -> None:
         """A timeout during authentication is a connection error."""
         session = MagicMock()

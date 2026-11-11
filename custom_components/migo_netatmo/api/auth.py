@@ -92,7 +92,7 @@ class AuthMixin:
                     error_msg = "Authentication failed"
                     try:
                         error_data = await response.json()
-                    except ValueError:
+                    except ValueError, aiohttp.ContentTypeError:
                         error_data = None
                     if isinstance(error_data, dict):
                         error_msg = str(error_data.get("error", error_msg))
@@ -133,7 +133,8 @@ class AuthMixin:
             True if token refresh was successful.
 
         Raises:
-            MigoAuthError: If token refresh and re-authentication both fail.
+            MigoAuthError: If re-authentication is rejected.
+            MigoConnectionError: If re-authentication hits a network error or an outage.
         """
         if not self._refresh_token:
             _LOGGER.debug("No refresh token available, performing full authentication")

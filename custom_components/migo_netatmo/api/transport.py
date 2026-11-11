@@ -76,15 +76,16 @@ def _as_json_object(payload: object) -> dict[str, Any]:
 async def _read_json(response: aiohttp.ClientResponse) -> object:
     """Decode a response body as JSON, mapping a decode failure to MigoApiError.
 
-    aiohttp raises ValueError (JSONDecodeError) on a non-JSON body, for example
-    an HTML error page served with a 200 status.
+    aiohttp raises ValueError (JSONDecodeError) on a body that is not valid
+    JSON, and ContentTypeError (a ClientError) on a non-JSON Content-Type, for
+    example an HTML error page served with a 200 status.
 
     Raises:
         MigoApiError: If the body is not valid JSON.
     """
     try:
         return await response.json()
-    except ValueError as err:
+    except (ValueError, aiohttp.ContentTypeError) as err:
         raise MigoApiError(f"Invalid JSON in API response: {err}") from err
 
 
