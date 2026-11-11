@@ -149,28 +149,36 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             homes = body.get(KEY_HOMES) or []
             _LOGGER.debug("Found %d homes in API response", len(homes))
 
-            # Reset data stores
-            self.homes = {}
-            self.rooms = {}
-            self.devices = {}
+            # Build into local stores and publish them only once the whole
+            # refresh succeeded: this method awaits between homes, and
+            # entities read self.homes/rooms/devices at any time. Filling the
+            # live dicts would expose partial data, or leave them empty/partial
+            # if a later call fails.
+            new_homes: dict[str, HomeConfig] = {}
+            new_rooms: dict[str, RoomData] = {}
+            new_devices: dict[str, ModuleData] = {}
 
             for home in homes:
-                await self._process_home(home)
+                await self._process_home(home, new_homes, new_rooms, new_devices)
 
             # Fetch consumption data for all rooms
-            await self._fetch_all_consumption()
+            await self._fetch_all_consumption(new_devices)
+
+            self.homes = new_homes
+            self.rooms = new_rooms
+            self.devices = new_devices
 
             _LOGGER.debug(
                 "MiGO data refresh complete: %d homes, %d rooms, %d devices",
-                len(self.homes),
-                len(self.rooms),
-                len(self.devices),
+                len(new_homes),
+                len(new_rooms),
+                len(new_devices),
             )
 
             return {
-                KEY_HOMES: self.homes,
-                KEY_ROOMS: self.rooms,
-                "devices": self.devices,
+                KEY_HOMES: new_homes,
+                KEY_ROOMS: new_rooms,
+                "devices": new_devices,
             }
 
         except MigoAuthError as err:
@@ -182,11 +190,20 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # successful refresh. Logging here would duplicate it every cycle.
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
-    async def _process_home(self, home: HomeConfig) -> None:
+    async def _process_home(
+        self,
+        home: HomeConfig,
+        homes: dict[str, HomeConfig],
+        rooms_out: dict[str, RoomData],
+        devices_out: dict[str, ModuleData],
+    ) -> None:
         """Process a single home and its rooms/modules.
 
         Args:
             home: The home data from the API.
+            homes: Target store for the home.
+            rooms_out: Target store for the home's rooms.
+            devices_out: Target store for the home's modules.
         """
         home_id = home.get("id")
         if not home_id:
@@ -209,7 +226,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             len(modules),
         )
 
-        self.homes[home_id] = home
+        homes[home_id] = home
 
         # Get real-time status for this home
         room_status, module_status = await self._fetch_home_status(home_id)
@@ -219,11 +236,11 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         # Process rooms
         for room in rooms:
-            self._process_room(room, home_id, home_name, room_status)
+            self._process_room(room, home_id, home_name, room_status, rooms_out)
 
         # Process modules/devices
         for module in modules:
-            self._process_module(module, home_id, module_status, module_configs)
+            self._process_module(module, home_id, module_status, devices_out, module_configs)
 
     async def _fetch_home_status(
         self,
@@ -312,6 +329,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         home_id: str,
         home_name: str,
         room_status: dict[str, RoomStatus],
+        rooms_out: dict[str, RoomData],
     ) -> None:
         """Process a room and merge with status data.
 
@@ -320,6 +338,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             home_id: The home ID this room belongs to.
             home_name: The home name for display purposes.
             room_status: Dictionary of room status by room ID.
+            rooms_out: Target store the merged room is written to.
         """
         room_id = room.get("id")
         if not room_id:
@@ -327,7 +346,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         # Merge static room data with real-time status
         status_data = room_status.get(room_id, {})
-        self.rooms[room_id] = {
+        rooms_out[room_id] = {
             **room,
             **status_data,
             "home_id": home_id,
@@ -339,6 +358,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         module: ModuleConfig,
         home_id: str,
         module_status: dict[str, ModuleStatus],
+        devices_out: dict[str, ModuleData],
         module_configs: dict[str, ModuleConfigData] | None = None,
     ) -> None:
         """Process a module and merge with status and config data.
@@ -347,6 +367,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             module: The static module configuration.
             home_id: The home ID this module belongs to.
             module_status: Dictionary of module status by module ID.
+            devices_out: Target store the merged module is written to.
             module_configs: Dictionary of module configs by module ID (optional).
         """
         module_id = module.get("id")
@@ -361,15 +382,18 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         # state with nothing in the logs.
         status_data = module_status.get(module_id, {})
         config_data = (module_configs or {}).get(module_id, {})
-        self.devices[module_id] = {
+        devices_out[module_id] = {
             **module,
             **config_data,
             **status_data,
             "home_id": home_id,
         }
 
-    async def _fetch_all_consumption(self) -> None:
+    async def _fetch_all_consumption(self, devices: dict[str, ModuleData]) -> None:
         """Fetch consumption data using device/module IDs.
+
+        Args:
+            devices: The devices of the refresh in progress (not yet published).
 
         This retrieves sum_boiler_on and sum_boiler_off using the getmeasure endpoint
         with device_id (gateway) and module_id (thermostat) like Vaillant vSmart does.
@@ -399,7 +423,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
         date_begin = int(time.time()) - (7 * 24 * 60 * 60)
 
         # Find gateway and thermostat pairs
-        for device_id, device_data in self.devices.items():
+        for device_id, device_data in devices.items():
             device_type = device_data.get("type")
             if device_type != "NAVaillant":
                 continue
@@ -407,7 +431,7 @@ class MigoDataUpdateCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # Find the thermostat module linked to this gateway
             module_id = None
             home_id = device_data.get("home_id")
-            for mod_id, mod_data in self.devices.items():
+            for mod_id, mod_data in devices.items():
                 if mod_data.get("type") == "NAThermVaillant" and mod_data.get("home_id") == home_id:
                     # Check if this thermostat is linked to the gateway
                     bridge = mod_data.get("bridge")
