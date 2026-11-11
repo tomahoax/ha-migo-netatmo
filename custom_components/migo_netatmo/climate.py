@@ -103,7 +103,7 @@ async def async_setup_entry(
 class MigoClimate(MigoRoomControlEntity, ClimateEntity):
     """MiGO Climate entity."""
 
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
@@ -143,20 +143,25 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         """Return the optimistic-cache key for this room's target temperature."""
         return f"climate_target_temperature_{self._room_id}"
 
+    # No @override here: the base members only exist from HA 2026.11 (add it when the floor reaches it).
     @property
-    @override
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """Return the current temperature."""
         return safe_float(self._room_data.get("therm_measured_temperature"))
 
     @property
-    @override
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the target temperature."""
         cached = self.coordinator.get_cached_value(self._target_temperature_cache_key)
         if cached is not None:
             return float(cached)
         return safe_float(self._room_data.get("therm_setpoint_temperature"))
+
+    # HA < 2026.11 has no native_* climate temperature API. Drop once hacs.json's floor reaches 2026.11.
+    if not TYPE_CHECKING and not hasattr(ClimateEntity, "native_temperature_unit"):
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
+        current_temperature = native_current_temperature
+        target_temperature = native_target_temperature
 
     @property
     def _home_therm_mode(self) -> str | None:
@@ -241,8 +246,8 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         # Fallback for when the thermostat device data isn't available yet:
         # infer from the temperature delta, as before.
-        current = self.current_temperature
-        target = self.target_temperature
+        current = self.native_current_temperature
+        target = self.native_target_temperature
 
         if current is not None and target is not None:
             if current < target - 0.5:
@@ -419,7 +424,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
             duration = home_data.get("therm_setpoint_default_duration", DEFAULT_MANUAL_SETPOINT_DURATION)
 
             # Keep current target temperature or use a sensible default
-            temperature = self.target_temperature or 20.0
+            temperature = self.native_target_temperature or 20.0
 
             _LOGGER.debug(
                 "Setting manual mode for room %s: temp=%s°C, duration=%s min",
@@ -538,7 +543,7 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
 
         # Check if it's a boost (manual mode at max temperature)
         if room_mode == MODE_MANUAL:
-            target = self.target_temperature
+            target = self.native_target_temperature
             if target is not None and target >= TEMP_MAX - 0.5:
                 return PRESET_BOOST
             return None

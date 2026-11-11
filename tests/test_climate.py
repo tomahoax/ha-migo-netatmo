@@ -52,11 +52,17 @@ class TestMigoClimate:
 
     def test_current_temperature(self, climate):
         """Test current temperature property."""
-        assert climate.current_temperature == 21.5
+        assert climate.native_current_temperature == 21.5
 
     def test_target_temperature(self, climate):
         """Test target temperature property."""
-        assert climate.target_temperature == 20.0
+        assert climate.native_target_temperature == 20.0
+
+    def test_provides_native_temperature_api(self, climate):
+        """The entity serves its temperatures through the native_* members."""
+        assert climate._attr_native_temperature_unit == "°C"
+        assert climate.native_current_temperature == 21.5
+        assert climate.native_target_temperature == 20.0
 
     def test_hvac_mode_schedule(self, climate):
         """Test HVAC mode in schedule mode."""
