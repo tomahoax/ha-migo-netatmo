@@ -99,7 +99,7 @@ async def test_climate_current_temperature(coordinator):
     }
 
     climate = MigoClimate(coordinator, "room_1", Mock())
-    assert climate.current_temperature == 20.5
+    assert climate.native_current_temperature == 20.5
 ```
 
 ### Testing Coordinator

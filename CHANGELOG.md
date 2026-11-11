@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Climate: use Home Assistant's `native_*` temperature API (`native_temperature_unit`, `native_current_temperature`, `native_target_temperature`), fixing the deprecation warnings raised since Home Assistant 2026.11 (removal in 2027.11). Still compatible with 2026.9.2.
+
 ## [1.0.0] - 2026-10-05
 
 First stable release since 0.40.2. It gathers everything published in the betas, whose sections below list each change in detail. This summary is for people updating from 0.40.2.
