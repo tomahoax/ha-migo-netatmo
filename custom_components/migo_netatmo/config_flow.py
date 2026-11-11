@@ -218,7 +218,10 @@ class MigoConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_USERNAME].lower())
             self._abort_if_unique_id_mismatch()
 
-            errors = await self._async_validate_input(user_input)
+            # Validate what will be stored (as reauth does): a custom client
+            # secret is deliberately not pre-filled, so it is absent from
+            # user_input but still kept in the entry by data_updates.
+            errors = await self._async_validate_input({**reconfigure_entry.data, **user_input})
             if not errors:
                 return self.async_update_reload_and_abort(reconfigure_entry, data_updates=user_input)
 
