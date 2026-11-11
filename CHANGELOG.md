@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Setting a target temperature from the climate card now also switches the boiler back to heating, as the Heat and Boost modes already did. Before, a temperature set right after Hot water only left the boiler unable to heat.
+- The Hysteresis and Heating Curve numbers no longer show made-up defaults after a restart. They keep the last value you set from Home Assistant, and show `unknown` until you set one (the MiGO API never reports them back).
+
 ## [1.0.0] - 2026-10-05
 
 First stable release since 0.40.2. It gathers everything published in the betas, whose sections below list each change in detail. This summary is for people updating from 0.40.2.
