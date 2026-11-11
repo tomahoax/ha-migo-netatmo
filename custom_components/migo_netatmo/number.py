@@ -5,15 +5,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, override
 
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
 from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DEFAULT_DHW_TEMPERATURE,
-    DEFAULT_HEATING_CURVE,
-    DEFAULT_HYSTERESIS,
     DEFAULT_MANUAL_SETPOINT_DURATION,
     DEFAULT_TEMP_OFFSET,
     DEVICE_TYPE_GATEWAY,
@@ -301,7 +299,40 @@ class MigoDHWTemperatureNumber(_MigoCachedValueMixin, MigoGatewayControlEntity, 
         _LOGGER.debug("DHW temperature set for device %s", self._device_id)
 
 
-class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, NumberEntity):
+class _MigoWriteOnlyNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, RestoreNumber):
+    """Base for gateway settings the API never echoes back (hysteresis, heating curve).
+
+    The only source for these values is the optimistic coordinator cache,
+    which is lost on restart. The last state is restored into it, so the
+    entity keeps showing what was last set from Home Assistant instead of
+    inventing a value. With nothing known, `native_value` is None (unknown).
+    """
+
+    if TYPE_CHECKING:
+
+        def _native_value_fallback(self) -> float | None: ...
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Restore the last known value into the coordinator cache."""
+        await super().async_added_to_hass()
+        if self.coordinator.get_cached_value(self._cache_key) is not None:
+            return
+        if self._native_value_fallback() is not None:
+            return
+        last = await self.async_get_last_number_data()
+        if last is not None and last.native_value is not None:
+            self.coordinator.set_cached_value(self._cache_key, last.native_value)
+
+    @property
+    @override
+    def native_value(self) -> float | None:
+        """Return the cached/API/restored value, or None when nothing is known."""
+        value = self._resolve_cached_value(self._native_value_fallback)
+        return None if value is None else float(value)
+
+
+class MigoHysteresisNumber(_MigoWriteOnlyNumber):
     """MiGO Hysteresis threshold number entity.
 
     Note: Although hysteresis is a gateway parameter, it's assigned to the
@@ -339,8 +370,9 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
         """Return the cache key for this entity."""
         return f"hysteresis_{self._device_id}"
 
-    def _native_value_fallback(self) -> float:
-        """Return the API-derived value, falling back to the documented default.
+    @override
+    def _native_value_fallback(self) -> float | None:
+        """Return the API-derived value, or None when the API provides none.
 
         Hysteresis in Celsius is the deadband value plus one, over ten.
 
@@ -353,21 +385,15 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
         `self._device_data.get(...)` below has, in practice, never had
         anything to return. Kept in case a future capture proves the field
         does show up under some condition; until then this always falls
-        through to the optimistic cache (right after a write from Home
-        Assistant) or DEFAULT_HYSTERESIS - same write-only situation as
-        `MigoHeatingCurveNumber` below.
+        through to the optimistic cache (a write from Home Assistant, or the
+        value restored after a restart) and otherwise to None (unknown) - same
+        write-only situation as `MigoHeatingCurveNumber` below.
         """
         deadband = self._device_data.get("simple_heating_algo_deadband")
         if deadband is not None:
             return round((deadband + 1) / 10, 1)
-        # Default to 1.6°C (deadband=15) as seen in typical configuration
-        return DEFAULT_HYSTERESIS
-
-    @property
-    @override
-    def native_value(self) -> float | None:
-        """Return the current hysteresis threshold."""
-        return float(self._resolve_cached_value(self._native_value_fallback))
+        # No invented default: a made-up value would show as if it were real.
+        return None
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -386,7 +412,7 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
             # simple_heating_algo_deadband is never echoed back by the API
             # (see _native_value_fallback's docstring) - clearing the cache
             # on success would make native_value fall straight through to
-            # DEFAULT_HYSTERESIS instead of the value just confirmed set.
+            # None (unknown) instead of the value just confirmed set.
             clear_cache_on_success=False,
             device_id=self._device_id,
             hysteresis=hysteresis,
@@ -394,7 +420,7 @@ class MigoHysteresisNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntit
         _LOGGER.debug("Hysteresis set for device %s", self._device_id)
 
 
-class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEntity, NumberEntity):
+class MigoHeatingCurveNumber(_MigoWriteOnlyNumber):
     """MiGO Heating curve (slope) number entity.
 
     Note: Although heating curve is a gateway parameter, it's assigned to the
@@ -431,30 +457,25 @@ class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
         """Return the cache key for this entity."""
         return f"heating_curve_{self._device_id}"
 
-    def _native_value_fallback(self) -> float:
-        """Return the API-derived value, falling back to the documented default.
+    @override
+    def _native_value_fallback(self) -> float | None:
+        """Return the API-derived value, or None when the API provides none.
 
         Write-only setting: `heating_curve` is never present in
         `homesdata`/`homestatus`/`getconfigs` (confirmed via a live
         debug-log capture across all three), so `self._device_data.get(...)`
         below never actually has anything to return - it's kept in case a
         future capture ever finds it echoed back somewhere, but in practice
-        this always falls through to the optimistic cache (right after a
-        write from Home Assistant) or DEFAULT_HEATING_CURVE otherwise - see
-        the constant's own comment in const.py on why that's not a real
-        factory default, just this installation's calibrated value.
+        this always falls through to the optimistic cache (a write from Home
+        Assistant, or the value restored after a restart) and otherwise to
+        None (unknown). There is no universal factory default: the value is
+        installation-specific.
         """
         # slope in UI = api_slope / 10
         api_slope = self._device_data.get("heating_curve")
         if api_slope is not None:
             return round(api_slope / 10, 1)
-        return DEFAULT_HEATING_CURVE
-
-    @property
-    @override
-    def native_value(self) -> float | None:
-        """Return the current heating curve slope."""
-        return float(self._resolve_cached_value(self._native_value_fallback))
+        return None
 
     @override
     async def async_set_native_value(self, value: float) -> None:
@@ -473,7 +494,7 @@ class MigoHeatingCurveNumber(_MigoCachedValueMixin, MigoThermostatHomeControlEnt
             # heating_curve is never echoed back by the API (see
             # _native_value_fallback's docstring) - clearing the cache on
             # success would make native_value fall straight through to
-            # DEFAULT_HEATING_CURVE instead of the value just confirmed set.
+            # None (unknown) instead of the value just confirmed set.
             clear_cache_on_success=False,
             device_id=self._device_id,
             slope=slope,

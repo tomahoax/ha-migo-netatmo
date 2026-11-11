@@ -5,12 +5,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock, create_autospec
 
 import pytest
+from homeassistant.components.number import NumberExtraStoredData
+from homeassistant.core import HomeAssistant, State
+from pytest_homeassistant_custom_component.common import MockConfigEntry, mock_restore_cache_with_extra_data
 
 from custom_components.migo_netatmo.api import MigoApi
 from custom_components.migo_netatmo.const import (
     DEFAULT_DHW_TEMPERATURE,
-    DEFAULT_HEATING_CURVE,
-    DEFAULT_HYSTERESIS,
     DEFAULT_MANUAL_SETPOINT_DURATION,
     DEFAULT_TEMP_OFFSET,
 )
@@ -156,9 +157,9 @@ class TestMigoHysteresisNumber:
         mock_coordinator.devices["gateway_001"]["simple_heating_algo_deadband"] = 15
         assert entity.native_value == 1.6
 
-    def test_native_value_defaults_when_absent(self, entity) -> None:
-        """With no cache and no API value, the documented default applies."""
-        assert entity.native_value == DEFAULT_HYSTERESIS
+    def test_native_value_unknown_when_absent(self, entity) -> None:
+        """With no cache and no API value, nothing is invented."""
+        assert entity.native_value is None
 
     async def test_async_set_native_value(self, entity, mock_coordinator) -> None:
         """Setting a value calls the API, caches it, and refreshes."""
@@ -189,9 +190,9 @@ class TestMigoHeatingCurveNumber:
         mock_coordinator.devices["gateway_001"]["heating_curve"] = 17
         assert entity.native_value == 1.7
 
-    def test_native_value_defaults_when_absent(self, entity) -> None:
-        """With no cache and no API value, the documented default applies."""
-        assert entity.native_value == DEFAULT_HEATING_CURVE
+    def test_native_value_unknown_when_absent(self, entity) -> None:
+        """With no cache and no API value, nothing is invented."""
+        assert entity.native_value is None
 
     async def test_async_set_native_value(self, entity, mock_coordinator) -> None:
         """Setting a value calls the API, caches it, and refreshes."""
@@ -202,16 +203,47 @@ class TestMigoHeatingCurveNumber:
         mock_coordinator.async_request_refresh.assert_awaited_once()
 
 
-def test_default_heating_curve_is_2_6() -> None:
-    """Pins the constant so a future edit doesn't silently drift again.
+HYSTERESIS_ENTITY = "number.my_home_thermostat_hysteresis_threshold"
+HEATING_CURVE_ENTITY = "number.my_home_thermostat_heating_curve"
 
-    Reported live: the heating curve number entity's no-data fallback showed
-    1.5, not the 2.6 shown in the MiGo app. Root cause investigated via a
-    live debug-log capture: `heating_curve` is never present in homesdata/
-    homestatus/getconfigs, so there is no API-discoverable "true default"
-    at all - it's an installation-specific calibration value. The user
-    chose to just update the constant to match their own installation
-    (2.6); this pins that constant's current value, not that 2.6 is itself
-    "correct" in any universal sense.
-    """
-    assert DEFAULT_HEATING_CURVE == 2.6
+
+def _stored(entity_id: str, value: float | None, max_value: float) -> tuple[State, dict]:
+    """Build a restore-cache entry for a write-only number."""
+    extra = NumberExtraStoredData(max_value, 0.0, 0.1, None, value)
+    return State(entity_id, "unknown" if value is None else str(value)), extra.as_dict()
+
+
+class TestRestoreAfterRestart:
+    """Write-only numbers (never echoed by the API) survive a restart."""
+
+    async def test_restored_value_is_shown(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """The last known value is restored rather than a made-up default."""
+        mock_restore_cache_with_extra_data(
+            hass,
+            [_stored(HYSTERESIS_ENTITY, 0.8, 2.0), _stored(HEATING_CURVE_ENTITY, 1.9, 5.0)],
+        )
+        mock_config_entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert float(hass.states.get(HYSTERESIS_ENTITY).state) == 0.8
+        assert float(hass.states.get(HEATING_CURVE_ENTITY).state) == 1.9
+
+    async def test_unknown_when_nothing_to_restore(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        patch_migo_api: MagicMock,
+    ) -> None:
+        """With nothing known, the state is unknown rather than a fake default."""
+        mock_config_entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert hass.states.get(HYSTERESIS_ENTITY).state == "unknown"
+        assert hass.states.get(HEATING_CURVE_ENTITY).state == "unknown"

@@ -135,6 +135,21 @@ class TestMigoClimate:
         climate.coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_set_temperature_resets_control_mode_first(self, climate):
+        """set_temperature first resets temperature_control_mode to heating.
+
+        Otherwise a leftover DHW-only ("cooling") keeps the boiler from heating.
+        """
+        order: list[str] = []
+        climate._api.set_temperature_control_mode.side_effect = lambda **kw: order.append("mode") or {"status": "ok"}
+        climate._api.set_temperature.side_effect = lambda **kw: order.append("temp") or {"status": "ok"}
+
+        await climate.async_set_temperature(temperature=22.0)
+
+        climate._api.set_temperature_control_mode.assert_called_once_with(home_id="home_123", mode="heating")
+        assert order == ["mode", "temp"]
+
+    @pytest.mark.asyncio
     async def test_set_hvac_mode_heat(self, climate, mock_coordinator):
         """Test setting HVAC mode to heat uses set_temperature with duration."""
         # Add home data with custom duration

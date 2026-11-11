@@ -214,8 +214,8 @@ instead; see
 | Entity ID Pattern | Name | Range | Description |
 |-------------------|------|-------|-------------|
 | `number.migo_{home}_dhw_temperature` | DHW Temperature | 45-60°C | Hot water temperature setpoint |
-| `number.migo_{home}_hysteresis` | Hysteresis Threshold | 0.1-2.0°C | Heating algorithm threshold |
-| `number.migo_{home}_heating_curve` | Heating Curve | 0.0-5.0 | Heating curve slope adjustment. Write-only: never echoed back by the API, so this always shows either what was last set from Home Assistant or `DEFAULT_HEATING_CURVE` (`const.py`) - never the boiler's real current value on its own |
+| `number.migo_{home}_hysteresis` | Hysteresis Threshold | 0.1-2.0°C | Heating algorithm threshold. Like the heating curve, shows the last value set from Home Assistant (restored after a restart), or `unknown` until one has been set |
+| `number.migo_{home}_heating_curve` | Heating Curve | 0.0-5.0 | Heating curve slope adjustment. Write-only: never echoed back by the API, so this shows what was last set from Home Assistant (restored after a restart), or `unknown` until a value has been set - never the boiler's real current value on its own |
 
 ### Home Controls
 
