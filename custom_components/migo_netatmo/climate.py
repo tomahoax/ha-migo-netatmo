@@ -390,6 +390,18 @@ class MigoClimate(MigoRoomControlEntity, ClimateEntity):
         home_id = get_home_id_or_raise(self._room_data, "room", self._room_id)
 
         _LOGGER.debug("Setting room %s temperature to %s°C", self._room_id, temperature)
+        # Same reset as the Heat and Boost branches of async_set_hvac_mode and
+        # async_set_preset_mode: set_temperature alone leaves a
+        # temperature_control_mode of "cooling" (left by a prior DHW-only
+        # selection) untouched, so the boiler would stay unable to heat even
+        # though this manual setpoint was written. Sent unconditionally, since
+        # `coordinator.homes` can lag a DHW-only write by the debounce window;
+        # "heating" when already "heating" is a harmless no-op.
+        await self._call_api(
+            self._api.set_temperature_control_mode,
+            home_id=home_id,
+            mode="heating",
+        )
         await self._call_api_optimistically(
             self._api.set_temperature,
             cache_key=self._target_temperature_cache_key,
